@@ -134,6 +134,21 @@ def _exercise(site,options_page,worker,context,origin,badge,publisher_requests,v
     assert reply and reply["status"]=="COMPLETED" and reply["shouldLabel"] is False, reply
     site.evaluate("document.querySelector('#asset').remove()")
     badge.wait_for(state="detached",timeout=10000)
+    site.evaluate("""() => {
+      const feed = document.createElement('section');
+      for (let i = 0; i < 240; i++) {
+        const row = document.createElement('div');
+        const image = document.createElement('img');
+        image.src = document.querySelector('#control').src;
+        row.append(image); feed.append(row);
+      }
+      const last = document.createElement('img');
+      last.src = globalThis.signedSource;
+      feed.append(last); document.body.append(feed);
+      last.scrollIntoView();
+    }""")
+    badge.wait_for(state="visible",timeout=45000)
+    assert badge.count()==1, "expected the signed final item of the long feed to be labeled"
     context.set_offline(False)
     options_page.bring_to_front()
     options_page.get_by_role("button",name=f"Remove {origin}").click()
@@ -144,7 +159,7 @@ def _exercise(site,options_page,worker,context,origin,badge,publisher_requests,v
     assert not forbidden, f"unexpected HTTP/WS traffic: {forbidden}"
     assert all(m=="GET" and "?" not in path for m,path in publisher_requests), publisher_requests
     return {"installed":True,"version":version,"positive":True,"removal":True,
-            "offline":True,"offline_model_status":reply["status"],"addressed_positive":True,"revocation":True,"reduced_motion":True,"unexpected_requests":forbidden}
+            "offline":True,"offline_model_status":reply["status"],"long_feed_positive":True,"addressed_positive":True,"revocation":True,"reduced_motion":True,"unexpected_requests":forbidden}
 
 
 if __name__=="__main__":

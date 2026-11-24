@@ -12,16 +12,34 @@ from time import monotonic, sleep
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-def webdriver(url, method="GET", body=None):
+def webdriver(url, method="GET", body=None, timeout=40):
     data = None if body is None else json.dumps(body).encode()
     request = Request(url, data=data, method=method, headers={"Content-Type":"application/json"})
     try:
-        with urlopen(request, timeout=40) as response:
+        with urlopen(request, timeout=timeout) as response:
             return json.load(response)["value"]
     except HTTPError as error:
         raise RuntimeError(f"SafariDriver {error.code}: {error.read(1024).decode(errors='replace')}") from error
 
-def run(harness, extension=None, ios_simulator=False):
+def simulator_device(requested=None):
+    result = subprocess.run(["xcrun", "simctl", "list", "devices", "booted", "-j"],
+                            check=True, capture_output=True, text=True, timeout=10)
+    devices = [{"udid":device["udid"],"name":device["name"],"runtime":runtime}
+               for runtime, group in json.loads(result.stdout)["devices"].items()
+               if ".iOS-" in runtime
+               for device in group if device.get("state") == "Booted" and device.get("isAvailable", True)]
+    print(json.dumps({"safari_step":"simulator.booted_devices","devices":devices}),flush=True)
+    selected = [device for device in devices if not requested or device["udid"] == requested]
+    if len(selected) != 1:
+        raise RuntimeError("Select exactly one booted iOS device with --simulator-udid; matching devices="+str(len(selected)))
+    return selected[0]["udid"]
+
+
+def run(harness, extension=None, ios_simulator=False, simulator_udid=None):
+    if ios_simulator:
+        simulator_udid = simulator_device(simulator_udid)
+        print(json.dumps({"safari_step":"simulator.launch_safari","udid":simulator_udid}),flush=True)
+        subprocess.run(["xcrun", "simctl", "launch", simulator_udid, "com.apple.mobilesafari"], check=True, timeout=30)
     with socket.socket() as port:
         port.bind(("127.0.0.1",0))
         driver_port = port.getsockname()[1]
@@ -34,15 +52,26 @@ def run(harness, extension=None, ios_simulator=False):
         deadline = monotonic()+15
         while monotonic()<deadline:
             try:
-                webdriver(driver_url+"/status")
+                webdriver(driver_url+"/status", timeout=3)
                 break
             except URLError:
                 sleep(.25)
         capabilities = {"browserName":"Safari"}
         if ios_simulator:
-            capabilities.update({"platformName":"ios", "safari:useSimulator":True})
+            capabilities.update({"platformName":"ios", "safari:useSimulator":True,
+                                 "safari:deviceUDID":simulator_udid})
         print(json.dumps({"safari_step":"session.begin", "capabilities":capabilities}),flush=True)
-        created = webdriver(driver_url+"/session","POST",{"capabilities":{"alwaysMatch":capabilities}})
+        started = monotonic()
+        try:
+            created = webdriver(driver_url+"/session","POST",{"capabilities":{"alwaysMatch":capabilities}},timeout=60)
+        except (RuntimeError, TimeoutError, URLError) as error:
+            print(json.dumps({"safari_step":"session.failed","elapsedSeconds":round(monotonic()-started,1),
+                              "error":str(error)[:1000],"iosSimulator":ios_simulator,
+                              "simulatorUDID":simulator_udid,
+                              "note":"Simulator must expose Safari through Web Inspector and Remote Automation; no preference or access-control bypass is applied."}),flush=True)
+            if ios_simulator:
+                simulator_device(simulator_udid)
+            raise
         session = driver_url+"/session/"+created["sessionId"]
         print(json.dumps({"safari_step":"session.created", "browserVersion":created["capabilities"].get("browserVersion"),
                           "platformName":created["capabilities"].get("platformName"), "iosSimulator":ios_simulator}),flush=True)
@@ -82,5 +111,8 @@ if __name__ == "__main__":
     parser.add_argument("harness",type=Path)
     parser.add_argument("--extension",type=Path,help="Install and exercise the unmodified packaged Safari WebExtension")
     parser.add_argument("--ios-simulator",action="store_true",help="Run the same checks in native Safari on an available iOS Simulator")
+    parser.add_argument("--simulator-udid",help="Exact booted iOS Simulator UDID; otherwise require exactly one booted iOS device")
     args=parser.parse_args()
-    run(args.harness,args.extension,args.ios_simulator)
+    if args.simulator_udid and not args.ios_simulator:
+        parser.error("--simulator-udid requires --ios-simulator")
+    run(args.harness,args.extension,args.ios_simulator,args.simulator_udid)

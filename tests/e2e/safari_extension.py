@@ -121,7 +121,10 @@ def diagnostics(driver):
 
 def install(driver, build, modified=False):
     step("install.begin", modified_test_copy=modified)
-    identifier = driver.call("/webextension", "POST", {"type": "path", "path": str(build.resolve())})
+    response = driver.call("/webextension", "POST", {"type": "path", "path": str(build.resolve())})
+    # Safari 27 returns the WebDriver extension result object. The opaque id is
+    # for uninstall; it is not necessarily the safari-web-extension URL host.
+    identifier = response.get("extension") if isinstance(response, dict) else response
     if not isinstance(identifier, str) or not identifier or len(identifier) > 300:
         raise AssertionError(f"Unexpected WebExtension install identifier: {identifier!r}")
     step("install.complete", identifier=identifier, modified_test_copy=modified)
@@ -129,7 +132,18 @@ def install(driver, build, modified=False):
 
 
 def uninstall(driver, identifier):
-    driver.call("/webextension/" + quote(identifier, safe=""), "DELETE")
+    try:
+        driver.call("/webextension/" + quote(identifier, safe=""), "DELETE")
+    except RuntimeError as error:
+        message = str(error).lower()
+        missing = message.startswith("safaridriver 404:") and any(
+            code in message for code in ("no such web extension", "unknown extension"))
+        if not missing or not re.search(r"%[0-9a-fA-F]{2}", identifier):
+            raise
+        # Apple's opaque UNSIGNED ids can contain a pre-escaped %20. Retry once
+        # only for the specific not-found outcome, retaining existing escapes.
+        step("uninstall.retry_existing_url_escape")
+        driver.call("/webextension/" + quote(identifier, safe="%"), "DELETE")
     step("uninstall.complete")
 
 
@@ -168,13 +182,21 @@ labelAiWebDriverApi.runtime.onInstalled.addListener(()=>{
 });
 """)
     copied["background"]["service_worker"] = bootstrap
+    discovery = "label-ai-webdriver-discovery.js"
+    (destination / discovery).write_text("""
+const labelAiWebDriverApi=globalThis.browser||globalThis.chrome;
+document.documentElement.dataset.labelAiOptionsUrl=labelAiWebDriverApi.runtime.getURL('/options.html');
+""")
+    copied["content_scripts"] = copied.get("content_scripts", []) + [{
+        "matches": [pattern], "js": [discovery], "run_at": "document_idle", "all_frames": False,
+    }]
     (destination / "manifest.json").write_text(json.dumps(copied))
     assert copied.get("incognito") == manifest.get("incognito"), "private-browsing policy changed"
     assert (destination / worker).read_bytes() == (build / worker).read_bytes(), "product worker changed"
     return destination
 
 
-def find_opened_options(driver):
+def find_opened_options(driver, origin):
     def find():
         for handle in driver.call("/window/handles"):
             driver.switch(handle)
@@ -184,7 +206,22 @@ def find_opened_options(driver):
                 if options_ready(driver):
                     return handle
         return None
-    return driver.wait("test install opened the genuine options page", find, 15)
+    try:
+        return driver.wait("test install opened the genuine options page", find, 5)
+    except AssertionError:
+        # A tabs.create tab may not belong to SafariDriver's managed window.
+        # A loopback-only test script publishes only runtime.getURL; navigate
+        # the real options page in a managed WebDriver tab instead.
+        step("test_copy_options.discovery", disclosure="Loopback-only test content script exposes only the genuine options URL; it performs no analysis and changes no product guard.")
+        handle = driver.call("/window/new", "POST", {"type": "tab"})["handle"]
+        driver.switch(handle)
+        driver.navigate(origin + "/")
+        url = driver.wait("loopback test options URL discovery", lambda: driver.script("return document.documentElement.dataset.labelAiOptionsUrl||null;"), 12)
+        parsed = urlsplit(url)
+        assert parsed.scheme in ("safari-web-extension", "webkit-extension") and parsed.path == "/options.html" and not parsed.query and not parsed.fragment, "Unexpected discovered options URL"
+        driver.navigate(url)
+        driver.wait("genuine options in managed automation tab", lambda: options_ready(driver), 10)
+        return handle
 
 
 def request_consent(driver, options, origin):
@@ -328,13 +365,13 @@ def run_extension(session, request, build):
                 request_consent(driver, options, origin)
             except SetupUnavailable as error:
                 step("test_setup_fallback", reason=str(error)[:500],
-                     disclosure="Disposable copy adds only loopback host grant and onInstalled options bootstrap; production scripts, detector checks and private-browsing guards stay intact.")
+                     disclosure="Disposable copy adds only loopback host grant, onInstalled options bootstrap, and loopback-only options URL discovery; production scripts, detector checks and private-browsing guards stay intact.")
                 uninstall(driver, identifier)
                 identifier = None
                 copied = disposable_copy(build, Path(temporary) / "extension", manifest)
                 modified = True
                 identifier = install(driver, copied, modified=True)
-                options = find_opened_options(driver)
+                options = find_opened_options(driver, origin)
                 step("test_copy_options.complete")
                 site = driver.call("/window/new", "POST", {"type": "tab"})["handle"]
                 driver.switch(site)

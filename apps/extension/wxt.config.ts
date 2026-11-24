@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { access, copyFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ICON_PATHS, writeIcons } from './icon-assets';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const provenanceRequire = createRequire(join(root, '../../packages/provenance/package.json'));
@@ -33,10 +34,19 @@ export default defineConfig({
     description:
       'Private, on-device analysis of visible images and videos. Media never leaves your device for analysis.',
     version: '0.1.0',
+    icons: ICON_PATHS,
     incognito: 'not_allowed',
     permissions: ['storage', 'scripting'],
     optional_host_permissions: ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'],
-    action: { default_title: 'Label.ai privacy and site access' },
+    action: {
+      default_title: 'Label.ai privacy and site access',
+      default_icon: {
+        16: ICON_PATHS['16']!,
+        32: ICON_PATHS['32']!,
+        48: ICON_PATHS['48']!,
+        128: ICON_PATHS['128']!,
+      },
+    },
     content_security_policy: {
       extension_pages:
         "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; worker-src 'self'; connect-src 'self';",
@@ -50,6 +60,7 @@ export default defineConfig({
         throw new Error('Label.ai must register scripts only after site consent.');
     },
     'build:before': async () => {
+      await writeIcons(join(root, 'public/icons'));
       try {
         await access(join(root, 'public/models/detectra-v3.onnx'));
         await access(join(root, 'public/models/ort-wasm-simd-threaded.wasm'));

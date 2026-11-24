@@ -16,6 +16,7 @@ apps/extension/public/models/
 apps/extension/public/runtime/
 apps/extension/public/c2pa/
 apps/extension/public/licenses/
+apps/extension/public/icons/
 ml/artifacts/
 ml/datasets/raw/
 artifacts/

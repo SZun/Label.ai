@@ -49,7 +49,9 @@ export default defineContentScript({
     let settings: LocalSettings = { ...DEFAULT_SETTINGS };
     let ended = false;
     const entries = new Map<Element, MediaEntry>();
-    const roots = new Set<Node>();
+    const roots = new WeakSet<Node>();
+    const observed = new WeakSet<Element>();
+    const animatedSources = new WeakMap<Element, string>();
     const queue = new BoundedQueue(1, 25);
     const videoCaptures = new CaptureSlots(1);
     let scheduled = false;
@@ -169,6 +171,7 @@ export default defineContentScript({
         animate: !entry.animated,
       };
       entry.animated = true;
+      animatedSources.set(entry.element, entry.source);
       return placement;
     }
 
@@ -299,6 +302,7 @@ export default defineContentScript({
         if (!entry.element.isConnected) {
           cancel(entry);
           intersection.unobserve(entry.element);
+          observed.delete(entry.element);
           resize.unobserve(entry.element);
           entries.delete(entry.element);
           continue;
@@ -392,11 +396,19 @@ export default defineContentScript({
 
     const intersection = new IntersectionObserver(
       (changes) => {
-        for (const change of changes) {
-          const entry = entries.get(change.target);
+        // A target can cross the threshold more than once before this callback.
+        const visibility = new Map(
+          changes.map(({ target, isIntersecting }) => [target, isIntersecting]),
+        );
+        // Process exits first so a visible item can reclaim a slot in the same batch.
+        for (const [target, visible] of visibility) {
+          const entry = entries.get(target);
           if (!entry) continue;
-          entry.visible = change.isIntersecting;
+          entry.visible = visible;
           if (!entry.visible) suspendEntry(entry);
+        }
+        for (const [target, visible] of visibility) {
+          if (visible && target.isConnected && !entries.has(target)) admitVisible(target);
         }
         schedule();
       },
@@ -405,27 +417,37 @@ export default defineContentScript({
     const resize = new ResizeObserver(schedule);
 
     function register(element: Element) {
-      if (entries.has(element) || entries.size >= 200 || element.closest('label-ai-overlay'))
-        return;
-      const source = sourceFor(element);
+      if (observed.has(element)) return;
       if (
         !(element instanceof HTMLImageElement || element instanceof HTMLVideoElement) &&
-        !source.startsWith('data:image/')
+        !sourceFor(element).startsWith('data:image/')
       )
         return;
+      observed.add(element);
+      intersection.observe(element);
+    }
+
+    function admitVisible(element: Element) {
+      if (entries.size >= 200) {
+        const oldestHidden = Array.from(entries.values()).find((entry) => !entry.visible);
+        if (!oldestHidden) return;
+        cancel(oldestHidden);
+        resize.unobserve(oldestHidden.element);
+        entries.delete(oldestHidden.element);
+      }
+      const source = sourceFor(element);
       const entry: MediaEntry = {
         element,
         id: crypto.randomUUID(),
         source,
         generation: 0,
-        visible: false,
-        animated: false,
+        visible: true,
+        animated: animatedSources.get(element) === source,
         attempted: false,
         originalAttempted: false,
         frames: [],
       };
       entries.set(element, entry);
-      intersection.observe(element);
       resize.observe(element);
     }
 
@@ -434,10 +456,19 @@ export default defineContentScript({
       const batch = pendingScans.splice(0, 150);
       for (const node of batch) {
         if (node.closest('label-ai-overlay')) continue;
+        if (!node.isConnected) {
+          intersection.unobserve(node);
+          observed.delete(node);
+          if (node.shadowRoot) pendingScans.push(...node.shadowRoot.children);
+          pendingScans.push(...node.children);
+          continue;
+        }
         register(node);
-        if (node.shadowRoot && !roots.has(node.shadowRoot)) {
-          roots.add(node.shadowRoot);
-          mutation.observe(node.shadowRoot, observerOptions);
+        if (node.shadowRoot) {
+          if (!roots.has(node.shadowRoot)) {
+            roots.add(node.shadowRoot);
+            mutation.observe(node.shadowRoot, observerOptions);
+          }
           pendingScans.push(...node.shadowRoot.children);
         }
         pendingScans.push(...node.children);
@@ -465,6 +496,8 @@ export default defineContentScript({
           if (entry && sourceFor(change.target) !== entry.source) reset(entry);
           else register(change.target);
         }
+        for (const node of change.removedNodes)
+          if (node instanceof Element && !node.isConnected) scan(node);
         for (const node of change.addedNodes) if (node instanceof Element) scan(node);
       }
       schedule();
@@ -532,7 +565,6 @@ export default defineContentScript({
       queue.clear();
       for (const entry of entries.values()) cancel(entry);
       entries.clear();
-      roots.clear();
       pendingScans = [];
       mutation.disconnect();
       intersection.disconnect();

@@ -2,7 +2,7 @@
 
 Label.ai is a WXT browser extension that scans visible media on sites you enable. When it can verify a signed declaration that the visual was AI-generated, it adds **AI Slop Detected 🤮** to the upper-left corner. There is one brief animation, with a static version for people who prefer reduced motion. The badge has no tooltip, score or click action.
 
-This is a development preview for desktop Chromium-family browsers and Safari. Most social-network images and videos do not expose an intact, verifiable credential to an extension. Such media may stay unlabeled. The included local image and video analysis code is experimental. Its scores cannot currently create a public label. A missing label conveys no information about authenticity.
+This is a development preview for Chromium, Google Chrome, Edge, Brave, Opera, and Safari. Most social-network images and videos do not expose an intact, verifiable credential to an extension. Such media may stay unlabeled. The included local image and video analysis code is experimental. Its scores cannot currently create a public label. A missing label conveys no information about authenticity.
 
 ## Try the development build
 
@@ -38,6 +38,6 @@ make test-e2e
 make package
 ```
 
-Run `make safari-xcode` and `python3 tools/build_apple_host.py artifacts/safari-xcode` on macOS. The standalone browser test accepts `--browser /path/to/executable` to exercise alternative Chromium-family engines. Vivaldi uses its own native DevTools harness in `tests/e2e/vivaldi_test.py`. The macOS CI job also runs the real signature verifier in native Safari through Apple’s WebDriver. Test the unmodified ZIP in a real profile before sharing it. The headless loopback test uses a temporary copy with a pregranted fixture origin to exercise the permission and labeling flow.
+Run `make safari-xcode` and `python3 tools/build_apple_host.py artifacts/safari-xcode` on macOS. The standalone browser test accepts `--browser /path/to/executable` to exercise the desktop browsers listed in the support matrix. The macOS CI job also runs the real signature verifier in native Safari through Apple’s WebDriver. Test the unmodified ZIP in a real profile before sharing it. The headless loopback test uses a temporary copy with a pregranted fixture origin to exercise the permission and labeling flow.
 
 [Specification](LABEL_AI_SPECIFICATION.md) · [Browser support](docs/BROWSER_SUPPORT.md) · [Apple’s Safari testing guide](https://developer.apple.com/documentation/safariservices/running-your-safari-web-extension) · [Progress and verification](docs/PROGRESS.md) · [Release gates](docs/RELEASE_GATES.md) · [Requirements](docs/REQUIREMENTS_TRACEABILITY.md) · [Evaluation](docs/EVALUATION.md)
