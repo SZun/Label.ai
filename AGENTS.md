@@ -105,7 +105,7 @@ Do not weaken assertions, delete tests, skip failures, fabricate output, or alte
 ### Mandatory agent orchestration
 - In Plan mode, delegate read-only research, exploration, architecture analysis, and test planning only. In Build mode, delegate implementation within the approved scope and active permissions.
 - At the start of substantial work and each milestone, assess whether available subagents can improve speed, quality, or independent verification. Delegate whenever there is meaningful benefit; do not default to serial execution of independent tasks.
-- Use at most three additional active workers (four total including the primary agent). Respect actual tool availability and permissions; never claim to have launched an unavailable agent.
+- Use at most five additional active workers (six total including the primary agent). Respect actual tool availability and permissions; never claim to have launched an unavailable agent.
 - Delegate independent research, repository exploration, test design, implementation of isolated modules, security review, and code review as appropriate. Prefer independent review of consequential changes by an agent other than their author.
 - Give each worker explicit scope, requirements, acceptance criteria, file ownership, dependencies, and expected deliverables. Avoid overlapping edits; use isolated worktrees when supported and appropriate.
 - Coordinate interfaces before parallel implementation. Respect dependency ordering and TDD: implementation must not precede the relevant failing tests.
