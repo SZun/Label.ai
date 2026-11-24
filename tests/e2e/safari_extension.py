@@ -137,13 +137,13 @@ def uninstall(driver, identifier):
     except RuntimeError as error:
         message = str(error).lower()
         missing = message.startswith("safaridriver 404:") and any(
-            code in message for code in ("no such web extension", "unknown extension"))
+            code in message for code in ("no such extension", "no such web extension", "unknown extension"))
         if not missing or not re.search(r"%[0-9a-fA-F]{2}", identifier):
             raise
         # Apple's opaque UNSIGNED ids can contain a pre-escaped %20. Retry once
         # only for the specific not-found outcome, retaining existing escapes.
         step("uninstall.retry_existing_url_escape")
-        driver.call("/webextension/" + quote(identifier, safe="%"), "DELETE")
+        driver.call("/webextension/" + quote(identifier, safe="%()"), "DELETE")
     step("uninstall.complete")
 
 
