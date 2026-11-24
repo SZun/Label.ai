@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT))
 from tools.demo_page import publisher
 
 TEXT = "AI Slop Detected 🤮"
+CURRENT_STEP = "initialization"
 BADGES = r"""(() => {
   const found = [];
   function visit(root) {
@@ -201,6 +202,8 @@ class CDP:
 
 
 def step(name):
+    global CURRENT_STEP
+    CURRENT_STEP = name
     print(f"[vivaldi] {name}", flush=True)
 
 
@@ -245,6 +248,9 @@ async def exercise(cdp, build, args, origin, publisher_requests):
     report = {"installed": True, "native_browser": "Vivaldi", "transport": "direct-cdp-explicit-targets",
               "version": version, "extension_id": extension_id, "test_origin_pregranted": args.pregrant_test_origin}
     if args.install_only:
+        assert not cdp.unexpected and not cdp.errors, {"network": cdp.unexpected, "runtime": cdp.errors}
+        report.update({"unexpected_requests": cdp.unexpected, "observed_requests": cdp.requests,
+                       "runtime_errors": cdp.errors})
         step("Unmodified extension install and options checks passed")
         return report
 
@@ -414,7 +420,8 @@ def main():
         result = asyncio.run(run(args))
         result["passed"] = True
     except Exception as error:
-        result = {"passed": False, "native_browser": "Vivaldi", "error": f"{type(error).__name__}: {error}"[:4000]}
+        result = {"passed": False, "native_browser": "Vivaldi", "failed_step": CURRENT_STEP,
+                  "error": f"{type(error).__name__}: {error}"[:4000]}
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(result, indent=2) + "\n")
