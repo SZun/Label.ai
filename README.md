@@ -10,7 +10,11 @@ This is a development preview for desktop Chromium-family browsers and Safari. M
 2. Run `make bootstrap` and `make build`. The first bootstrap downloads pinned development dependencies, model weights and test fixtures. Browser analysis runs locally with package resources.
 3. In a desktop Chromium browser with unpacked extension support, open its extensions manager, enable Developer mode, choose **Load unpacked** and select `apps/extension/.output/chrome-mv3`. The ZIP made by `make package` contains the same directory contents. Extract it before loading.
 4. Click the extension toolbar icon. Enter a public HTTPS site in **Site address**, choose **Enable on this site**, approve the browser prompt and reload the page. The privacy page also lets you pause, remove individual grants, and clear local settings.
-5. For Safari, build the separate `safari-mv3` target. Run `make safari-xcode` on a Mac with Xcode to create the containing apps. Build the macOS app or the iOS app for a simulator/device in Xcode, then enable the extension in Safari settings and grant site access. The Safari ZIP contains WebExtension resources for packaging. See the compatibility and release documents before distribution.
+5. For a temporary macOS Safari install, use **Add Temporary Extension…** in Safari’s developer settings and select the unpacked `safari-mv3` directory. For an Apple containing app, run `make safari-xcode` on a Mac with Xcode to create the containing apps. Build the macOS app or the iOS app for a simulator/device in Xcode, then enable the extension in Safari settings and grant site access. The Safari ZIP contains WebExtension resources for packaging. See the compatibility and release documents before distribution.
+
+### Try a known positive
+
+After bootstrap, run `python3 tools/demo_page.py` and open `http://127.0.0.1:8765`. Enable that exact address in Label.ai and reload the page. The tabby cat carries a signed Adobe Firefly creation record and should receive the badge. The conventional gradient should stay unlabeled. The server binds to loopback and only serves sample media. Press Ctrl+C to close it.
 
 ## What runs on the device
 
@@ -36,4 +40,4 @@ make package
 
 Run `make safari-xcode` and `python3 tools/build_apple_host.py artifacts/safari-xcode` on macOS. The standalone browser test accepts `--browser /path/to/executable` to exercise alternative Chromium-family engines. Test the unmodified ZIP in a real profile before sharing it. The headless loopback test uses a temporary copy with a pregranted fixture origin to exercise the permission and labeling flow.
 
-[Specification](LABEL_AI_SPECIFICATION.md) · [Browser support](docs/BROWSER_SUPPORT.md) · [Progress and verification](docs/PROGRESS.md) · [Release gates](docs/RELEASE_GATES.md) · [Requirements](docs/REQUIREMENTS_TRACEABILITY.md) · [Evaluation](docs/EVALUATION.md)
+[Specification](LABEL_AI_SPECIFICATION.md) · [Browser support](docs/BROWSER_SUPPORT.md) · [Apple’s Safari testing guide](https://developer.apple.com/documentation/safariservices/running-your-safari-web-extension) · [Progress and verification](docs/PROGRESS.md) · [Release gates](docs/RELEASE_GATES.md) · [Requirements](docs/REQUIREMENTS_TRACEABILITY.md) · [Evaluation](docs/EVALUATION.md)

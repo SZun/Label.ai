@@ -37,6 +37,14 @@
       "bytes": 2130441
     },
     {
+      "file": "sora.mp4",
+      "upstreamPath": "videos/sora.MP4",
+      "origin": "Sora-generated video with an active generation assertion but expired and untrusted signing credentials; actual packaged WASM refuses the label",
+      "expected": "invalid",
+      "sha256": "7d750b0c9cb9c1ab162a067cf128213590da2b858f2e1de336190427a77f75cf",
+      "bytes": 5278370
+    },
+    {
       "file": "unsigned.png",
       "origin": "Conventional one-pixel PNG test fixture without provenance",
       "expected": "missing",

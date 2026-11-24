@@ -10,6 +10,10 @@ This branch started from f390a4c, which contained the plan and specification but
 - Source, checksums, runtime, timings, representation and predictions are recorded under ml/reports and tests/fixtures. The model takes roughly 1.4–1.5 seconds per image on the development CPU. Browser and device timings can differ.
 - Unit, policy, WASM, type checking and package verification are automated. CI builds both WXT targets. The browser jobs install the Chromium package and exercise permission, signed embedded and publisher image labeling, stale-source removal, reduced motion, offline inference and revocation. The macOS job converts the Safari target and compiles the macOS and iOS containing apps. Follow the PR checks for results on its exact revision.
 
+## Packaged browser observations
+
+On revision 6a189c1, the Linux Chromium 151.0.7922.34, Microsoft Edge 158.0.4370.33 and Brave 1.100.59 / Chromium 158.0.8127.92 jobs each installed the unmodified extension. In a separate disposable profile with a loopback host grant, all three passed visible badge, signed publisher JPEG, withdrawn/stale badge, offline local ONNX execution, reduced-motion and revocation checks. No unexpected requests appeared in the monitored browser/publisher traffic. On the macOS runner, Xcode successfully compiled both the unsigned macOS app and the iOS simulator app. The native grant dialog and physical device behavior still require acceptance. [Run and job logs](https://github.com/SZun/Label.ai/actions/runs/45493431709)
+
 ## Acceptance still open
 
 Representative holdouts and licensed diversity, large-feed resource measurements, private versus public context ambiguity, real public-site performance, device-specific UI behavior and native Safari enable/grant/scan acceptance remain release work. Missing credentials and withheld statistical labels leave much of today's web content unlabeled. The package is a development preview.

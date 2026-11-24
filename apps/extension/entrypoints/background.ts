@@ -2,7 +2,12 @@ import { browser } from 'wxt/browser';
 import { createLocalDetector } from '@label-ai/detector';
 import { PROVENANCE_TRUST_EXPIRES_AT } from '@label-ai/provenance';
 import { hostPermissionPattern, isEligiblePage, type LocalSettings } from '../src/core/policy';
-import { isAnalyzeRequest, decodeBase64, type AnalyzeRequest, type LocalDecision } from '../src/core/protocol';
+import {
+  isAnalyzeRequest,
+  decodeBase64,
+  type AnalyzeRequest,
+  type LocalDecision,
+} from '../src/core/protocol';
 import { BoundedQueue } from '../src/core/queue';
 import { readSettings, writeSettings, SETTINGS_KEY } from '../src/transport/settings';
 import { localProvenance, clearProvenance } from '../src/transport/provenance';
@@ -10,34 +15,91 @@ import { localProvenance, clearProvenance } from '../src/transport/provenance';
 export default defineBackground(() => {
   const queue = new BoundedQueue(1, 8);
   let detector: ReturnType<typeof createLocalDetector> | undefined;
-  const pending = new Map<string, { tabId: number; documentId: string; abort: AbortController; finish: (result: LocalDecision) => void; input: AnalyzeRequest }>();
+  const pending = new Map<
+    string,
+    {
+      tabId: number;
+      windowId: number;
+      documentId: string;
+      abort: AbortController;
+      finish: (result: LocalDecision) => void;
+      input: AnalyzeRequest;
+    }
+  >();
 
-  const noLabel = (input: AnalyzeRequest, status: LocalDecision['status'] = 'FAILED'): LocalDecision => ({ instanceId: input.instanceId, requestId: input.requestId, generation: input.generation, status, shouldLabel: false, policyVersion: 'local-v1', expiresAt: Date.now() });
-  const scopedKey = (tabId: number, documentId: string, requestId: string) => `${tabId}:${documentId}:${requestId}`;
+  const noLabel = (
+    input: AnalyzeRequest,
+    status: LocalDecision['status'] = 'FAILED',
+  ): LocalDecision => ({
+    instanceId: input.instanceId,
+    requestId: input.requestId,
+    generation: input.generation,
+    status,
+    shouldLabel: false,
+    policyVersion: 'local-v1',
+    expiresAt: Date.now(),
+  });
+  const scopedKey = (tabId: number, documentId: string, requestId: string) =>
+    `${tabId}:${documentId}:${requestId}`;
 
   async function updateRegistration() {
     const settings = await readSettings();
     const origins: string[] = [];
-    if (settings.enabled) for (const origin of settings.approvedOrigins) {
-      const pattern = hostPermissionPattern(origin);
-      if (pattern && !origins.includes(pattern) && await browser.permissions.contains({ origins: [pattern] })) origins.push(pattern);
-    }
+    if (settings.enabled)
+      for (const origin of settings.approvedOrigins) {
+        const pattern = hostPermissionPattern(origin);
+        if (
+          pattern &&
+          !origins.includes(pattern) &&
+          (await browser.permissions.contains({ origins: [pattern] }))
+        )
+          origins.push(pattern);
+      }
     const scripts = await browser.scripting.getRegisteredContentScripts();
-    if (scripts.some((script) => script.id === 'label-ai-media')) await browser.scripting.unregisterContentScripts({ ids: ['label-ai-media'] });
-    if (origins.length) await browser.scripting.registerContentScripts([{ id: 'label-ai-media', js: ['content-scripts/media.js'], matches: origins, allFrames: true, runAt: 'document_idle', persistAcrossSessions: true }]);
+    if (scripts.some((script) => script.id === 'label-ai-media'))
+      await browser.scripting.unregisterContentScripts({ ids: ['label-ai-media'] });
+    if (origins.length)
+      await browser.scripting.registerContentScripts([
+        {
+          id: 'label-ai-media',
+          js: ['content-scripts/media.js'],
+          matches: origins,
+          allFrames: true,
+          runAt: 'document_idle',
+          persistAcrossSessions: true,
+        },
+      ]);
   }
   let registration = Promise.resolve();
-  const syncRegistration = () => { registration = registration.catch(() => {}).then(updateRegistration); return registration; };
+  const syncRegistration = () => {
+    registration = registration.catch(() => {}).then(updateRegistration);
+    return registration;
+  };
 
-  async function validSender(sender: Parameters<Parameters<typeof browser.runtime.onMessage.addListener>[0]>[1], settings: LocalSettings) {
-    if (sender.id !== browser.runtime.id || typeof sender.tab?.id !== 'number' || sender.tab.incognito || !sender.url || !isEligiblePage(sender.url, settings)) return false;
-    if (!await browser.permissions.contains({ origins: [hostPermissionPattern(sender.url)!] })) return false;
+  async function validSender(
+    sender: Parameters<Parameters<typeof browser.runtime.onMessage.addListener>[0]>[1],
+    settings: LocalSettings,
+  ) {
+    if (
+      sender.id !== browser.runtime.id ||
+      typeof sender.tab?.id !== 'number' ||
+      sender.tab.incognito ||
+      !sender.url ||
+      !isEligiblePage(sender.url, settings)
+    )
+      return false;
+    if (!(await browser.permissions.contains({ origins: [hostPermissionPattern(sender.url)!] })))
+      return false;
     const tab = await browser.tabs.get(sender.tab.id);
-    return tab.active && !tab.incognito;
+    if (!tab.active || tab.incognito) return false;
+    return (await browser.windows.get(tab.windowId)).focused;
   }
 
-  async function analyze(input: AnalyzeRequest, sender: Parameters<Parameters<typeof browser.runtime.onMessage.addListener>[0]>[1]): Promise<LocalDecision> {
-    if (!await validSender(sender, await readSettings())) return noLabel(input);
+  async function analyze(
+    input: AnalyzeRequest,
+    sender: Parameters<Parameters<typeof browser.runtime.onMessage.addListener>[0]>[1],
+  ): Promise<LocalDecision> {
+    if (!(await validSender(sender, await readSettings()))) return noLabel(input);
     const tabId = sender.tab!.id!;
     const documentId = sender.documentId ?? `${sender.frameId ?? 0}:${sender.url}`;
     const key = scopedKey(tabId, documentId, input.requestId);
@@ -53,47 +115,101 @@ export default defineBackground(() => {
         pending.delete(key);
         resolve(result);
       };
-      const timeout = setTimeout(() => { abort.abort(); finish(noLabel(input, 'CANCELED')); }, 45_000);
-      pending.set(key, { tabId, documentId, abort, finish, input });
+      const timeout = setTimeout(() => {
+        abort.abort();
+        finish(noLabel(input, 'CANCELED'));
+      }, 45_000);
+      pending.set(key, { tabId, windowId: sender.tab!.windowId, documentId, abort, finish, input });
       const accepted = queue.enqueue(key, async () => {
         try {
-          if (abort.signal.aborted || !await validSender(sender, await readSettings())) { finish(noLabel(input, 'CANCELED')); return; }
+          if (abort.signal.aborted || !(await validSender(sender, await readSettings()))) {
+            finish(noLabel(input, 'CANCELED'));
+            return;
+          }
           const original = input.original;
           if (original) {
             const provenance = await localProvenance(original, abort.signal);
-            if (provenance?.shouldLabel === true && !abort.signal.aborted && await validSender(sender, await readSettings())) {
-              finish({ ...noLabel(input, 'COMPLETED'), shouldLabel: true, policyVersion: provenance.policyVersion, expiresAt: Math.min(Date.now() + 60_000, Date.parse(PROVENANCE_TRUST_EXPIRES_AT)) });
+            if (
+              provenance?.shouldLabel === true &&
+              !abort.signal.aborted &&
+              (await validSender(sender, await readSettings()))
+            ) {
+              finish({
+                ...noLabel(input, 'COMPLETED'),
+                shouldLabel: true,
+                policyVersion: provenance.policyVersion,
+                expiresAt: Math.min(Date.now() + 60_000, Date.parse(PROVENANCE_TRUST_EXPIRES_AT)),
+              });
               return;
             }
           }
-          if (abort.signal.aborted) { finish(noLabel(input, 'CANCELED')); return; }
-          if (input.kind === 'video' && !input.frames) { finish(noLabel(input, 'UNSUPPORTED')); return; }
-          detector ??= createLocalDetector({ assetBaseUrl: new URL('models/', browser.runtime.getURL('/options.html')).href });
+          if (abort.signal.aborted) {
+            finish(noLabel(input, 'CANCELED'));
+            return;
+          }
+          if (input.kind === 'video' && !input.frames) {
+            finish(noLabel(input, 'UNSUPPORTED'));
+            return;
+          }
+          detector ??= createLocalDetector({
+            assetBaseUrl: new URL('models/', browser.runtime.getURL('/options.html')).href,
+          });
           const engine = await detector;
           const decode = (frame: NonNullable<AnalyzeRequest['frame']>) => {
             const rgba = decodeBase64(frame.rgba, frame.width * frame.height * 4);
-            if (rgba.length !== frame.width * frame.height * 4) throw new Error('Invalid pixel buffer');
+            if (rgba.length !== frame.width * frame.height * 4)
+              throw new Error('Invalid pixel buffer');
             return { ...frame, rgba };
           };
-          const result = input.kind === 'image'
-            ? await engine.analyzeRgba({ ...decode(input.frame!), signal: abort.signal })
-            : await engine.analyzeVideoFrames({ frames: input.frames!.map(decode), durationMs: input.durationMs!, coverage: input.coverage, signal: abort.signal });
-          const allowed = !abort.signal.aborted && await validSender(sender, await readSettings());
-          finish({ ...noLabel(input, result.status), shouldLabel: allowed && result.shouldLabel, policyVersion: result.policyVersion, expiresAt: Date.now() + 60_000 });
-        } catch { detector = undefined; finish(noLabel(input)); }
-        finally { clearTimeout(timeout); pending.delete(key); }
+          const result =
+            input.kind === 'image'
+              ? await engine.analyzeRgba({ ...decode(input.frame!), signal: abort.signal })
+              : await engine.analyzeVideoFrames({
+                  frames: input.frames!.map(decode),
+                  durationMs: input.durationMs!,
+                  coverage: input.coverage,
+                  signal: abort.signal,
+                });
+          const allowed =
+            !abort.signal.aborted && (await validSender(sender, await readSettings()));
+          finish({
+            ...noLabel(input, result.status),
+            shouldLabel: allowed && result.shouldLabel,
+            policyVersion: result.policyVersion,
+            expiresAt: Date.now() + 60_000,
+          });
+        } catch {
+          detector = undefined;
+          finish(noLabel(input));
+        } finally {
+          clearTimeout(timeout);
+          pending.delete(key);
+        }
       });
-      if (!accepted) { clearTimeout(timeout); pending.delete(key); finish(noLabel(input, 'UNSUPPORTED')); }
+      if (!accepted) {
+        clearTimeout(timeout);
+        pending.delete(key);
+        finish(noLabel(input, 'UNSUPPORTED'));
+      }
     });
   }
 
   async function clear() {
     queue.clear();
-    for (const job of pending.values()) { job.abort.abort(); job.finish(noLabel(job.input, 'CANCELED')); }
+    for (const job of pending.values()) {
+      job.abort.abort();
+      job.finish(noLabel(job.input, 'CANCELED'));
+    }
     pending.clear();
     const previous = detector;
     detector = undefined;
-    if (previous) { try { await (await previous).dispose(); } catch { /* Failed initialization owns no usable session. */ } }
+    if (previous) {
+      try {
+        await (await previous).dispose();
+      } catch {
+        /* Failed initialization owns no usable session. */
+      }
+    }
     await clearProvenance();
   }
 
@@ -103,33 +219,81 @@ export default defineBackground(() => {
       const documentId = sender.documentId ?? `${sender.frameId ?? 0}:${sender.url}`;
       const key = scopedKey(sender.tab.id, documentId, message.requestId);
       const job = pending.get(key);
-      if (job) { job.abort.abort(); queue.cancel(key); job.finish(noLabel(job.input, 'CANCELED')); pending.delete(key); }
+      if (job) {
+        job.abort.abort();
+        queue.cancel(key);
+        job.finish(noLabel(job.input, 'CANCELED'));
+        pending.delete(key);
+      }
     }
-    if (message?.type === 'label-ai:clear' && sender.url?.startsWith(browser.runtime.getURL('/options.html'))) return clear().then(() => ({ cleared: true }));
-    if (message?.type === 'label-ai:sync' && sender.id === browser.runtime.id && sender.url?.startsWith(browser.runtime.getURL('/options.html'))) return syncRegistration().then(() => ({ registered: true }));
+    if (
+      message?.type === 'label-ai:clear' &&
+      sender.url?.startsWith(browser.runtime.getURL('/options.html'))
+    )
+      return clear().then(() => ({ cleared: true }));
+    if (
+      message?.type === 'label-ai:sync' &&
+      sender.id === browser.runtime.id &&
+      sender.url?.startsWith(browser.runtime.getURL('/options.html'))
+    )
+      return syncRegistration().then(() => ({ registered: true }));
   });
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes[SETTINGS_KEY]) { void clear(); void syncRegistration().catch(() => {}); }
+    if (area === 'local' && changes[SETTINGS_KEY]) {
+      void clear();
+      void syncRegistration().catch(() => {});
+    }
   });
   browser.permissions.onRemoved.addListener(() => {
     void clear();
     void (async () => {
       const settings = await readSettings();
       const approvedOrigins: string[] = [];
-      for (const origin of settings.approvedOrigins) if (await browser.permissions.contains({ origins: [hostPermissionPattern(origin)!] })) approvedOrigins.push(origin);
-      if (approvedOrigins.length !== settings.approvedOrigins.length && JSON.stringify(await readSettings()) === JSON.stringify(settings)) await writeSettings({ ...settings, approvedOrigins });
+      for (const origin of settings.approvedOrigins)
+        if (await browser.permissions.contains({ origins: [hostPermissionPattern(origin)!] }))
+          approvedOrigins.push(origin);
+      if (
+        approvedOrigins.length !== settings.approvedOrigins.length &&
+        JSON.stringify(await readSettings()) === JSON.stringify(settings)
+      )
+        await writeSettings({ ...settings, approvedOrigins });
       await syncRegistration();
     })().catch(() => {});
   });
-  browser.permissions.onAdded.addListener(() => { void syncRegistration().catch(() => {}); });
+  browser.permissions.onAdded.addListener(() => {
+    void syncRegistration().catch(() => {});
+  });
   browser.tabs.onActivated.addListener(({ tabId }) => {
-    for (const [key, job] of pending) if (job.tabId !== tabId) { job.abort.abort(); queue.cancel(key); job.finish(noLabel(job.input, 'CANCELED')); }
+    for (const [key, job] of pending)
+      if (job.tabId !== tabId) {
+        job.abort.abort();
+        queue.cancel(key);
+        job.finish(noLabel(job.input, 'CANCELED'));
+      }
   });
   browser.tabs.onRemoved.addListener((tabId) => {
-    for (const [key, job] of pending) if (job.tabId === tabId) { job.abort.abort(); queue.cancel(key); job.finish(noLabel(job.input, 'CANCELED')); }
+    for (const [key, job] of pending)
+      if (job.tabId === tabId) {
+        job.abort.abort();
+        queue.cancel(key);
+        job.finish(noLabel(job.input, 'CANCELED'));
+      }
   });
-  browser.runtime.onInstalled.addListener(() => { void syncRegistration().catch(() => {}); });
-  browser.runtime.onStartup.addListener(() => { void syncRegistration().catch(() => {}); });
-  browser.action.onClicked.addListener(() => { void browser.runtime.openOptionsPage(); });
+  browser.windows.onFocusChanged.addListener((windowId) => {
+    for (const job of pending.values())
+      if (job.windowId !== windowId) {
+        job.abort.abort();
+        job.finish(noLabel(job.input, 'CANCELED'));
+      }
+  });
+  browser.runtime.onInstalled.addListener(() => {
+    void syncRegistration().catch(() => {});
+  });
+  browser.runtime.onStartup.addListener(() => {
+    void syncRegistration().catch(() => {});
+  });
+  browser.action.onClicked.addListener(() => {
+    void browser.runtime.openOptionsPage();
+  });
   void syncRegistration().catch(() => {});
 });

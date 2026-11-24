@@ -20,6 +20,7 @@ with sync_playwright() as p:
         ('firefly-tampered.jpg', 'image/jpeg', 'invalid'),
         ('camera-edited.jpg', 'image/jpeg', 'verified-other'),
         ('chatgpt-expired.png', 'image/png', 'invalid'),
+        ('sora.mp4', 'video/mp4', 'invalid'),
         ('unsigned.png', 'image/png', 'missing'),
     ]:
         encoded = base64.b64encode((FIXTURES / name).read_bytes()).decode()

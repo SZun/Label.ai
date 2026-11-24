@@ -14,6 +14,8 @@ __pycache__/
 !.env.example
 apps/extension/public/models/
 apps/extension/public/runtime/
+apps/extension/public/c2pa/
+apps/extension/public/licenses/
 ml/artifacts/
 ml/datasets/raw/
 artifacts/

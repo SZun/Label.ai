@@ -38,6 +38,8 @@ export function createProvenanceVerifier(options: ProvenanceOptions): Provenance
 
   let disposed = false;
   let sdk: Promise<void> | undefined;
+  let runtimeLoad: AbortController | undefined;
+  let cancelActive: (() => void) | undefined;
   let queue: Promise<void> = Promise.resolve();
   let queuedCount = 0;
   let queuedBytes = 0;
@@ -45,27 +47,41 @@ export function createProvenanceVerifier(options: ProvenanceOptions): Provenance
     provenanceResult(status, PROVENANCE_POLICY_VERSION, reason);
 
   function resetRuntime() {
+    runtimeLoad?.abort();
+    runtimeLoad = undefined;
     sdk = undefined;
   }
 
-  async function runtime(): Promise<void> {
-    sdk ??= (async () => {
-      const response = await fetch(wasmUrl, { integrity: WASM_SRI, credentials: 'omit', redirect: 'error' });
+  function runtime(): Promise<void> {
+    if (sdk) return sdk;
+    const controller = new AbortController();
+    runtimeLoad = controller;
+    sdk = (async () => {
+      const response = await fetch(wasmUrl, {
+        integrity: WASM_SRI, credentials: 'omit', redirect: 'error', signal: controller.signal,
+      });
+      if (disposed || controller.signal.aborted) throw new Error('Packaged load canceled');
       if (!response.ok) throw new Error('Packaged WASM unavailable');
-      await initializeWasm(await WebAssembly.compileStreaming(response));
+      const module = await WebAssembly.compileStreaming(response);
+      if (disposed || controller.signal.aborted) throw new Error('Packaged load canceled');
+      await initializeWasm(module);
     })();
     return sdk;
   }
 
-  async function read(blob: Blob): Promise<ProvenanceResult> {
+  async function read(blob: Blob, active: () => boolean): Promise<ProvenanceResult> {
+    const currentRuntime = runtime();
     try {
-      await runtime();
+      await currentRuntime;
     } catch {
-      resetRuntime();
+      // A late failure from an old canceled load must not abort a newer job.
+      if (sdk === currentRuntime) resetRuntime();
       return result('unavailable', 'C2PA_RUNTIME_UNAVAILABLE');
     }
     try {
+      if (!active()) return result('unavailable', 'C2PA_CANCELED');
       const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (!active()) return result('unavailable', 'C2PA_CANCELED');
       return await verifyBytes(bytes, blob.type, offlineTrustSettings(), PROVENANCE_POLICY_VERSION);
     } catch {
       // Never expose SDK exception strings: malformed metadata can contain arbitrary private text.
@@ -80,25 +96,36 @@ export function createProvenanceVerifier(options: ProvenanceOptions): Provenance
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
     let abort: (() => void) | undefined;
+    let interrupted = false;
     const started = performance.now();
+    const active = () => !interrupted && !disposed && !signal?.aborted &&
+      performance.now() - started <= timeoutMs && Date.now() < Date.parse(PROVENANCE_TRUST_EXPIRES_AT);
     const interruption = new Promise<ProvenanceResult>((resolve) => {
       abort = () => {
+        interrupted = true;
         resetRuntime();
         resolve(result('unavailable', 'C2PA_CANCELED'));
       };
+      cancelActive = abort;
       signal?.addEventListener('abort', abort, { once: true });
       timer = setTimeout(() => {
+        interrupted = true;
         resetRuntime();
         resolve(result('unavailable', 'C2PA_TIMEOUT'));
       }, timeoutMs);
     });
     try {
-      const answer = await Promise.race([read(blob), interruption]);
+      const answer = await Promise.race([read(blob, active), interruption]);
       // Wasm parsing can occupy this context synchronously; never accept an overdue result
       // merely because the timer callback could not run until parsing finished.
       if (performance.now() - started > timeoutMs) return result('unavailable', 'C2PA_TIMEOUT');
+      if (Date.now() >= Date.parse(PROVENANCE_TRUST_EXPIRES_AT)) {
+        return result('unavailable', 'C2PA_TRUST_SNAPSHOT_EXPIRED');
+      }
       return disposed || signal?.aborted ? result('unavailable', 'C2PA_CANCELED') : answer;
     } finally {
+      interrupted = true;
+      if (cancelActive === abort) cancelActive = undefined;
       if (timer !== undefined) clearTimeout(timer);
       if (abort) signal?.removeEventListener('abort', abort);
     }
@@ -125,6 +152,7 @@ export function createProvenanceVerifier(options: ProvenanceOptions): Provenance
     },
     dispose() {
       disposed = true;
+      cancelActive?.();
       resetRuntime();
     },
   };

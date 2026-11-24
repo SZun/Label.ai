@@ -5,6 +5,16 @@ from pathlib import Path
 import subprocess
 
 
+def select_scheme(schemes, platform):
+    apps = [s for s in schemes if "extension" not in s.lower() and "test" not in s.lower()]
+    matches = [s for s in apps if platform.lower() in s.lower()]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches and len(apps) == 1:
+        return apps[0]
+    raise ValueError(f"Cannot identify {platform} application scheme in {schemes}")
+
+
 def build(location):
     projects = list(location.rglob("*.xcodeproj"))
     if len(projects) != 1:
@@ -12,10 +22,8 @@ def build(location):
     cmd = ["xcodebuild","-project",str(projects[0])]
     schemes = json.loads(subprocess.check_output(cmd+["-list","-json"]))["project"]["schemes"]
     for platform, destination in (("macOS","generic/platform=macOS"), ("iOS","generic/platform=iOS Simulator")):
-        app = [s for s in schemes if platform.lower() in s.lower() and "extension" not in s.lower()]
-        if len(app) != 1:
-            raise SystemExit(f"Expected a {platform} application scheme in {schemes}")
-        subprocess.run(cmd+["-scheme",app[0],"-configuration","Debug","-destination",destination,
+        scheme = select_scheme(schemes, platform)
+        subprocess.run(cmd+["-scheme",scheme,"-configuration","Debug","-destination",destination,
                             "-derivedDataPath",str(location/"build"/platform),
                             "CODE_SIGNING_ALLOWED=NO","build"],check=True)
 

@@ -10,6 +10,7 @@ test:
 	python3 -m unittest discover -s tests/quality -v
 	pnpm test
 verify: test
+	pnpm format:check
 	pnpm -r --if-present typecheck
 	$(MAKE) build
 	python3 tools/audit_packages.py apps/extension/.output/chrome-mv3 apps/extension/.output/safari-mv3

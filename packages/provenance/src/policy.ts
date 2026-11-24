@@ -32,13 +32,15 @@ function record(value: unknown): RecordValue | undefined {
     ? value as RecordValue : undefined;
 }
 
-function codes(value: unknown): Set<string> {
-  return new Set(Array.isArray(value)
-    ? value.flatMap((item: unknown) => {
-        const code = record(item)?.code;
-        return typeof code === 'string' ? [code] : [];
-      })
-    : []);
+function codes(value: unknown): Set<string> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const result = new Set<string>();
+  for (const item of value) {
+    const code = record(item)?.code;
+    if (typeof code !== 'string' || code.length === 0) return undefined;
+    result.add(code);
+  }
+  return result;
 }
 
 const GENERATED = 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia';
@@ -56,7 +58,11 @@ export function evaluateManifest(value: unknown, policyVersion: string): Provena
   const manifest = record(manifests[label]);
   const checks = record(record(store?.validation_results)?.activeManifest);
   const success = codes(checks?.success);
-  const failure = codes(checks?.failure);
+  const failure = checks?.failure === undefined ? new Set<string>() : codes(checks.failure);
+  const informational = checks?.informational === undefined ? new Set<string>() : codes(checks.informational);
+  if (!success || !failure || !informational) {
+    return result('invalid', 'C2PA_MALFORMED_VALIDATION_REPORT');
+  }
   if (!success.has('signingCredential.trusted') &&
       (failure.size === 0 || [...failure].every((code) => code === 'signingCredential.untrusted'))) {
     return result('untrusted', 'C2PA_CREDENTIAL_UNTRUSTED');
@@ -64,7 +70,7 @@ export function evaluateManifest(value: unknown, policyVersion: string): Provena
   if (store?.validation_state !== 'Trusted' || failure.size > 0 ||
       !success.has('claimSignature.validated') ||
       ![...ASSET_BINDINGS].some((code) => success.has(code)) ||
-      [...codes(checks?.informational)].some((code) => /untrusted|revoked|mismatch|expired/i.test(code))) {
+      [...informational].some((code) => /untrusted|revoked|mismatch|expired/i.test(code))) {
     return result('invalid', 'C2PA_VALIDATION_FAILED');
   }
   if (!manifest || !Array.isArray(manifest.assertions)) {
@@ -89,6 +95,7 @@ export function evaluateManifest(value: unknown, policyVersion: string): Provena
   // It cannot authorize an asset-level badge, including on a complete video.
   if (creationActions.some((action) =>
       action.regionOfInterest !== undefined || action.regions !== undefined ||
+      action.changes !== undefined || action.changed !== undefined ||
       record(action.parameters)?.ingredients !== undefined ||
       record(action.parameters)?.ingredient !== undefined)) {
     return result('verified-other', 'C2PA_GENERATION_SCOPE_AMBIGUOUS');

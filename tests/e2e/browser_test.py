@@ -5,76 +5,61 @@ observations cover Playwright-visible targets plus every request reaching the pu
 A second scan runs after switching this temporary browser context offline.
 """
 import argparse
-import base64
 from contextlib import contextmanager
 import hashlib
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import subprocess
+from time import monotonic, sleep
 import json
 import os
 from pathlib import Path
-from tempfile import TemporaryDirectory
-from threading import Thread
-import zlib
-import struct
 import shutil
-
+import sys
+from tempfile import TemporaryDirectory
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
-SIGNED = ROOT / "tests/fixtures/provenance/firefly-generated.jpg"
+sys.path.insert(0,str(ROOT))
+from tools.demo_page import publisher
+
 TEXT = "AI Slop Detected 🤮"
 
 
-def ramp_png():
-    def chunk(tag,data):
-        return struct.pack(">I",len(data))+tag+data+struct.pack(">I",zlib.crc32(tag+data))
-    w,h=240,170
-    pixels=b"".join(b'\0'+bytes(((x+y)%250 for x in range(w))) for y in range(h))
-    return b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack(">IIBBBBB",w,h,8,0,0,0,0))+chunk(b'IDAT',zlib.compress(pixels))+chunk(b'IEND',b'')
-
-
 @contextmanager
-def publisher():
-    blobs = {"signed":SIGNED.read_bytes(), "unsigned":ramp_png()}
-    resources = {"/assets/"+hashlib.sha256(v).hexdigest()+(".jpg" if k=="signed" else ".png"):v for k,v in blobs.items()}
-    paths = list(resources)
-    requests=[]
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self,*_):
-            pass
-        def do_GET(self):
-            requests.append(("GET",self.path))
-            if self.path in resources:
-                data=resources[self.path]
-                mime="image/jpeg" if self.path.endswith(".jpg") else "image/png"
-            elif self.path=="/":
-                uris={k:"data:image/"+("jpeg" if k=="signed" else "png")+";base64,"+base64.b64encode(v).decode() for k,v in blobs.items()}
-                data=(f'<!doctype html><meta charset=utf-8><title>Label.ai local acceptance</title>'
-                      f'<link rel=icon href="data:,"><style>img{{width:240px;height:170px;object-fit:contain}}</style>'
-                      f'<img id=asset alt="Fixture artwork" src="{uris["signed"]}">'
-                      f'<img id=control alt="Conventional gradient" src="{uris["unsigned"]}">'
-                      f'<script>globalThis.signedSource={json.dumps(uris["signed"])};globalThis.addressed={json.dumps(paths[0])};</script>').encode()
-                mime="text/html"
-            else:
-                self.send_error(404)
-                return
-            self.send_response(200)
-            self.send_header("Content-Type",mime)
-            self.send_header("Content-Length",str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-        def do_POST(self):
-            requests.append(("POST",self.path))
-            self.send_error(405)
-        do_PUT=do_POST
-    server=ThreadingHTTPServer(("127.0.0.1",0),Handler)
-    thread=Thread(target=server.serve_forever,daemon=True)
-    thread.start()
-    try:
-        yield f"http://127.0.0.1:{server.server_port}",requests
-    finally:
-        server.shutdown()
-        server.server_close()
+def browser_session(pw, profile, launch, args):
+    if not args.desktop_cdp:
+        options = {"executable_path":args.browser} if args.browser else {"channel":"chromium"}
+        context = pw.chromium.launch_persistent_context(profile,headless=True,args=launch,
+            ignore_default_args=["--disable-extensions"],viewport={"width":1000,"height":720},**options)
+        try:
+            yield context
+        finally:
+            context.close()
+        return
+    # Vivaldi uses a component extension for its own browser UI. Run the full
+    # branded desktop under Xvfb and attach by its loopback DevTools endpoint.
+    if not args.browser:
+        raise ValueError("A native browser executable is required for desktop CDP")
+    flags = [arg for arg in launch if not arg.startswith("--disable-extensions-except=")]
+    cmd = [args.browser, f"--user-data-dir={profile}", "--remote-debugging-address=127.0.0.1",
+           "--remote-debugging-port=0", "--no-sandbox", *flags, "about:blank"]
+    with subprocess.Popen(cmd) as process:
+        browser = None
+        try:
+            port_file = Path(profile)/"DevToolsActivePort"
+            deadline = monotonic()+30
+            while not port_file.exists() and monotonic()<deadline and process.poll() is None:
+                sleep(.2)
+            port = int(port_file.read_text().splitlines()[0])
+            browser = pw.chromium.connect_over_cdp(f"http://127.0.0.1:{port}",timeout=25000)
+            yield browser.contexts[0]
+        finally:
+            if browser:
+                browser.close()
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
 
 
 def run(args):
@@ -95,47 +80,52 @@ def run(args):
         launch=["--disable-extensions-except="+str(build),"--load-extension="+str(build),
                 "--disable-background-networking","--disable-component-update","--disable-sync",
                 "--no-first-run","--no-default-browser-check","--disable-dev-shm-usage"]
-        options={"executable_path":args.browser} if args.browser else {"channel":"chromium"}
-        context=pw.chromium.launch_persistent_context(profile,headless=True,
-                args=launch,ignore_default_args=["--disable-extensions"],viewport={"width":1000,"height":720},**options)
-        forbidden=[]
-        def requests_seen(request):
-            if request.url.startswith(("http://","https://","ws://","wss://")):
-                path=request.url.removeprefix(origin)
-                expected=request.url.startswith(origin+"/") and (path=="/" or path.startswith("/assets/"))
-                if not expected or request.method!="GET" or "?" in request.url:
-                    forbidden.append([request.method,request.url.split("?")[0]])
-        context.on("request",requests_seen)
-        try:
-            worker=context.service_workers[0] if context.service_workers else context.wait_for_event("serviceworker",timeout=12000)
-            ext=worker.url.split("/")[2]
-            version=context.browser.version if context.browser else None
-            # Record the packaged extension identity and actual engine for each independent run.
-            print(f"Loaded {manifest['name']} {manifest['version']} ({ext}) on {version or args.browser}",flush=True)
-            options_path=manifest.get("options_ui",{}).get("page") or manifest.get("options_page") or manifest.get("action",{}).get("default_popup")
-            if not options_path:
-                raise AssertionError("missing site-access page")
-            options_page=context.new_page()
-            options_page.goto(f"chrome-extension://{ext}/{options_path}")
-            if args.install_only:
-                options_page.get_by_role("heading",name="Site access").wait_for()
-                return {"installed":True,"version":version,"options":options_path}
-            site=context.new_page()
-            site.goto(origin)
-            badge=site.get_by_text(TEXT,exact=True)
-            assert badge.count()==0, "unexpected badge before user grants access"
+        with browser_session(pw,profile,launch,args) as context:
+            return exercise_install(context,manifest,build,args,origin,publisher_requests)
 
-            # Set permission through the options page's real user-gesture handler.
-            options_page.bring_to_front()
-            options_page.get_by_role("textbox").first.fill(origin)
-            options_page.get_by_role("button",name=args.enable_button).click()
-            options_page.get_by_text("Local analysis enabled.",exact=False).wait_for(timeout=12000)
-            options_page.wait_for_function("""async () => (await chrome.scripting.getRegisteredContentScripts()).some(script => script.id === 'label-ai-media')""",timeout=12000)
-            site.bring_to_front()
-            site.reload()
-            return _exercise(site,options_page,worker,context,origin,badge,publisher_requests,version,forbidden)
-        finally:
-            context.close()
+
+def exercise_install(context,manifest,build,args,origin,publisher_requests):
+    forbidden=[]
+    def requests_seen(request):
+        if request.url.startswith(("http://","https://","ws://","wss://")):
+            path=request.url.removeprefix(origin)
+            expected=request.url.startswith(origin+"/") and (path=="/" or path.startswith("/assets/"))
+            if not expected or request.method!="GET" or "?" in request.url:
+                forbidden.append([request.method,request.url.split("?")[0]])
+    context.on("request",requests_seen)
+    # An unpacked extension without a key derives its Chromium ID from the absolute path.
+    chars = "abcdefghijklmnop"
+    ext = "".join(chars[int(h,16)] for h in hashlib.sha256(os.fsencode(build)).hexdigest()[:32])
+    options_page=context.new_page()
+    options_page.goto(f"chrome-extension://{ext}/options.html")
+    options_page.get_by_role("heading",name="Site access").wait_for()
+    options_page.evaluate("chrome.runtime.sendMessage({type:'label-ai:sync'})")
+    worker=next((w for w in context.service_workers if w.url.startswith(f"chrome-extension://{ext}/")),None)
+    if worker is None:
+        worker=context.wait_for_event("serviceworker",predicate=lambda w:w.url.startswith(f"chrome-extension://{ext}/"),timeout=12000)
+    version=context.browser.version if context.browser else None
+    # Record the packaged extension identity and actual engine for each independent run.
+    print(f"Loaded {manifest['name']} {manifest['version']} ({ext}) on {version or args.browser}",flush=True)
+    options_path=manifest.get("options_ui",{}).get("page") or manifest.get("options_page") or manifest.get("action",{}).get("default_popup")
+    if not options_path:
+        raise AssertionError("missing site-access page")
+    if args.install_only:
+        options_page.get_by_role("heading",name="Site access").wait_for()
+        return {"installed":True,"version":version,"options":options_path}
+    site=context.new_page()
+    site.goto(origin)
+    badge=site.get_by_text(TEXT,exact=True)
+    assert badge.count()==0, "unexpected badge before user grants access"
+
+    # Set permission through the options page's real user-gesture handler.
+    options_page.bring_to_front()
+    options_page.get_by_role("textbox").first.fill(origin)
+    options_page.get_by_role("button",name=args.enable_button).click()
+    options_page.get_by_text("Local analysis enabled.",exact=False).wait_for(timeout=12000)
+    options_page.wait_for_function("""async () => (await chrome.scripting.getRegisteredContentScripts()).some(script => script.id === 'label-ai-media')""",timeout=12000)
+    site.bring_to_front()
+    site.reload()
+    return _exercise(site,options_page,worker,context,origin,badge,publisher_requests,version,forbidden)
 
 
 def _exercise(site,options_page,worker,context,origin,badge,publisher_requests,version,forbidden):
@@ -191,6 +181,7 @@ if __name__=="__main__":
     parser.add_argument("--build",type=Path,required=True)
     parser.add_argument("--browser",default=os.getenv("LABEL_TEST_BROWSER"))
     parser.add_argument("--pregrant-test-origin",action="store_true",help="Add loopback host grant to a disposable copy for headless E2E")
+    parser.add_argument("--desktop-cdp",action="store_true",help="Attach to an isolated native desktop Chromium-family browser")
     parser.add_argument("--install-only",action="store_true")
     parser.add_argument("--enable-button",default="Enable on this site")
     parser.add_argument("--report",type=Path)

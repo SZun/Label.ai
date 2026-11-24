@@ -18,32 +18,52 @@ it('retrieves only the authorized publisher resource without credentials, referr
   vi.stubGlobal('crypto', webcrypto);
   const fetcher = vi.fn().mockResolvedValue(response());
   vi.stubGlobal('fetch', fetcher);
-  expect(await fetchContentAddressed(source, page, new AbortController().signal)).toEqual({ mime: 'image/jpeg', base64: '/9j/2Q==' });
+  expect(await fetchContentAddressed(source, page, new AbortController().signal)).toEqual({
+    mime: 'image/jpeg',
+    base64: '/9j/2Q==',
+  });
   expect(fetcher).toHaveBeenCalledOnce();
   expect(fetcher.mock.calls[0]?.[0]).toBe(source);
-  expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ method: 'GET', mode: 'same-origin', credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', cache: 'force-cache' });
+  expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
+    method: 'GET',
+    mode: 'same-origin',
+    credentials: 'omit',
+    redirect: 'error',
+    referrerPolicy: 'no-referrer',
+    cache: 'force-cache',
+  });
   expect(fetcher.mock.calls[0]?.[1]).not.toHaveProperty('body');
 });
 
 it('does not fetch unbound URLs or stale canceled work', async () => {
   const fetcher = vi.fn();
   vi.stubGlobal('fetch', fetcher);
-  for (const candidate of ['https://elsewhere.example/assets/' + digest + '.jpg', 'https://news.example/photo.jpg', source + '?token=private']) {
-    expect(await fetchContentAddressed(candidate, page, new AbortController().signal)).toBeUndefined();
+  for (const candidate of [
+    'https://elsewhere.example/assets/' + digest + '.jpg',
+    'https://news.example/photo.jpg',
+    source + '?token=private',
+  ]) {
+    expect(
+      await fetchContentAddressed(candidate, page, new AbortController().signal),
+    ).toBeUndefined();
   }
-  const controller = new AbortController(); controller.abort();
+  const controller = new AbortController();
+  controller.abort();
   expect(await fetchContentAddressed(source, page, controller.signal)).toBeUndefined();
   expect(fetcher).not.toHaveBeenCalled();
 });
 
 it('rejects altered bytes, redirects and oversized original responses', async () => {
   vi.stubGlobal('crypto', webcrypto);
-  const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+  const fetcher = vi.fn();
+  vi.stubGlobal('fetch', fetcher);
   fetcher.mockResolvedValueOnce(response(Uint8Array.from([1, 2, 3])));
   expect(await fetchContentAddressed(source, page, new AbortController().signal)).toBeUndefined();
   fetcher.mockResolvedValueOnce(response(bytes, source + '/redirect'));
   expect(await fetchContentAddressed(source, page, new AbortController().signal)).toBeUndefined();
-  fetcher.mockResolvedValueOnce(response(bytes, source, { 'content-length': String(MAX_ORIGINAL_BYTES + 1) }));
+  fetcher.mockResolvedValueOnce(
+    response(bytes, source, { 'content-length': String(MAX_ORIGINAL_BYTES + 1) }),
+  );
   expect(await fetchContentAddressed(source, page, new AbortController().signal)).toBeUndefined();
   fetcher.mockResolvedValueOnce(response(new Uint8Array(MAX_ORIGINAL_BYTES + 1)));
   expect(await fetchContentAddressed(source, page, new AbortController().signal)).toBeUndefined();

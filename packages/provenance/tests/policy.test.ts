@@ -108,3 +108,27 @@ test('video binding accepts validated BMFF hashes, never a frame/ingredient resu
   store.validation_results.activeManifest.success[2] = { code: 'assertion.bmffHash.match' };
   assert.equal(evaluateManifest(store, POLICY).shouldLabel, true);
 });
+
+for (const field of ['changes', 'changed']) {
+  test(`a ${field} region or temporal restriction cannot authorize a whole-asset label`, () => {
+    const store = trustedStore();
+    Object.assign(store.manifests[active].assertions[0].data.actions[0], {
+      [field]: [{ type: 'temporal', start: 0, end: 1 }],
+    });
+    const result = evaluateManifest(store, POLICY);
+    assert.equal(result.shouldLabel, false);
+    assert.equal(result.status, 'verified-other');
+  });
+}
+
+test('malformed validation status collections cannot be silently treated as successful validation', () => {
+  for (const field of ['success', 'failure', 'informational']) {
+    for (const malformed of ['unexpected', [{ unknown: 'error' }], [{ code: 42 }]]) {
+      const store = trustedStore();
+      Object.assign(store.validation_results.activeManifest, { [field]: malformed });
+      const result = evaluateManifest(store, POLICY);
+      assert.equal(result.shouldLabel, false, `${field} accepted malformed statuses`);
+      assert.equal(result.status, 'invalid');
+    }
+  }
+});

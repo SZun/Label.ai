@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, hostPermissionPattern, isEligiblePage, normalizeOrigin } from '../src/core/policy';
+import {
+  DEFAULT_SETTINGS,
+  hostPermissionPattern,
+  isEligiblePage,
+  normalizeOrigin,
+} from '../src/core/policy';
 
 const approved = { enabled: true, consentVersion: 1, approvedOrigins: ['https://news.example'] };
 describe('ACQ-01 local access and privacy admission', () => {
@@ -8,12 +13,23 @@ describe('ACQ-01 local access and privacy admission', () => {
     expect(isEligiblePage('https://news.example/article', DEFAULT_SETTINGS)).toBe(false);
     expect(isEligiblePage('https://elsewhere.example/article', approved)).toBe(false);
   });
-  it.each(['https://news.example/login', 'https://news.example/messages/123', 'https://news.example/checkout', 'file:///private.jpg', 'chrome://settings', 'https://user:secret@news.example/article'])('rejects sensitive or restricted context %s', (url) => {
+  it.each([
+    'https://news.example/login',
+    'https://news.example/messages/123',
+    'https://news.example/checkout',
+    'file:///private.jpg',
+    'chrome://settings',
+    'https://user:secret@news.example/article',
+  ])('rejects sensitive or restricted context %s', (url) => {
     expect(isEligiblePage(url, approved)).toBe(false);
   });
   it('revocation, old consent and password-bearing pages are ineligible', () => {
-    expect(isEligiblePage('https://news.example/article', { ...approved, enabled: false })).toBe(false);
-    expect(isEligiblePage('https://news.example/article', { ...approved, consentVersion: 0 })).toBe(false);
+    expect(isEligiblePage('https://news.example/article', { ...approved, enabled: false })).toBe(
+      false,
+    );
+    expect(isEligiblePage('https://news.example/article', { ...approved, consentVersion: 0 })).toBe(
+      false,
+    );
     expect(isEligiblePage('https://news.example/article', approved, true)).toBe(false);
   });
   it('normalizes origins without granting broader domains or credentials', () => {
@@ -32,5 +48,13 @@ describe('ACQ-01 local access and privacy admission', () => {
   });
   it('fails closed for malformed percent-encoded page paths', () => {
     expect(isEligiblePage('https://news.example/%E0%A4%A', approved)).toBe(false);
+  });
+  it.each([
+    'https://news.example/#/messages/secret',
+    'https://news.example/#!/checkout',
+    'https://news.example/?route=/account/billing',
+    'https://news.example/?path=%2Finbox%2Fsecret',
+  ])('excludes private SPA routes expressed in fragments or route parameters: %s', (url) => {
+    expect(isEligiblePage(url, approved)).toBe(false);
   });
 });

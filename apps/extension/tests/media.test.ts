@@ -10,13 +10,27 @@ it('ACQ-04 preserves aspect ratio and bounds local pixel acquisition', () => {
 
 it('only accepts exact same-origin hash-addressed public media with no query', () => {
   const sha = 'a'.repeat(64);
-  expect(contentAddressedSource(`https://news.example/assets/${sha}.jpg`, 'https://news.example/story')).toEqual({ url: `https://news.example/assets/${sha}.jpg`, sha256: sha, mime: 'image/jpeg' });
-  expect(contentAddressedSource(`https://other.example/assets/${sha}.jpg`, 'https://news.example/story')).toBeNull();
-  expect(contentAddressedSource(`https://news.example/assets/${sha}.jpg?token=secret`, 'https://news.example/story')).toBeNull();
-  expect(contentAddressedSource('https://news.example/assets/file.jpg', 'https://news.example/story')).toBeNull();
+  expect(
+    contentAddressedSource(`https://news.example/assets/${sha}.jpg`, 'https://news.example/story'),
+  ).toEqual({ url: `https://news.example/assets/${sha}.jpg`, sha256: sha, mime: 'image/jpeg' });
+  expect(
+    contentAddressedSource(`https://other.example/assets/${sha}.jpg`, 'https://news.example/story'),
+  ).toBeNull();
+  expect(
+    contentAddressedSource(
+      `https://news.example/assets/${sha}.jpg?token=secret`,
+      'https://news.example/story',
+    ),
+  ).toBeNull();
+  expect(
+    contentAddressedSource('https://news.example/assets/file.jpg', 'https://news.example/story'),
+  ).toBeNull();
 });
 it('ACQ-02 obtains original bytes only from the actual embedded source', () => {
-  expect(embeddedOriginal('data:image/jpeg;base64,AQID')).toEqual({ mime: 'image/jpeg', base64: 'AQID' });
+  expect(embeddedOriginal('data:image/jpeg;base64,AQID')).toEqual({
+    mime: 'image/jpeg',
+    base64: 'AQID',
+  });
   expect(embeddedOriginal('https://example.org/image.jpg')).toBeUndefined();
   expect(embeddedOriginal('data:image/svg+xml;base64,AQID')).toBeUndefined();
   expect(embeddedOriginal('data:image/jpeg;base64,%%%')).toBeUndefined();
