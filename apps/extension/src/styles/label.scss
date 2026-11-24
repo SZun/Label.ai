@@ -1,0 +1,20 @@
+@use '@smui/paper/mixins' as paper;
+@include paper.core-styles;
+
+.label-anchor { position: fixed; pointer-events: none; z-index: 2147483646; }
+.smui-paper.slop-label {
+  display: inline-flex; align-items: center; gap: 4px;
+  width: max-content; box-sizing: border-box; margin: 0; padding: 7px 11px;
+  border: 0; border-radius: 999px; color: #fff; background: #212121;
+  font: 600 13px/16px system-ui, sans-serif; letter-spacing: 0;
+  white-space: nowrap; pointer-events: none; user-select: none;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 25%); transform-origin: top left;
+}
+.slop-label.label--new { animation: label-arrival 720ms cubic-bezier(.2,.75,.25,1) 1 both; }
+@keyframes label-arrival {
+  0% { opacity: 0; transform: scale(.88); }
+  25% { opacity: 1; transform: scale(1.04); background: #b71c1c; box-shadow: 0 0 10px rgb(183 28 28 / 55%); }
+  55% { transform: scale(1); background: #b71c1c; }
+  100% { opacity: 1; transform: scale(1); background: #212121; box-shadow: 0 2px 6px rgb(0 0 0 / 25%); }
+}
+@media (prefers-reduced-motion: reduce) { .slop-label.label--new { animation: none; } }

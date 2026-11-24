@@ -1,0 +1,21 @@
+{
+  "name": "label-ai",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "pnpm --filter @label-ai/extension dev",
+    "build": "pnpm --filter @label-ai/extension build",
+    "build:chrome": "pnpm --filter @label-ai/extension build:chrome",
+    "build:safari": "pnpm --filter @label-ai/extension build:safari",
+    "typecheck": "pnpm --filter @label-ai/extension typecheck",
+    "test": "pnpm -r --if-present test",
+    "format:check": "prettier --check apps/extension/src apps/extension/entrypoints apps/extension/tests",
+    "package:chrome": "pnpm --filter @label-ai/extension zip",
+    "package:safari": "pnpm --filter @label-ai/extension zip:safari"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2",
+    "prettier-plugin-svelte": "3.4.1"
+  }
+}

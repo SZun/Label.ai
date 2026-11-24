@@ -1,0 +1,45 @@
+name: Verify the browser extension
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: make bootstrap
+      - run: make verify
+      - run: pip install -r tests/e2e/requirements.txt && python -m playwright install --with-deps chromium
+      - run: make test-e2e
+      - run: make package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages/*.zip
+          if-no-files-found: error
+  safari-wrapper:
+    needs: extension
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - name: Package the unsigned Apple host apps
+        run: |
+          mkdir -p artifacts/safari-web
+          unzip -q artifacts/packages/label-ai-safari.zip -d artifacts/safari-web
+          tools/package_safari.sh artifacts/safari-web artifacts/xcode
+          python tools/build_apple_host.py artifacts/xcode

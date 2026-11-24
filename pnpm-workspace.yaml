@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  '@parcel/watcher': false
+  esbuild: true
+  protobufjs: false
+onlyBuiltDependencies:
+  - esbuild
+ignoredBuiltDependencies:
+  - '@parcel/watcher'
+minimumReleaseAgeExclude:
+  - '@contentauth/c2pa-wasm@0.15.2'
+  - '@contentauth/c2pa-web@0.17.2'

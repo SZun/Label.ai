@@ -1,0 +1,27 @@
+{
+  "version": "c2pa-trust-2026-11-24.1",
+  "retrievedAt": "2026-11-24",
+  "expiresAt": "2027-02-22T00:00:00Z",
+  "conformanceCommit": "b6525ae86bac68cf8fe57c932e98cc4f7d1a8c17",
+  "sources": [
+    {
+      "file": "c2pa-anchors.pem",
+      "url": "https://raw.githubusercontent.com/c2pa-org/conformance-public/b6525ae86bac68cf8fe57c932e98cc4f7d1a8c17/trust-list/C2PA-TRUST-LIST.pem",
+      "license": "CC-BY-4.0",
+      "sha256": "859f422cf4744a45de6f073b258d76381c91a9624c10aaa40543c19c1f124e13"
+    },
+    {
+      "file": "timestamp-anchors.pem",
+      "url": "https://raw.githubusercontent.com/c2pa-org/conformance-public/b6525ae86bac68cf8fe57c932e98cc4f7d1a8c17/trust-list/C2PA-TSA-TRUST-LIST.pem",
+      "license": "CC-BY-4.0",
+      "sha256": "eca8347ee71e31d226e00c85b15aca356116fefe6c26ed8c0ee1f954115b1990"
+    },
+    {
+      "file": "adobe-legacy-root.pem",
+      "url": "https://contentcredentials.org/trust/anchors.pem",
+      "selection": "Only Adobe Root CA G2, a production CAI interim trust anchor; never test certificates",
+      "sourceSha256": "db57e50b9bd4e4c786cbb91f38fd85e2af6a9d5412438a8cddcc42688df07ae5",
+      "sha256": "8ff3b92d8f77ec497544c9c91845523bddcffb65adfdf579cff7b4a0f10bd12e"
+    }
+  ]
+}
