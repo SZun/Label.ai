@@ -53,6 +53,10 @@ class CdpError(RuntimeError):
     pass
 
 
+class WorkerUnavailable(CdpError):
+    pass
+
+
 class CDP:
     """Multiplex documented flattened sessions on the browser WebSocket."""
 
@@ -66,6 +70,8 @@ class CDP:
         self.requests = []
         self.unexpected = []
         self.errors = []
+        self.worker = None
+        self.managed_tabs = {}
         self.reader = asyncio.create_task(self._read())
 
     async def _read(self):
@@ -167,14 +173,37 @@ class CDP:
         raise AssertionError(f"Timed out waiting for {description} after {timeout}s")
 
     async def page(self, label, url):
-        target = (await self.command("Target.createTarget", {"url": "about:blank"}))["targetId"]
-        session = await self.attach(target, label)
-        await self.command("Page.enable", session=session)
-        await self.command("Page.navigate", {"url": url}, session=session)
-        return target, session
+        if self.worker is None:
+            raise CdpError("Attach the installed extension worker before creating browser tabs")
+        before = {target["targetId"] for target in (await self.command("Target.getTargets"))["targetInfos"]}
+        # Raw Target.createTarget creates an empty, unusable ghost target in Vivaldi.
+        # Its supported extension API creates a tab managed by the real browser UI.
+        tab = await self.evaluate(self.worker, """(async () => {
+          const url = new URL(%s).href;
+          const tab = await chrome.tabs.create({url, active:true});
+          return {id:tab.id,windowId:tab.windowId,url};
+        })()""" % json.dumps(url))
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            targets = (await self.command("Target.getTargets"))["targetInfos"]
+            for info in targets:
+                if info["type"] == "page" and info["targetId"] not in before and info["url"] == tab["url"]:
+                    target = info["targetId"]
+                    session = await self.attach(target, label)
+                    await self.command("Page.enable", session=session)
+                    self.managed_tabs[target] = tab
+                    return target, session
+            await asyncio.sleep(0.15)
+        raise AssertionError(f"Vivaldi did not expose the native {label} tab created by chrome.tabs.create")
 
     async def activate(self, target, session):
-        await self.command("Target.activateTarget", {"targetId": target})
+        tab = self.managed_tabs.get(target)
+        if tab is None or self.worker is None:
+            raise CdpError("Refusing to activate a target without its native Vivaldi tab identity")
+        await self.evaluate(self.worker, """(async () => {
+          await chrome.windows.update(%s,{focused:true});
+          await chrome.tabs.update(%s,{active:true});
+        })()""" % (json.dumps(tab["windowId"]), json.dumps(tab["id"])))
         await self.command("Page.bringToFront", session=session)
         await self.wait(session, "document.hasFocus() && !document.hidden", "focused document")
 
@@ -223,15 +252,34 @@ async def debugger_url(profile, process, log, timeout=35):
     raise TimeoutError(f"No loopback DevTools endpoint after {timeout}s: {log.read_text(errors='replace')[-6000:]}")
 
 
-async def extension_worker(cdp, extension_url):
-    deadline = time.monotonic() + 20
+async def extension_worker(cdp, extension_url, timeout=20):
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         targets = (await cdp.command("Target.getTargets"))["targetInfos"]
         for target in targets:
             if target["type"] == "service_worker" and target["url"].startswith(extension_url):
                 return await cdp.attach(target["targetId"], "extension-worker")
         await asyncio.sleep(0.15)
-    raise AssertionError("The packaged extension service worker was not available")
+    raise WorkerUnavailable("The packaged extension service worker was not available")
+
+
+async def bootstrap_worker(cdp, extension_url):
+    try:
+        return await extension_worker(cdp, extension_url, timeout=6)
+    except WorkerUnavailable:
+        # A worker can sleep before CDP attaches. Reuse a real startup tab, never
+        # the Vivaldi UI target and never an empty-URL ghost, to open our options.
+        step("Wake the extension through the existing real startup tab")
+        targets = (await cdp.command("Target.getTargets"))["targetInfos"]
+        startup = next((target for target in targets if target["type"] == "page" and target["url"] == "about:blank"), None)
+        if startup is None:
+            raise WorkerUnavailable("No live extension worker or real about:blank startup tab was available")
+        session = await cdp.attach(startup["targetId"], "worker-wakeup-options")
+        await cdp.command("Page.enable", session=session)
+        await cdp.command("Page.navigate", {"url": extension_url + "options.html"}, session=session)
+        await cdp.wait(session, "[...document.querySelectorAll('h2')].some(e=>e.textContent.trim()==='Site access')", "worker-wakeup options")
+        await cdp.evaluate(session, "chrome.runtime.sendMessage({type:'label-ai:sync'})")
+        return await extension_worker(cdp, extension_url)
 
 
 async def exercise(cdp, build, args, origin, publisher_requests):
@@ -239,14 +287,17 @@ async def exercise(cdp, build, args, origin, publisher_requests):
     extension_id = "".join(chars[int(h, 16)] for h in hashlib.sha256(os.fsencode(build)).hexdigest()[:32])
     extension_url = f"chrome-extension://{extension_id}/"
     version = await cdp.command("Browser.getVersion")
-    step("Open the packaged extension options")
+    step("Attach the installed extension worker before creating Vivaldi-managed tabs")
+    worker = await bootstrap_worker(cdp, extension_url)
+    cdp.worker = worker
+    step("Open the packaged extension options through chrome.tabs.create")
     options_target, options = await cdp.page("options", extension_url + "options.html")
     await cdp.wait(options, "[...document.querySelectorAll('h2')].some(e=>e.textContent.trim()==='Site access')", "site-access options")
     assert await cdp.evaluate(options, "chrome.runtime.id") == extension_id
     await cdp.evaluate(options, "chrome.runtime.sendMessage({type:'label-ai:sync'})")
-    worker = await extension_worker(cdp, extension_url)
     report = {"installed": True, "native_browser": "Vivaldi", "transport": "direct-cdp-explicit-targets",
-              "version": version, "extension_id": extension_id, "test_origin_pregranted": args.pregrant_test_origin}
+              "tab_creation": "chrome.tabs.create", "version": version, "extension_id": extension_id,
+              "test_origin_pregranted": args.pregrant_test_origin}
     if args.install_only:
         assert not cdp.unexpected and not cdp.errors, {"network": cdp.unexpected, "runtime": cdp.errors}
         report.update({"unexpected_requests": cdp.unexpected, "observed_requests": cdp.requests,
@@ -297,7 +348,7 @@ async def exercise(cdp, build, args, origin, publisher_requests):
 
     step("Verify reduced-motion signed provenance entirely offline")
     await cdp.command("Emulation.setEmulatedMedia", {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]}, session=site)
-    await cdp.offline([site, options, worker], True)
+    await cdp.offline(list(cdp.labels), True)
     offline_requests = len(publisher_requests)
     await cdp.evaluate(site, "document.querySelector('#asset').src=globalThis.signedSource")
     labels = await badge(1, 30)
@@ -322,7 +373,7 @@ async def exercise(cdp, build, args, origin, publisher_requests):
     step("Verify DOM removal and consent revocation")
     await cdp.evaluate(site, "document.querySelector('#asset').remove()")
     await badge(0, 10)
-    await cdp.offline([site, options, worker], False)
+    await cdp.offline(list(cdp.labels), False)
     await cdp.activate(options_target, options)
     await cdp.click(options, aria=f"Remove {origin}")
     await cdp.wait(options, "chrome.scripting.getRegisteredContentScripts().then(s=>s.length===0)", "revoked script registration")

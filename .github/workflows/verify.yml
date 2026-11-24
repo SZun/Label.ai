@@ -78,29 +78,6 @@ jobs:
         with:
           name: browser-verification-${{ matrix.browser }}
           path: artifacts/browser-report.json
-  safari-wrapper:
-    needs: extension
-    runs-on: macos-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: label-ai-browser-extensions
-          path: artifacts/packages
-      - name: Package the unsigned Apple host apps
-        run: |
-          mkdir -p artifacts/safari-web
-          unzip -q artifacts/packages/label-ai-safari.zip -d artifacts/safari-web
-          tools/package_safari.sh artifacts/safari-web artifacts/xcode
-          python tools/build_apple_host.py artifacts/xcode
-      - uses: actions/upload-artifact@v4
-        with:
-          name: label-ai-safari-xcode
-          path: |
-            artifacts/xcode/**
-            !artifacts/xcode/build/**
-          if-no-files-found: error
   safari-runtime:
     needs: extension
     runs-on: macos-latest
@@ -119,6 +96,8 @@ jobs:
         with:
           name: safari-verifier-harness
           path: artifacts/safari-verifier
+      - name: Extract the packaged Safari target
+        run: unzip -q artifacts/packages/label-ai-safari.zip -d artifacts/safari-web
       - name: Boot an available iPhone simulator
         if: matrix.platform == 'ios-simulator'
         run: |
@@ -128,10 +107,21 @@ jobs:
         env:
           PLATFORM: ${{ matrix.platform }}
         run: |
-          mkdir -p artifacts/safari-web
-          unzip -q artifacts/packages/label-ai-safari.zip -d artifacts/safari-web
           python3 tools/prepare_provenance_fixtures.py
           sudo /usr/bin/safaridriver --enable
           args=(artifacts/safari-verifier --extension artifacts/safari-web)
           if [ "$PLATFORM" = ios-simulator ]; then args+=(--ios-simulator); fi
           python3 -u tests/e2e/safari_verifier.py "${args[@]}"
+      - name: Compile the unsigned macOS and iOS host apps
+        if: "!cancelled() && matrix.platform == 'desktop'"
+        run: |
+          tools/package_safari.sh artifacts/safari-web artifacts/xcode
+          python3 tools/build_apple_host.py artifacts/xcode
+      - uses: actions/upload-artifact@v4
+        if: "!cancelled() && matrix.platform == 'desktop' && hashFiles('artifacts/xcode/**/*.pbxproj') != ''"
+        with:
+          name: label-ai-safari-xcode
+          path: |
+            artifacts/xcode/**
+            !artifacts/xcode/build/**
+          if-no-files-found: error

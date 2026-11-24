@@ -22,6 +22,10 @@ ELEMENT = "element-6066-11e4-a52e-4f735466cecf"
 TEXT = "AI Slop Detected 🤮"
 
 
+class SetupUnavailable(AssertionError):
+    """Only origin discovery or native permission interaction may use a test copy."""
+
+
 def step(name, **details):
     print(json.dumps({"safari_extension_step": name, **details}, ensure_ascii=False), flush=True)
 
@@ -135,9 +139,12 @@ def options_ready(driver):
 
 def open_original_options(driver, identifier, options_path):
     if not re.fullmatch(r"[A-Za-z0-9._-]+", identifier):
-        raise AssertionError("Install identifier does not directly identify a Safari extension origin")
-    driver.navigate(f"safari-web-extension://{identifier}/{options_path}")
-    driver.wait("unmodified extension options page", lambda: options_ready(driver), 8)
+        raise SetupUnavailable("Install identifier does not directly identify a Safari extension origin")
+    try:
+        driver.navigate(f"safari-web-extension://{identifier}/{options_path}")
+        driver.wait("unmodified extension options page", lambda: options_ready(driver), 8)
+    except (AssertionError, RuntimeError) as error:
+        raise SetupUnavailable(str(error)) from error
     return driver.call("/window")
 
 
@@ -182,6 +189,9 @@ def find_opened_options(driver):
 
 def request_consent(driver, options, origin):
     driver.switch(options)
+    private = driver.script("return (globalThis.browser||globalThis.chrome).extension?.inIncognitoContext===true;")
+    step("options.context", incognito=private)
+    assert not private, "SafariDriver extension context is private; production guard must remain active"
     element = driver.element("#site")
     driver.call("/element/" + quote(element, safe="") + "/clear", "POST", {})
     driver.call("/element/" + quote(element, safe="") + "/value", "POST", {"text": origin})
@@ -190,14 +200,18 @@ def request_consent(driver, options, origin):
     def consent():
         message = driver.script("return document.querySelector('[role=status]')?.textContent||''")
         if "not granted" in message:
-            raise AssertionError("Native site permission was not granted")
+            raise SetupUnavailable("Native site permission was not granted")
         return "Local analysis enabled." in message
-    driver.wait("real options consent handler", consent, 12)
+    try:
+        driver.wait("real options consent handler", consent, 12)
+    except (AssertionError, RuntimeError) as error:
+        raise SetupUnavailable(str(error)) from error
     driver.wait("registered production content script", lambda: driver.async_script("const api=globalThis.browser||globalThis.chrome; return (await api.scripting.getRegisteredContentScripts()).some(s=>s.id==='label-ai-media');"), 12)
-    state = driver.async_script("const api=globalThis.browser||globalThis.chrome; return {permissions:await api.permissions.getAll(),settings:(await api.storage.local.get('localSettings')).localSettings,incognito:api.extension?.inIncognitoContext};")
+    state = driver.async_script("const api=globalThis.browser||globalThis.chrome; return {permissions:await api.permissions.getAll(),settings:(await api.storage.local.get('localSettings')).localSettings,incognito:api.extension?.inIncognitoContext,tabs:(await api.tabs.query({})).filter(t=>t.url?.startsWith(args[0]+'/')).map(t=>({id:t.id,incognito:t.incognito,active:t.active}))};", origin)
     assert state["settings"]["enabled"] and origin in state["settings"]["approvedOrigins"], state
     assert state.get("incognito") is not True, "SafariDriver extension context is private; production guard must remain active"
     step("consent.complete", state=state)
+    assert not any(tab.get("incognito") for tab in state["tabs"]), "SafariDriver fixture tab is private; production guard must remain active"
 
 
 def start_model_check(driver, options, origin):
@@ -312,7 +326,7 @@ def run_extension(session, request, build):
                 driver.navigate(origin + "/")
                 badge_count(driver, 0, 5)
                 request_consent(driver, options, origin)
-            except (AssertionError, RuntimeError) as error:
+            except SetupUnavailable as error:
                 step("test_setup_fallback", reason=str(error)[:500],
                      disclosure="Disposable copy adds only loopback host grant and onInstalled options bootstrap; production scripts, detector checks and private-browsing guards stay intact.")
                 uninstall(driver, identifier)
