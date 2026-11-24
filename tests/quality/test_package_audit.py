@@ -31,5 +31,6 @@ class PackagePolicyTests(unittest.TestCase):
                 "content_security_policy": {"extension_pages": "script-src 'self'; connect-src 'self'"},
             }))
             findings = " ".join(inspect_build(base))
+            self.assertIn("incognito", findings)
             self.assertIn("host permissions", findings)
             self.assertIn("static content scripts", findings)

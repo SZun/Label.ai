@@ -68,6 +68,7 @@ export default defineContentScript({
 
     const active = () =>
       !ended &&
+      !browser.extension?.inIncognitoContext &&
       !document.hidden &&
       document.hasFocus() &&
       isEligiblePage(

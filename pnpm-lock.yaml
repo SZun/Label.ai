@@ -83,6 +83,9 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+      vite:
+        specifier: 8.3.8
+        version: 8.3.8(@types/node@24.10.1)(jiti@2.7.0)(sass@1.94.2)
 
 packages:
 

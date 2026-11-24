@@ -26,7 +26,7 @@ jobs:
           name: label-ai-browser-extensions
           path: artifacts/packages/*.zip
           if-no-files-found: error
-      - run: pnpm --dir apps/extension exec vite build --config ../../packages/provenance/tests/browser/vite.config.mjs --outDir ../../../../artifacts/safari-verifier --base ./
+      - run: pnpm --dir packages/provenance exec vite build --config tests/browser/vite.config.mjs --outDir ../../../../artifacts/safari-verifier --base ./
       - uses: actions/upload-artifact@v4
         with:
           name: safari-verifier-harness

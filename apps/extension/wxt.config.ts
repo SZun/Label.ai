@@ -33,6 +33,7 @@ export default defineConfig({
     description:
       'Private, on-device analysis of visible images and videos. Media never leaves your device for analysis.',
     version: '0.1.0',
+    incognito: 'not_allowed',
     permissions: ['storage', 'scripting'],
     optional_host_permissions: ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'],
     action: { default_title: 'Label.ai privacy and site access' },

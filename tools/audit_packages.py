@@ -23,6 +23,8 @@ class ActiveResources(HTMLParser):
 def inspect_build(build):
     m = json.loads((build/"manifest.json").read_text())
     errors = []
+    if m.get("incognito") != "not_allowed":
+        errors.append("incognito access must be explicitly disabled")
     if m.get("host_permissions"):
         errors.append("host permissions must be optional at install time")
     if m.get("content_scripts"):
