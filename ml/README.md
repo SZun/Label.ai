@@ -216,8 +216,9 @@ node --experimental-strip-types packages/detector/tests/run-corpus.ts \
 
 ### Candidate research for the next model comparison
 
-Two compact ONNX image candidates have public model cards, but neither has been
-measured in Label.ai or cleared for its distribution:
+Two compact ONNX image candidates have public model cards. One was measured
+in the bounded development comparison below; neither has been cleared for
+Label.ai distribution.
 
 - [Slop Detect ViT-S int8](https://huggingface.co/Loke-60000/slop-detect-vit-s-onnx):
   MIT-declared checkpoint; the publisher describes web-degraded training and
@@ -242,3 +243,42 @@ positives for the current projected 99% precision lower-bound criterion. That
 calculation is a feasibility bound; calibrated recall and actual observed errors
 will determine the necessary size. Neither this development corpus nor the
 publicly available frontier split satisfies that acceptance condition.
+
+
+### One bounded comparison with the newer Loke ONNX model
+
+The same 38 original image files were then run once with the publisher's
+23,046,673-byte int8 ONNX artifact
+([revision 3bed6a1e](https://huggingface.co/Loke-60000/slop-detect-vit-s-onnx/tree/3bed6a1e72ae7c3f8a783ecbee8d3d71a64a12e4)).
+The runtime and model SHA-256 were verified before inference, and channels
+were normalized using the published `model.json` CLIP constants. All 38
+inferences completed with a median inference time of 843 ms on the
+development CPU. Pairwise ranking AUROC was 0.817 (Loke) versus 0.778
+(Detectra). Counts at preexisting diagnostic thresholds follow.
+
+| Raw threshold | Detectra generated / genuine flagged | Loke generated / genuine flagged |
+| --- | --- | --- |
+| 0.65 (Loke author threshold) | 4/19 / 0/19 | 6/19 / 1/19 |
+| 0.99 | 0/19 / 0/19 | 2/19 / 0/19 |
+
+The replacement candidate had modestly better ranking on this sample. Its
+high-score recall was still low and its author threshold flagged a real
+image. No model was promoted, no threshold was tuned, and the independent
+release gate is still outstanding. Candidate per-file raw results and
+hashes are in the same frontier report.
+
+To reproduce after preparing the sample, provision the exact candidate
+weights below. The developer comparison validates the expected model
+size and checksum before use.
+
+```sh
+curl --fail --location --max-time 60 \
+  https://huggingface.co/Loke-60000/slop-detect-vit-s-onnx/resolve/3bed6a1e72ae7c3f8a783ecbee8d3d71a64a12e4/model.onnx \
+  --output artifacts/frontier-dev/loke-candidate.onnx
+python ml/prepare-smoke.py artifacts/frontier-dev/originals-manifest.jsonl \
+  artifacts/frontier-dev/originals-prepared
+node --experimental-strip-types packages/detector/tests/compare-loke.ts \
+  artifacts/frontier-dev/loke-candidate.onnx \
+  artifacts/frontier-dev/originals-prepared/prepared.json \
+  artifacts/frontier-dev/loke-rerun.jsonl
+```
