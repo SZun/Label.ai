@@ -51,22 +51,39 @@ def run(args):
         launch=["--disable-extensions-except="+str(build),"--load-extension="+str(build),
                 "--disable-background-networking","--disable-component-update","--disable-sync",
                 "--no-first-run","--no-default-browser-check","--disable-dev-shm-usage"]
+        forbidden=[]
+        requests_seen = request_observer(origin, forbidden)
         with browser_session(pw,profile,launch,args) as context:
-            return exercise_install(context,manifest,build,args,origin,publisher_requests)
+            context.on("request", requests_seen)
+            result = exercise_install(context,manifest,build,args,origin)
+        if not args.install_only:
+            with browser_session(pw,profile,launch,args) as context:
+                context.on("request", requests_seen)
+                result.update(exercise_restart(context, build, origin))
+            assert all(m=="GET" and "?" not in path for m,path in publisher_requests), publisher_requests
+        assert not forbidden, f"unexpected HTTP/WS traffic: {forbidden}"
+        result["unexpected_requests"] = forbidden
+        return result
 
 
-def exercise_install(context,manifest,build,args,origin,publisher_requests):
-    forbidden=[]
+def request_observer(origin, forbidden):
     def requests_seen(request):
         if request.url.startswith(("http://","https://","ws://","wss://")):
             path=request.url.removeprefix(origin)
             expected=request.url.startswith(origin+"/") and (path=="/" or path.startswith("/assets/"))
             if not expected or request.method!="GET" or "?" in request.url:
                 forbidden.append([request.method,request.url.split("?")[0]])
-    context.on("request",requests_seen)
+    return requests_seen
+
+
+def extension_id(build):
     # An unpacked extension without a key derives its Chromium ID from the absolute path.
     chars = "abcdefghijklmnop"
-    ext = "".join(chars[int(h,16)] for h in hashlib.sha256(os.fsencode(build)).hexdigest()[:32])
+    return "".join(chars[int(h,16)] for h in hashlib.sha256(os.fsencode(build)).hexdigest()[:32])
+
+
+def exercise_install(context,manifest,build,args,origin):
+    ext = extension_id(build)
     options_page=context.new_page()
     options_page.goto(f"chrome-extension://{ext}/options.html")
     options_page.get_by_role("heading",name="Site access").wait_for()
@@ -96,10 +113,10 @@ def exercise_install(context,manifest,build,args,origin,publisher_requests):
     options_page.wait_for_function("""async () => (await chrome.scripting.getRegisteredContentScripts()).some(script => script.id === 'label-ai-media')""",timeout=12000)
     site.bring_to_front()
     site.reload()
-    return _exercise(site,options_page,worker,context,origin,badge,publisher_requests,version,forbidden)
+    return exercise_page(site,worker,context,badge,version)
 
 
-def _exercise(site,options_page,worker,context,origin,badge,publisher_requests,version,forbidden):
+def exercise_page(site,worker,context,badge,version):
     badge.wait_for(state="visible",timeout=45000)
     assert badge.count()==1
     assert badge.evaluate("(e)=>getComputedStyle(e).pointerEvents")=="none"
@@ -109,6 +126,18 @@ def _exercise(site,options_page,worker,context,origin,badge,publisher_requests,v
     badge.wait_for(state="visible",timeout=45000)
     site.evaluate("document.querySelector('#asset').src=document.querySelector('#control').src")
     badge.wait_for(state="detached",timeout=10000)
+    site.evaluate("""async () => {
+      const bytes=await (await fetch(globalThis.signedSource)).blob();
+      globalThis.signedBlob=URL.createObjectURL(bytes);
+      document.querySelector('#asset').src=globalThis.signedBlob;
+    }""")
+    badge.wait_for(state="visible",timeout=45000)
+    site.evaluate("""() => {
+      document.querySelector('#asset').src=document.querySelector('#control').src;
+      URL.revokeObjectURL(globalThis.signedBlob);
+    }""")
+    badge.wait_for(state="detached",timeout=10000)
+    video = exercise_video(site, badge)
     context.set_offline(True)
     site.emulate_media(reduced_motion="reduce")
     site.evaluate("document.querySelector('#asset').src=globalThis.signedSource")
@@ -150,16 +179,77 @@ def _exercise(site,options_page,worker,context,origin,badge,publisher_requests,v
     badge.wait_for(state="visible",timeout=45000)
     assert badge.count()==1, "expected the signed final item of the long feed to be labeled"
     context.set_offline(False)
+    return {"installed":True,"version":version,"positive":True,"removal":True,
+            "offline":True,"offline_model_status":reply["status"],"long_feed_positive":True,
+            "addressed_positive":True,"blob_positive":True,"reduced_motion":True,"video":video}
+
+
+def exercise_video(site, badge):
+    """Check actual video playback and abstention on a signed image poster."""
+    supports_mp4 = site.evaluate("""() => Boolean(document.createElement('video').canPlayType('video/mp4; codecs="avc1.64001F"'))""")
+    if not supports_mp4:
+        return {"playback":"unsupported_mp4_codec","verified":False}
+    site.evaluate("""async () => {
+      const video=document.createElement('video');
+      video.id='clip'; video.width=260; video.height=200; video.muted=true;
+      video.playsInline=true; video.controls=true;
+      video.poster=globalThis.signedSource;
+      globalThis.videoEvents={seeking:0,pause:0};
+      for (const event of ['seeking','pause']) video.addEventListener(event,()=>globalThis.videoEvents[event]++);
+      const blob=await (await fetch(globalThis.videoFixture)).blob();
+      globalThis.videoBlob=URL.createObjectURL(blob);
+      video.src=globalThis.videoBlob;
+      document.body.prepend(video);
+      await video.play();
+    }""")
+    try:
+        site.wait_for_function("document.querySelector('#clip')?.currentTime >= 3", timeout=15000)
+        state = site.evaluate("""() => {
+          const video=document.querySelector('#clip');
+          return {paused:video.paused, seeking:globalThis.videoEvents.seeking,
+                  pauses:globalThis.videoEvents.pause, controls:video.controls};
+        }""")
+        assert state=={"paused":False,"seeking":0,"pauses":0,"controls":True}, state
+        assert badge.count()==0, "signed AI poster or ineligible video produced a whole-video label"
+        return {"playback":"passed","verified":True,"poster_negative":True,"no_seek":True}
+    finally:
+        site.evaluate("""() => {
+          document.querySelector('#clip')?.remove();
+          URL.revokeObjectURL(globalThis.videoBlob);
+        }""")
+
+
+
+def exercise_restart(context, build, origin):
+    """Reopen the actual persistent profile, verifying startup without another grant."""
+    options_page = context.new_page()
+    options_page.goto(f"chrome-extension://{extension_id(build)}/options.html")
+    options_page.get_by_role("button",name=f"Remove {origin}").wait_for(timeout=12000)
+    site = context.new_page()
+    site.bring_to_front()
+    site.goto(origin)
+    badge = site.get_by_text(TEXT, exact=True)
+    badge.wait_for(state="visible", timeout=45000)
+    assert badge.count()==1, "expected a restored label without granting the site again"
+
+    # The label must return on viewport re-entry without replaying its entrance animation.
+    site.evaluate("""() => {
+      document.body.style.minHeight='2200px';
+      window.scrollTo(0, 1800);
+    }""")
+    badge.wait_for(state="detached", timeout=10000)
+    site.evaluate("window.scrollTo(0,0)")
+    badge.wait_for(state="visible", timeout=20000)
+    assert badge.evaluate("(e)=>getComputedStyle(e).animationName")=="none"
+
     options_page.bring_to_front()
     options_page.get_by_role("button",name=f"Remove {origin}").click()
     options_page.wait_for_function("async () => (await chrome.scripting.getRegisteredContentScripts()).length === 0")
     site.bring_to_front()
+    badge.wait_for(state="detached",timeout=10000)
     site.reload()
     assert badge.count()==0
-    assert not forbidden, f"unexpected HTTP/WS traffic: {forbidden}"
-    assert all(m=="GET" and "?" not in path for m,path in publisher_requests), publisher_requests
-    return {"installed":True,"version":version,"positive":True,"removal":True,
-            "offline":True,"offline_model_status":reply["status"],"long_feed_positive":True,"addressed_positive":True,"revocation":True,"reduced_motion":True,"unexpected_requests":forbidden}
+    return {"persistent_browser_restart":True,"scroll_reentry_without_animation":True,"revocation":True}
 
 
 if __name__=="__main__":

@@ -1,0 +1,2147 @@
+{
+  "schemaVersion": 1,
+  "purpose": "DEVELOPER COMPARISON ONLY - NOT A RELEASE HOLDOUT",
+  "dataset": {
+    "name": "WasItAIGenerated Frontier Image & Video Benchmark (October 2026)",
+    "revision": "e6a8b83d15fab1da958848368fcd07e943afafd0",
+    "url": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10",
+    "metadataSha256": "f8063df0a65c41dd66fe259e7c4b86f3bb71f7fe10e9ccc52df091ba9b09873c",
+    "selection": "label-ai-frontier-dev-v1; hash-selected per generator, source-distinct genuine assets, paired original/Instagram images; 3 generated/3 genuine clips"
+  },
+  "runtime": {
+    "engine": "ONNX Runtime Web/WASM with exact pinned model and WASM, Node 24 Linux x64",
+    "model": "detectra-v3-vits16-384",
+    "modelSha256": "1414b9aafaa01a644ed706224973f09b53a1388282104409862df9893b1b962b",
+    "wasmSha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d",
+    "preprocessingVersion": "rgb-white-bilinear440-center384-imagenet-v1",
+    "temporalFeatureVersion": "luma32-consecutive-difference2-logit-distribution-v1",
+    "manifestSha256": {
+      "image": "01fdf025840412fd4879131ee2ce85d5f3d9ff315f95fdad5457ed5ea383e47b",
+      "video": "31230ce5de38af2570f7ec8df7ce4c23a003a0429a7cd3de4e6baf16ed7312d9"
+    }
+  },
+  "counts": {
+    "assetRenditions": 82,
+    "sourceGroups": 44,
+    "generatedImageGenerators": 19,
+    "generatedVideoGenerators": 3,
+    "completed": 82,
+    "label": 0
+  },
+  "notes": [
+    "Image originals and Instagram renditions are dependent; they must not be pooled as independent evidence.",
+    "Dataset authors removed image metadata. This tests statistical scores rather than C2PA provenance.",
+    "Development sample only; no claim of training disjointness, unseen-generator independence, difficult-negative category coverage or representative prevalence.",
+    "Scores are uncalibrated diagnostics: image sigmoid(logit), video lower-quartile frame score. The latter is not a learned clip posterior.",
+    "The current policy deliberately abstained on every sample. Candidate threshold .99 is a fixed diagnostic from the existing policy; .5 is shown for comparison, not selected as a release threshold.",
+    "Pixel acquisition uses local Pillow and ffmpeg, with video size/cadence approximating the extension. Native browser behavior is a separate acceptance gate."
+  ],
+  "summary": {
+    "image/instagram": {
+      "generated": {
+        "n": 19,
+        "scoreMin": 0.0001516387933388399,
+        "scoreMax": 0.8972539035038549,
+        "scoreMedian": 0.03763164818488748,
+        "rawAtLeast99": 0,
+        "rawAtLeast50": 2
+      },
+      "genuine": {
+        "n": 19,
+        "scoreMin": 3.1012440399185714e-05,
+        "scoreMax": 0.016351536434217558,
+        "scoreMedian": 0.005273503932362078,
+        "rawAtLeast99": 0,
+        "rawAtLeast50": 0
+      },
+      "decodeAndInferenceElapsedMsMedian": 1576.296173499999
+    },
+    "image/original": {
+      "generated": {
+        "n": 19,
+        "scoreMin": 0.00016329193773503915,
+        "scoreMax": 0.9141548521041831,
+        "scoreMedian": 0.07240054502964358,
+        "rawAtLeast99": 0,
+        "rawAtLeast50": 4
+      },
+      "genuine": {
+        "n": 19,
+        "scoreMin": 2.609826636404386e-05,
+        "scoreMax": 0.015809967908430568,
+        "scoreMedian": 0.002456857005063214,
+        "rawAtLeast99": 0,
+        "rawAtLeast50": 0
+      },
+      "decodeAndInferenceElapsedMsMedian": 1813.337621000006
+    },
+    "video/original": {
+      "generated": {
+        "n": 3,
+        "scoreMin": 0.0008536655814333227,
+        "scoreMax": 0.3813788284937483,
+        "scoreMedian": 0.23768485423631505,
+        "rawAtLeast99": 0,
+        "rawAtLeast50": 0,
+        "temporallyEligible": 1
+      },
+      "genuine": {
+        "n": 3,
+        "scoreMin": 0.0001231114200154494,
+        "scoreMax": 0.5454399833144401,
+        "scoreMedian": 0.0024715936745438013,
+        "rawAtLeast99": 0,
+        "rawAtLeast50": 1,
+        "temporallyEligible": 2
+      },
+      "decodeAndInferenceElapsedMsMedian": 20044.354157500005
+    }
+  },
+  "rows": [
+    {
+      "file": "images/i598e52166541.png",
+      "sha256": "d089dd71d04f6d602b93cb14e1826b6d9bd756de437cf58a686c73c3f883363a",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i598e52166541.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "alibaba/qwen-image-3",
+      "group": "i598e52166541",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.777724254922406,
+      "elapsedMs": 1918.608122,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i598e52166541.jpg",
+      "sha256": "932861553c9c3eb4549d3de1cfe2c2c1d63537608b529615f5668e622243a4b8",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/i598e52166541.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "alibaba/qwen-image-3",
+      "group": "i598e52166541",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.46382916374909205,
+      "elapsedMs": 2040.1479320000003,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/ifc92f833a520.jpg",
+      "sha256": "fc92f833a52027423c5a5eff7f928d79ce24f6bf7a2b4c8521dd21cf47021cbd",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/ifc92f833a520.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "blackforestlabs/flux-3",
+      "group": "ifc92f833a520",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.00032715235075061506,
+      "elapsedMs": 2142.643647000001,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/ifc92f833a520.jpg",
+      "sha256": "5212064d7c30a79f8eeca45e7a556f90cc9f13895b9d725f3236b81654502f42",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/ifc92f833a520.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "blackforestlabs/flux-3",
+      "group": "ifc92f833a520",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.0005019071512126147,
+      "elapsedMs": 2142.1496319999997,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/iccfdbf0ab715.jpg",
+      "sha256": "b3682c6a4f562d3c8e6271f83ee0868a6c1f3e751ff3a1a1c1c229ad696ebc4b",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/iccfdbf0ab715.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "bytedance/seedream/v5/pro",
+      "group": "iccfdbf0ab715",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.00016329193773503915,
+      "elapsedMs": 2399.0568550000007,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/iccfdbf0ab715.jpg",
+      "sha256": "f8560cd2ce9df3e6e539f50416b1fee304d9a96172654806ab9f741107f9ce6c",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/iccfdbf0ab715.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "bytedance/seedream/v5/pro",
+      "group": "iccfdbf0ab715",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.00044236139198127773,
+      "elapsedMs": 2109.6600310000013,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i1eb44e267d8b.png",
+      "sha256": "7413328da7363b003c7c0368cab8a40fe9b78c96d9a995f69a47eaa0757f7c73",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i1eb44e267d8b.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "flux-2",
+      "group": "i1eb44e267d8b",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.8188187787215665,
+      "elapsedMs": 2021.4570050000002,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i1eb44e267d8b.jpg",
+      "sha256": "d239dbd8d6e669be9d19930b27f034ae9df99f3c8421e114347b1b50448d582a",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/i1eb44e267d8b.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "flux-2",
+      "group": "i1eb44e267d8b",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.15262796454438127,
+      "elapsedMs": 2059.406008,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i74d377113b09.jpg",
+      "sha256": "7f22a7d861baa31e3d7ffaee78e85a4712d888912c93c91479e770e30c0010dd",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i74d377113b09.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "flux-2-pro",
+      "group": "i74d377113b09",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.07240054502964358,
+      "elapsedMs": 2090.058148,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i74d377113b09.jpg",
+      "sha256": "bda1409c7ea3aeaf1e9b76e3325c290cd931f0269f7efb680dbe9d0e38d91ff2",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/i74d377113b09.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "flux-2-pro",
+      "group": "i74d377113b09",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.21482560751512428,
+      "elapsedMs": 2134.610067999998,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i505ecc34bde8.png",
+      "sha256": "505ecc34bde82264dcf017cc0a5de55aadd1314e278c08566b7ba4bb28898954",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i505ecc34bde8.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "google/nano-banana-2.1",
+      "group": "i505ecc34bde8",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.005288192110228406,
+      "elapsedMs": 2196.424014,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i505ecc34bde8.jpg",
+      "sha256": "c7e906d11bbc84fb046369299ad90534a04c7243a1d4818d5c5434d557fb8492",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/i505ecc34bde8.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "google/nano-banana-2.1",
+      "group": "i505ecc34bde8",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.0033171297613940227,
+      "elapsedMs": 2175.6973389999985,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i93036b4cbf1b.png",
+      "sha256": "5b41c77eeccd2b423ed4cb701e147ef339e75d1228de579648254c3da6b8ca91",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i93036b4cbf1b.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "hidream-o1-image",
+      "group": "i93036b4cbf1b",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.4003186987009474,
+      "elapsedMs": 2074.404513999998,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i93036b4cbf1b.jpg",
+      "sha256": "2223cbd61e9f5510d57cedd7197cd7be1c77d509b8208889a6a76d65ba418db5",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/i93036b4cbf1b.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "hidream-o1-image",
+      "group": "i93036b4cbf1b",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.19783857032460575,
+      "elapsedMs": 2004.7158899999995,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/ic1ff36b15eaa.png",
+      "sha256": "2562ea698d25ffbe78c4b31b78800579c5e826c0152b2a9f6341deacb4b054d9",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/ic1ff36b15eaa.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "ideogram/v4.5",
+      "group": "ic1ff36b15eaa",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.7787573048542357,
+      "elapsedMs": 2017.5790579999993,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/ic1ff36b15eaa.jpg",
+      "sha256": "4fe04407d97e3b2bbaee53a1b06497a069064a711b79afde28f0f3e4f22f9ff8",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/ic1ff36b15eaa.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "ideogram/v4.5",
+      "group": "ic1ff36b15eaa",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.8972539035038549,
+      "elapsedMs": 2216.800842000004,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/idabc9c73eeb7.png",
+      "sha256": "60a6d37e3d2c32b7490ea59146393716283cd7e4f56704de32cd74b173d25010",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/idabc9c73eeb7.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "kling-image/v3",
+      "group": "idabc9c73eeb7",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.47161989331398124,
+      "elapsedMs": 2234.695378000004,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/idabc9c73eeb7.jpg",
+      "sha256": "30849ec79d726d1cadf5073fa118d35f11dc8f1c39d533a8c6a27001ffaf926a",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/idabc9c73eeb7.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "kling-image/v3",
+      "group": "idabc9c73eeb7",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.4842829645674032,
+      "elapsedMs": 2156.9482869999993,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i803fbb8ce859.png",
+      "sha256": "223c5d0e9a0ce2a2114c597ec598bc324a04af6a385131c4d200b070680eb91e",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i803fbb8ce859.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "krea-2/turbo",
+      "group": "i803fbb8ce859",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.11120997792741641,
+      "elapsedMs": 2150.212671000001,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i803fbb8ce859.jpg",
+      "sha256": "aa1d409a13cfc02654caa3abef86eff19a3b9571083e8c8f7919d71df3325b5e",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/i803fbb8ce859.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "krea-2/turbo",
+      "group": "i803fbb8ce859",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.08870204341835286,
+      "elapsedMs": 2195.2007379999995,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i6a901bf58ab0.png",
+      "sha256": "120f84137770dbee7d36dcbef5c9226dc41cf6d6a4f69a23cb6e9d2b52fbbad8",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i6a901bf58ab0.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "luma/agent/uni-1/v1",
+      "group": "i6a901bf58ab0",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.07968899458081888,
+      "elapsedMs": 1698.2955880000009,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i6a901bf58ab0.jpg",
+      "sha256": "c56f2245d6cc3f04cd02d8756211acc2952921735f2ddc3128825f7aaa116f00",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/i6a901bf58ab0.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "luma/agent/uni-1/v1",
+      "group": "i6a901bf58ab0",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.09381304539803954,
+      "elapsedMs": 1561.9345899999971,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/iaf612c0833f8.webp",
+      "sha256": "b13b35763b47fe9cb9917877741c32dc85dc8e1e802109bc7b1f0a348ddd0d4e",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/iaf612c0833f8.webp",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "meta/muse-image",
+      "group": "iaf612c0833f8",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0009289338948006022,
+      "elapsedMs": 1852.7999679999994,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/iaf612c0833f8.jpg",
+      "sha256": "bd220c3bfe4f35b4bd6215e341dcc5df464800705c8e6461d4b2b5d7ab6b103f",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/iaf612c0833f8.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "meta/muse-image",
+      "group": "iaf612c0833f8",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.0012720113574126,
+      "elapsedMs": 1664.710533999998,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/iec5058584351.png",
+      "sha256": "9a9c5880a32ecc16d021cd5a3960177e062da8af726b4c623b9a649568e32648",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/iec5058584351.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "microsoft/mai-image-2.5",
+      "group": "iec5058584351",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.006926649210262219,
+      "elapsedMs": 1709.8577030000015,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/iec5058584351.jpg",
+      "sha256": "9cf41b2f30b451bb9e7ff825728a848255bc912b51a2838f4b53ee50a513634f",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/iec5058584351.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "microsoft/mai-image-2.5",
+      "group": "iec5058584351",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.004693435754144019,
+      "elapsedMs": 1501.5415579999972,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/ic022ec3c7df4.png",
+      "sha256": "bf2d09ee9b73a1e1b9b1ce87d895728e50c93669409b0288630facff6b98f621",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/ic022ec3c7df4.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "nano-banana-pro",
+      "group": "ic022ec3c7df4",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.00018909454058374156,
+      "elapsedMs": 1612.0069609999991,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/ic022ec3c7df4.jpg",
+      "sha256": "32e557487e852962491c6fd8f13f842bdd589811fa08f1cc9b6f7c1abc03ed62",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/ic022ec3c7df4.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "nano-banana-pro",
+      "group": "ic022ec3c7df4",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.0001516387933388399,
+      "elapsedMs": 1573.4154540000018,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i63989072c188.png",
+      "sha256": "8c232a9a58a40d3b1032d192fecf9c5bc419197d5d51995887e1c45e47358d2a",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i63989072c188.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "openai/gpt-image-2",
+      "group": "i63989072c188",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.21650210608924308,
+      "elapsedMs": 1635.0688730000038,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i63989072c188.jpg",
+      "sha256": "fe485feb844caa0f8bd979126e5dcabca44d7d69586918d15fb8bb4fd1fc8623",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/i63989072c188.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "openai/gpt-image-2",
+      "group": "i63989072c188",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.03763164818488748,
+      "elapsedMs": 1559.9528890000001,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i0fa00aa62b5f.png",
+      "sha256": "81bdca8bd9f5478fd511535ebb347b13c0e318a62911bff9e7b8088345348ee2",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i0fa00aa62b5f.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "qwen-image-2512",
+      "group": "i0fa00aa62b5f",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.9141548521041831,
+      "elapsedMs": 1652.5172909999965,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i0fa00aa62b5f.jpg",
+      "sha256": "abca645c4404afd9cd0f3f653ffe79de488163b0f0ba87b757834f6614e23fe3",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/i0fa00aa62b5f.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "qwen-image-2512",
+      "group": "i0fa00aa62b5f",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.7888066014361326,
+      "elapsedMs": 1462.7750280000037,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i0add1c4b77cb.webp",
+      "sha256": "613fdc1dba9d98bdd2f03fe6ce38010a3e78d89c5e5afe41b5d42b9dec39ee46",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i0add1c4b77cb.webp",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "recraft/v4.1",
+      "group": "i0add1c4b77cb",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.02110349989114656,
+      "elapsedMs": 1562.1075820000042,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i0add1c4b77cb.jpg",
+      "sha256": "87e1c4d09f6b2d4af602ac216b03205cee75d7f10652e31e2591418957deedef",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/i0add1c4b77cb.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "recraft/v4.1",
+      "group": "i0add1c4b77cb",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.0034649016477299953,
+      "elapsedMs": 1514.2557589999924,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/ib88d154e26d4.jpg",
+      "sha256": "72ee9e5242816d9a87a253c8667b9cc9c5e9137c0f27bf954b51b140b2662535",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/ib88d154e26d4.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "xai/grok-imagine-image/v2.0",
+      "group": "ib88d154e26d4",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0015796910555033576,
+      "elapsedMs": 1618.632598000011,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/ib88d154e26d4.jpg",
+      "sha256": "d3d216409e95ae308e38a441b96ada1a308b7abbdbb2fcc023a3f27b963cffef",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/ib88d154e26d4.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "xai/grok-imagine-image/v2.0",
+      "group": "ib88d154e26d4",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.003955937071874797,
+      "elapsedMs": 1624.219111000013,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/id2122e9b36bf.png",
+      "sha256": "a0def946d850620aefa57bc0d65caf7b04b9e98005689bba7c7c7c05821a1c3d",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/id2122e9b36bf.png",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "z-image/turbo",
+      "group": "id2122e9b36bf",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.05692171102528322,
+      "elapsedMs": 1595.4660620000068,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/id2122e9b36bf.jpg",
+      "sha256": "7439c8f1ef30668af6d4a42e2f979660f0ca376cf0b446a787962a71867a3782",
+      "kind": "image",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images_social/instagram/id2122e9b36bf.jpg",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "z-image/turbo",
+      "group": "id2122e9b36bf",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.013595687475718666,
+      "elapsedMs": 1524.7537230000016,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i91b447f98f27.jpg",
+      "sha256": "6efe8a62cf58bf2841bc78390ff772defaa70dce2a4336a13fe6aadc22e54902",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:View_of_Masjid_Quba.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "MrSalmon2",
+      "generator": "",
+      "group": "i91b447f98f27",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.002456857005063214,
+      "elapsedMs": 1665.698808999994,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i91b447f98f27.jpg",
+      "sha256": "8ef6cc4181dd85197d8684744501c6231a1ee73a199881cee826d528b46a1935",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:View_of_Masjid_Quba.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "MrSalmon2",
+      "generator": "",
+      "group": "i91b447f98f27",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.005762923343056251,
+      "elapsedMs": 1484.95126300001,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i6b3220426d97.jpg",
+      "sha256": "cb85800c27150e0282a9f017dd0eac47e33d5c7709e7e9b45566cd47119c8983",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:El_Monumento_al_Bostkirolari_plaque.jpg",
+      "license": "CC BY 4.0",
+      "author": "HarryCutts",
+      "generator": "",
+      "group": "i6b3220426d97",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0008485160222417462,
+      "elapsedMs": 1664.7272379999922,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i6b3220426d97.jpg",
+      "sha256": "518c98d5e685d6f350af66191a80d21954c982fee7f6eccf74d53e2ddf40be7a",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:El_Monumento_al_Bostkirolari_plaque.jpg",
+      "license": "CC BY 4.0",
+      "author": "HarryCutts",
+      "generator": "",
+      "group": "i6b3220426d97",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.0008196379968283566,
+      "elapsedMs": 1515.1309489999985,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i4cc8294163b1.jpg",
+      "sha256": "92e4232b8077276004cce0b125cc25dc657c94209b9ccfa25567fd43fad9a2f8",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Chacchoben_Ruin_PXL_20241023_171427545.MP.jpg",
+      "license": "CC BY 4.0",
+      "author": "Ganeshk",
+      "generator": "",
+      "group": "i4cc8294163b1",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.012708544888177336,
+      "elapsedMs": 1681.2407839999942,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i4cc8294163b1.jpg",
+      "sha256": "6253437afa4b91573d0a519affb08d42b1f596e858c8cacb749c1f8a91ec4704",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Chacchoben_Ruin_PXL_20241023_171427545.MP.jpg",
+      "license": "CC BY 4.0",
+      "author": "Ganeshk",
+      "generator": "",
+      "group": "i4cc8294163b1",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.016351536434217558,
+      "elapsedMs": 1532.3300290000043,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/ia69b9dd6f53d.jpg",
+      "sha256": "429c7d10efdf8b3555e5b4d5644125df41fb7f1bd5fdac47aa46eed5a233a7e5",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Unnameable_Books,_new_location,_exterior.jpg",
+      "license": "CC0",
+      "author": "Opencooper",
+      "generator": "",
+      "group": "ia69b9dd6f53d",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.00022682202079526715,
+      "elapsedMs": 2207.1215000000084,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/ia69b9dd6f53d.jpg",
+      "sha256": "b4529f0e97f9fe180f252f880de4b4ee48568ddca619f29bfbab20d089c5ae92",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Unnameable_Books,_new_location,_exterior.jpg",
+      "license": "CC0",
+      "author": "Opencooper",
+      "generator": "",
+      "group": "ia69b9dd6f53d",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.0003789546044605262,
+      "elapsedMs": 1579.1768929999962,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i4b02cf6b7db8.jpg",
+      "sha256": "ce8165e5b8d7c3a279497ee03568ba802d08dd02c450e913df7b00c786f3c95b",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:%E0%A4%AD%E0%A4%BE%E0%A4%97%E0%A4%B5%E0%A4%A4_%E0%A4%95%E0%A4%A5%E0%A4%BE.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Kailash shastri gawaloo",
+      "generator": "",
+      "group": "i4b02cf6b7db8",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.002081272610569127,
+      "elapsedMs": 1650.7974560000002,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i4b02cf6b7db8.jpg",
+      "sha256": "6b32ffde6ef6196c0ad39439af981457f50553c6baf29e9e2af651d5a5b4d78d",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:%E0%A4%AD%E0%A4%BE%E0%A4%97%E0%A4%B5%E0%A4%A4_%E0%A4%95%E0%A4%A5%E0%A4%BE.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Kailash shastri gawaloo",
+      "generator": "",
+      "group": "i4b02cf6b7db8",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.0027288793747484667,
+      "elapsedMs": 1590.3246830000135,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i659ce46d9671.jpg",
+      "sha256": "1150237d25ae2d5c0978d7677ac290a0d98df39ca422660acb0dbcd4eb969f9a",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:%D9%85%D8%B2%D8%A7%D8%B1_%D8%B3%DB%8C%D8%AF_%D8%AC%D9%88%D8%A7%D8%AF_%D8%B0%D8%A7%DA%A9%D8%B1.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Nimnsr",
+      "generator": "",
+      "group": "i659ce46d9671",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.015809967908430568,
+      "elapsedMs": 2063.313282000003,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i659ce46d9671.jpg",
+      "sha256": "704c03277187fe27d1807e082ead9e7c08e3844ea9083c7127d4733cb41c4fe4",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:%D9%85%D8%B2%D8%A7%D8%B1_%D8%B3%DB%8C%D8%AF_%D8%AC%D9%88%D8%A7%D8%AF_%D8%B0%D8%A7%DA%A9%D8%B1.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Nimnsr",
+      "generator": "",
+      "group": "i659ce46d9671",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.013009605480787145,
+      "elapsedMs": 1445.8359820000042,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i88356e4c0488.jpg",
+      "sha256": "cab82b851f2dda87669b1bf673ec41e1277fbad2d8bdd8b7a5e1a7c390bfcc06",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Dispersed_Phase_%26_Dispersed_Medium(colloids)-Chart_For_Teachers_And_Students.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Anonywiki66",
+      "generator": "",
+      "group": "i88356e4c0488",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.004947063312272101,
+      "elapsedMs": 1654.9253390000085,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i88356e4c0488.jpg",
+      "sha256": "815295e3fe7d401182a32e43d81c196159fe8c73b2b42ab886614039834ef25c",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Dispersed_Phase_%26_Dispersed_Medium(colloids)-Chart_For_Teachers_And_Students.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Anonywiki66",
+      "generator": "",
+      "group": "i88356e4c0488",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.007632759222316344,
+      "elapsedMs": 1533.7440910000005,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i4d60a075bb29.jpg",
+      "sha256": "e661831e8ce99d63282738a567b0e30d7f60cac4b8428f90a2ded9dab94d6183",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:513_Airwaves_20260814_2117262_Abby_Holliday_and_Seth_Findley.jpg",
+      "license": "CC BY 4.0",
+      "author": "Hayden Schiff",
+      "generator": "",
+      "group": "i4d60a075bb29",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.008062220327377531,
+      "elapsedMs": 1712.5143229999958,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i4d60a075bb29.jpg",
+      "sha256": "c39642aa44139bf36ac4a5c9880024d45ae778ee3e085cde781b2e876980af50",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:513_Airwaves_20260814_2117262_Abby_Holliday_and_Seth_Findley.jpg",
+      "license": "CC BY 4.0",
+      "author": "Hayden Schiff",
+      "generator": "",
+      "group": "i4d60a075bb29",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.004865311381237924,
+      "elapsedMs": 1565.488347999999,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i5c8b1400b6f3.jpg",
+      "sha256": "4c98c97616a5ffe21d13198470b5dc8bd94a89e032b5153d43518bf3e4dd4412",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Celina_Jaitly.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Vikas Tanwar",
+      "generator": "",
+      "group": "i5c8b1400b6f3",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0044567329750093004,
+      "elapsedMs": 2647.907376000003,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i5c8b1400b6f3.jpg",
+      "sha256": "0b1804ae95a0c2116b31db9ecd261c1de9e5a2d82fddf633b661d8677d6cd518",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Celina_Jaitly.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Vikas Tanwar",
+      "generator": "",
+      "group": "i5c8b1400b6f3",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.013495317554718224,
+      "elapsedMs": 1473.1617499999993,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i21bfde8ef43a.jpg",
+      "sha256": "f3afa37b22baac1d7f740cf45b14a2ae8624d0f0a79982e5e1da8e8f0fda172a",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:2026_Poland_movie_theater_ticket_Multikino_Katowice.jpg",
+      "license": "Public domain",
+      "author": "Unknown authorUnknown author",
+      "generator": "",
+      "group": "i21bfde8ef43a",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0005815914477748016,
+      "elapsedMs": 1793.3866229999985,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i21bfde8ef43a.jpg",
+      "sha256": "36c7d133a542a6ec379d68ba9d8944424ad912e66d8ef3b6a364c23fed1a90ce",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:2026_Poland_movie_theater_ticket_Multikino_Katowice.jpg",
+      "license": "Public domain",
+      "author": "Unknown authorUnknown author",
+      "generator": "",
+      "group": "i21bfde8ef43a",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.0006761788352252949,
+      "elapsedMs": 1504.3287839999975,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i88e672bdf6dd.jpg",
+      "sha256": "c0a4d7eec031c4a777c1a6c24a085ed52d438cf58c06e0b2336eaff27979d7f4",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Marche_des_fiert%C3%A9s_Paris_3_octobre_2026_-_sandrine_rousseau.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Silanoc",
+      "generator": "",
+      "group": "i88e672bdf6dd",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0001292797615880525,
+      "elapsedMs": 1949.9240180000052,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i88e672bdf6dd.jpg",
+      "sha256": "9cf66130f9bbc98137c979a04e8729b0f87f96d816e21809c8521f1d886de635",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Marche_des_fiert%C3%A9s_Paris_3_octobre_2026_-_sandrine_rousseau.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Silanoc",
+      "generator": "",
+      "group": "i88e672bdf6dd",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.00023779983009567665,
+      "elapsedMs": 1638.849445999993,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i65f5c01e5b7b.jpg",
+      "sha256": "92ab8beb6039c087d4b9181be1133c832742b32e6a9385021de8c17aec106fb4",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Edificio_antiguo_hoy_Rehabilitaci%C3%B3n_del_Hospital.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "ELVIVASDELAGENTE",
+      "generator": "",
+      "group": "i65f5c01e5b7b",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 2.609826636404386e-05,
+      "elapsedMs": 1562.3518049999984,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i65f5c01e5b7b.jpg",
+      "sha256": "14504fe131dca890173c8b32bd26d1d4a9ca7c754573cd639e9a9b32c33eb0a3",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Edificio_antiguo_hoy_Rehabilitaci%C3%B3n_del_Hospital.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "ELVIVASDELAGENTE",
+      "generator": "",
+      "group": "i65f5c01e5b7b",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 3.1012440399185714e-05,
+      "elapsedMs": 1664.0987350000069,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/ib31c0ef83bde.jpg",
+      "sha256": "31a8197c01d7b34ff031f7180b7557ba378387173e6bfae8faac8eb68332c24f",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:%D0%9C%D1%83%D0%B7%D0%B5%D0%B9_%D0%94%D0%BE%D0%BC_%D0%9F%D0%BB%D0%BE%D1%82%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B0,_%D0%91%D0%B0%D0%BB%D0%B0%D1%85%D0%BD%D0%B0_-_2024-07-28_53.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Дмитрий Сазанов",
+      "generator": "",
+      "group": "ib31c0ef83bde",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.003314189342069925,
+      "elapsedMs": 1842.0408959999913,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/ib31c0ef83bde.jpg",
+      "sha256": "a4083f07907b765ac861955606250d8901ca98222a25e51212a31299fa43204d",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:%D0%9C%D1%83%D0%B7%D0%B5%D0%B9_%D0%94%D0%BE%D0%BC_%D0%9F%D0%BB%D0%BE%D1%82%D0%BD%D0%B8%D0%BA%D0%BE%D0%B2%D0%B0,_%D0%91%D0%B0%D0%BB%D0%B0%D1%85%D0%BD%D0%B0_-_2024-07-28_53.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Дмитрий Сазанов",
+      "generator": "",
+      "group": "ib31c0ef83bde",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.005273503932362078,
+      "elapsedMs": 1522.7307029999938,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i9bda31112714.jpg",
+      "sha256": "02f41994bb3f691d0b7490c668f6fdbdb02527167c329f6b8bc7957ea7b6b548",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:%E9%95%87%E6%B1%9F%E4%B8%B9%E5%BE%92%E5%8C%BA%E7%88%B1%E6%B0%91%E8%B7%AF.jpg",
+      "license": "CC0",
+      "author": "Cjsy2026",
+      "generator": "",
+      "group": "i9bda31112714",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.004519504915549736,
+      "elapsedMs": 1833.2886190000136,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i9bda31112714.jpg",
+      "sha256": "c695631884088ed7fce83e313fd4f9ead13c1f9fe49d43aa07b74550806c735a",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:%E9%95%87%E6%B1%9F%E4%B8%B9%E5%BE%92%E5%8C%BA%E7%88%B1%E6%B0%91%E8%B7%AF.jpg",
+      "license": "CC0",
+      "author": "Cjsy2026",
+      "generator": "",
+      "group": "i9bda31112714",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.006710728265249278,
+      "elapsedMs": 1538.0377470000094,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i580f290832d3.jpg",
+      "sha256": "7aa0b52bf6269a68834748fb8ff26f02c71a8a7ead8447fad17b23ea28491aca",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Gudi_Padwa_Festival_(3).jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "AmanAgrahari01",
+      "generator": "",
+      "group": "i580f290832d3",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0008879089760795325,
+      "elapsedMs": 1671.893148999996,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i580f290832d3.jpg",
+      "sha256": "2af7f77ac08deb77be52fde95fbb6ab45556dbc39005ea894678796191dc42db",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Gudi_Padwa_Festival_(3).jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "AmanAgrahari01",
+      "generator": "",
+      "group": "i580f290832d3",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.003342004583019832,
+      "elapsedMs": 1539.0324929999915,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/ib41ccc31d919.jpg",
+      "sha256": "325474acdfa5c1a0302430b82d900791d717eb6aa4ac3158b09a0d45dd878429",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:MDDS_07_0462_(11).jpg",
+      "license": "CC BY-SA 3.0",
+      "author": "museumdaerah.deliserdang",
+      "generator": "",
+      "group": "ib41ccc31d919",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.010639512946488006,
+      "elapsedMs": 1599.4509630000102,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/ib41ccc31d919.jpg",
+      "sha256": "b91a177afc3d589dd1fb43ca854ef1b6108bd3c0d5abe869115a1dad40cc9554",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:MDDS_07_0462_(11).jpg",
+      "license": "CC BY-SA 3.0",
+      "author": "museumdaerah.deliserdang",
+      "generator": "",
+      "group": "ib41ccc31d919",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.015658444334099332,
+      "elapsedMs": 1707.321981000001,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/i6bc315ecb219.jpg",
+      "sha256": "571ea4b0d4378d0747bca84c8fa6763cbd78804362aee279fb435be73f5a27c6",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Braniewo_plac_Pi%C5%82sudskiego_ul._Przemys%C5%82owa.jpg",
+      "license": "CC BY 4.0",
+      "author": "Aleksander Durkiewicz",
+      "generator": "",
+      "group": "i6bc315ecb219",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0012857009194097832,
+      "elapsedMs": 1647.146332000004,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/i6bc315ecb219.jpg",
+      "sha256": "6829cd5462240cdfa8a85d7aa00422722d5aa18acc3823eeee8840211579d7d0",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Braniewo_plac_Pi%C5%82sudskiego_ul._Przemys%C5%82owa.jpg",
+      "license": "CC BY 4.0",
+      "author": "Aleksander Durkiewicz",
+      "generator": "",
+      "group": "i6bc315ecb219",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.015528113854474912,
+      "elapsedMs": 1667.1562590000103,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/ic6393a99b6a9.jpg",
+      "sha256": "0f137e6b300d04242e997eb8668c2abf76c6e57154de25baf4cb592237456b21",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Stolperstein_f%C3%BCr_EMIL_NATHAN_BAUM_(Geilenkirchen),_Sittarder_Stra%C3%9Fe_68,_2026_in_Kreis_Heinsberg.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Qwertzu111111",
+      "generator": "",
+      "group": "ic6393a99b6a9",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.012271610798218282,
+      "elapsedMs": 1930.8950310000073,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/ic6393a99b6a9.jpg",
+      "sha256": "160880a83d5bd636f721e7e54373d7bf45929939434da006748038dc4d0078ff",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Stolperstein_f%C3%BCr_EMIL_NATHAN_BAUM_(Geilenkirchen),_Sittarder_Stra%C3%9Fe_68,_2026_in_Kreis_Heinsberg.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Qwertzu111111",
+      "generator": "",
+      "group": "ic6393a99b6a9",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 0.01620741010228201,
+      "elapsedMs": 1866.7241759999888,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images/ia090f109157d.jpg",
+      "sha256": "deb65c941b80e79db3686c7ad4c0b7d422698175559cea484c5c5f3a8fac2e22",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Igreja_de_Santa_Maria_Madalena-Igreja_Paroquial_de_Alcobertas.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Jaimepereira48",
+      "generator": "",
+      "group": "ia090f109157d",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 5.11357416362556e-05,
+      "elapsedMs": 2083.0504310000106,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "images_social/instagram/ia090f109157d.jpg",
+      "sha256": "8a657ba645a0ab8ecdda7e9c8bfca3cf862f01bc971cf657facd84e044cb6335",
+      "kind": "image",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Igreja_de_Santa_Maria_Madalena-Igreja_Paroquial_de_Alcobertas.jpg",
+      "license": "CC BY-SA 4.0",
+      "author": "Jaimepereira48",
+      "generator": "",
+      "group": "ia090f109157d",
+      "slice": "instagram",
+      "status": "COMPLETED",
+      "rawScore": 5.674447466035376e-05,
+      "elapsedMs": 1554.1990190000215,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ]
+    },
+    {
+      "file": "videos/vb1492ceb58c0.mp4",
+      "sha256": "b1492ceb58c09c0c37e003f36b74bb3234a420823000cfef950910e6689b43c4",
+      "kind": "video",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/vb1492ceb58c0.mp4",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "veo3-fast",
+      "group": "vb1492ceb58c0",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0008536655814333227,
+      "elapsedMs": 20808.538488,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_TEMPORAL_FEATURES",
+        "VIDEO_ROUTE_UNVALIDATED",
+        "TEMPORAL_MODEL_NOT_CALIBRATED"
+      ],
+      "temporal": {
+        "eligible": true,
+        "coverage": 1,
+        "denseTriplets": 10,
+        "frameCount": 12,
+        "reasonCodes": []
+      }
+    },
+    {
+      "file": "videos/v3fae73976c72.mp4",
+      "sha256": "3fae73976c724425caa902f85d5e77e62c6e57883f5068cb8f77a8fd2e91d4f3",
+      "kind": "video",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/v3fae73976c72.mp4",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "luma-ray-3.2",
+      "group": "v3fae73976c72",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.3813788284937483,
+      "elapsedMs": 19901.880101,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_TEMPORAL_FEATURES",
+        "MIXED_FRAME_EVIDENCE",
+        "VIDEO_ROUTE_UNVALIDATED",
+        "TEMPORAL_MODEL_NOT_CALIBRATED"
+      ],
+      "temporal": {
+        "eligible": false,
+        "coverage": 1,
+        "denseTriplets": 10,
+        "frameCount": 12,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ]
+      }
+    },
+    {
+      "file": "videos/v7b02eeabd651.mp4",
+      "sha256": "7b02eeabd651b7f868f41dbd009167a569cb5ca9286ca07ea3fe990901b0fb44",
+      "kind": "video",
+      "origin": "generated",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/v7b02eeabd651.mp4",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "author": "WasItAIGenerated",
+      "generator": "hunyuan-1.5",
+      "group": "v7b02eeabd651",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.23768485423631505,
+      "elapsedMs": 19676.498235,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_TEMPORAL_FEATURES",
+        "MIXED_FRAME_EVIDENCE",
+        "VIDEO_ROUTE_UNVALIDATED",
+        "TEMPORAL_MODEL_NOT_CALIBRATED"
+      ],
+      "temporal": {
+        "eligible": false,
+        "coverage": 1,
+        "denseTriplets": 10,
+        "frameCount": 12,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ]
+      }
+    },
+    {
+      "file": "videos/v1211ff4c8481.mp4",
+      "sha256": "1211ff4c8481e14eff080eab31b36c73de79cd1c5d28f712268470feb05b17d0",
+      "kind": "video",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:2022-09-06_Video_Vogelschwarm_Stromleitungen_in_Tauberbischofsheim_(Tauberbischofsheim).webm",
+      "license": "CC BY-SA 4.0",
+      "author": "Triplec85",
+      "generator": "",
+      "group": "v1211ff4c8481",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0001231114200154494,
+      "elapsedMs": 20186.82821400001,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_TEMPORAL_FEATURES",
+        "VIDEO_ROUTE_UNVALIDATED",
+        "TEMPORAL_MODEL_NOT_CALIBRATED"
+      ],
+      "temporal": {
+        "eligible": true,
+        "coverage": 0.9916166675210967,
+        "denseTriplets": 10,
+        "frameCount": 12,
+        "reasonCodes": []
+      }
+    },
+    {
+      "file": "videos/v6baca0df85f1.mp4",
+      "sha256": "6baca0df85f108e7ed9689504fbb1a223d7a83558f3b2799e6b6f68aad4d603c",
+      "kind": "video",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Flughafen_BER_20260623_Pushback_Airbus_A320-200_Austrian_Airlines_02.webm",
+      "license": "CC0",
+      "author": "NutzerAusBerlin",
+      "generator": "",
+      "group": "v6baca0df85f1",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.0024715936745438013,
+      "elapsedMs": 21255.21048699999,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_TEMPORAL_FEATURES",
+        "VIDEO_ROUTE_UNVALIDATED",
+        "TEMPORAL_MODEL_NOT_CALIBRATED"
+      ],
+      "temporal": {
+        "eligible": true,
+        "coverage": 0.9916666666666668,
+        "denseTriplets": 10,
+        "frameCount": 12,
+        "reasonCodes": []
+      }
+    },
+    {
+      "file": "videos/vfe2c2bc901c6.mp4",
+      "sha256": "fe2c2bc901c6959fb1a3029496a8c0085ba83d95548726c8ef4b918d777c8381",
+      "kind": "video",
+      "origin": "genuine",
+      "source": "https://commons.wikimedia.org/wiki/File:Deimos_transit_-_Perseverance_Sol_1037_-_realtime_(53481468181).webm",
+      "license": "Public domain",
+      "author": "semeion.photo",
+      "generator": "",
+      "group": "vfe2c2bc901c6",
+      "slice": "original",
+      "status": "COMPLETED",
+      "rawScore": 0.5454399833144401,
+      "elapsedMs": 19238.168502999994,
+      "shouldLabel": false,
+      "reasonCodes": [
+        "LOCAL_TEMPORAL_FEATURES",
+        "MIXED_FRAME_EVIDENCE",
+        "VIDEO_ROUTE_UNVALIDATED",
+        "TEMPORAL_MODEL_NOT_CALIBRATED"
+      ],
+      "temporal": {
+        "eligible": false,
+        "coverage": 0.9916666666666668,
+        "denseTriplets": 10,
+        "frameCount": 12,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ]
+      }
+    }
+  ],
+  "candidateComparison": {
+    "purpose": "one bounded development-only comparison on the same 38 originals",
+    "model": "Loke-60000/slop-detect-vit-s-onnx",
+    "modelUrl": "https://huggingface.co/Loke-60000/slop-detect-vit-s-onnx",
+    "revision": "3bed6a1e72ae7c3f8a783ecbee8d3d71a64a12e4",
+    "modelSha256": "d431efd677cc124ab68c3f1b20d628b7e9a8362a99803b1878475060b05cff5a",
+    "modelBytes": 23046673,
+    "license": "MIT declared by publisher; underlying training-data rights not reviewed",
+    "preprocessing": "bilinear 440 short edge, center crop 384, CLIP mean [0.48145466, 0.4578275, 0.40821073], std [0.26862954, 0.26130258, 0.27577711] as pinned model.json; local Pillow RGBA",
+    "countPerClass": 19,
+    "medianInferenceElapsedMs": 842.920310500001,
+    "candidateCountsAtRawThresholdAndAuc": {
+      "0.5": {
+        "generated": 7,
+        "genuine": 3
+      },
+      "0.65": {
+        "generated": 6,
+        "genuine": 1
+      },
+      "0.99": {
+        "generated": 2,
+        "genuine": 0
+      },
+      "aurocPairwise": 0.8171745152354571
+    },
+    "baselineCountsAtRawThresholdAndAuc": {
+      "0.5": {
+        "generated": 4,
+        "genuine": 0
+      },
+      "0.65": {
+        "generated": 4,
+        "genuine": 0
+      },
+      "0.99": {
+        "generated": 0,
+        "genuine": 0
+      },
+      "aurocPairwise": 0.778393351800554
+    },
+    "rows": [
+      {
+        "sha256": "d089dd71d04f6d602b93cb14e1826b6d9bd756de437cf58a686c73c3f883363a",
+        "score": 0.4562508925395941,
+        "logit": -0.1754450798034668,
+        "elapsedMs": 956.8918020000001
+      },
+      {
+        "sha256": "fc92f833a52027423c5a5eff7f928d79ce24f6bf7a2b4c8521dd21cf47021cbd",
+        "score": 0.09107017865904082,
+        "logit": -2.3006374835968018,
+        "elapsedMs": 809.2526230000001
+      },
+      {
+        "sha256": "b3682c6a4f562d3c8e6271f83ee0868a6c1f3e751ff3a1a1c1c229ad696ebc4b",
+        "score": 0.2418068283104452,
+        "logit": -1.1427990198135376,
+        "elapsedMs": 807.1478670000001
+      },
+      {
+        "sha256": "7413328da7363b003c7c0368cab8a40fe9b78c96d9a995f69a47eaa0757f7c73",
+        "score": 0.9993724265549602,
+        "logit": 7.373022079467773,
+        "elapsedMs": 812.4747689999999
+      },
+      {
+        "sha256": "7f22a7d861baa31e3d7ffaee78e85a4712d888912c93c91479e770e30c0010dd",
+        "score": 0.27812959018643835,
+        "logit": -0.9537584781646729,
+        "elapsedMs": 843.2168609999999
+      },
+      {
+        "sha256": "505ecc34bde82264dcf017cc0a5de55aadd1314e278c08566b7ba4bb28898954",
+        "score": 0.030759950164488813,
+        "logit": -3.45029878616333,
+        "elapsedMs": 904.3651900000004
+      },
+      {
+        "sha256": "5b41c77eeccd2b423ed4cb701e147ef339e75d1228de579648254c3da6b8ca91",
+        "score": 0.9982726400456802,
+        "logit": 6.359432220458984,
+        "elapsedMs": 914.7736890000006
+      },
+      {
+        "sha256": "2562ea698d25ffbe78c4b31b78800579c5e826c0152b2a9f6341deacb4b054d9",
+        "score": 0.4242762292747771,
+        "logit": -0.30524325370788574,
+        "elapsedMs": 841.674462
+      },
+      {
+        "sha256": "60a6d37e3d2c32b7490ea59146393716283cd7e4f56704de32cd74b173d25010",
+        "score": 0.9078889524170926,
+        "logit": 2.2881271839141846,
+        "elapsedMs": 814.9218220000002
+      },
+      {
+        "sha256": "223c5d0e9a0ce2a2114c597ec598bc324a04af6a385131c4d200b070680eb91e",
+        "score": 0.869284457879744,
+        "logit": 1.8946468830108643,
+        "elapsedMs": 910.2700520000017
+      },
+      {
+        "sha256": "120f84137770dbee7d36dcbef5c9226dc41cf6d6a4f69a23cb6e9d2b52fbbad8",
+        "score": 0.13380668281903033,
+        "logit": -1.8677120208740234,
+        "elapsedMs": 784.9559760000011
+      },
+      {
+        "sha256": "b13b35763b47fe9cb9917877741c32dc85dc8e1e802109bc7b1f0a348ddd0d4e",
+        "score": 0.011626213557378053,
+        "logit": -4.442798614501953,
+        "elapsedMs": 881.2412270000004
+      },
+      {
+        "sha256": "9a9c5880a32ecc16d021cd5a3960177e062da8af726b4c623b9a649568e32648",
+        "score": 0.9792945117807554,
+        "logit": 3.856433629989624,
+        "elapsedMs": 814.280342
+      },
+      {
+        "sha256": "bf2d09ee9b73a1e1b9b1ce87d895728e50c93669409b0288630facff6b98f621",
+        "score": 0.002852459583068369,
+        "logit": -5.856717109680176,
+        "elapsedMs": 831.0478010000006
+      },
+      {
+        "sha256": "8c232a9a58a40d3b1032d192fecf9c5bc419197d5d51995887e1c45e47358d2a",
+        "score": 0.07860692235738591,
+        "logit": -2.4614269733428955,
+        "elapsedMs": 882.757458
+      },
+      {
+        "sha256": "81bdca8bd9f5478fd511535ebb347b13c0e318a62911bff9e7b8088345348ee2",
+        "score": 0.6487240887541971,
+        "logit": 0.6134355068206787,
+        "elapsedMs": 826.5948580000004
+      },
+      {
+        "sha256": "613fdc1dba9d98bdd2f03fe6ce38010a3e78d89c5e5afe41b5d42b9dec39ee46",
+        "score": 0.012008108582766693,
+        "logit": -4.410092353820801,
+        "elapsedMs": 884.61355
+      },
+      {
+        "sha256": "72ee9e5242816d9a87a253c8667b9cc9c5e9137c0f27bf954b51b140b2662535",
+        "score": 0.029836658954292015,
+        "logit": -3.48172664642334,
+        "elapsedMs": 826.5361030000004
+      },
+      {
+        "sha256": "a0def946d850620aefa57bc0d65caf7b04b9e98005689bba7c7c7c05821a1c3d",
+        "score": 0.9291833118002373,
+        "logit": 2.574211359024048,
+        "elapsedMs": 817.8945730000014
+      },
+      {
+        "sha256": "6efe8a62cf58bf2841bc78390ff772defaa70dce2a4336a13fe6aadc22e54902",
+        "score": 0.008195751222253871,
+        "logit": -4.795909881591797,
+        "elapsedMs": 874.6249690000004
+      },
+      {
+        "sha256": "cb85800c27150e0282a9f017dd0eac47e33d5c7709e7e9b45566cd47119c8983",
+        "score": 0.006664633412736322,
+        "logit": -5.004253387451172,
+        "elapsedMs": 819.7336699999978
+      },
+      {
+        "sha256": "92e4232b8077276004cce0b125cc25dc657c94209b9ccfa25567fd43fad9a2f8",
+        "score": 0.6631860358379207,
+        "logit": 0.6775248050689697,
+        "elapsedMs": 943.1093499999988
+      },
+      {
+        "sha256": "429c7d10efdf8b3555e5b4d5644125df41fb7f1bd5fdac47aa46eed5a233a7e5",
+        "score": 0.0037200223172395644,
+        "logit": -5.590298652648926,
+        "elapsedMs": 821.4493650000004
+      },
+      {
+        "sha256": "ce8165e5b8d7c3a279497ee03568ba802d08dd02c450e913df7b00c786f3c95b",
+        "score": 0.006083199310303822,
+        "logit": -5.096122741699219,
+        "elapsedMs": 842.6237600000022
+      },
+      {
+        "sha256": "1150237d25ae2d5c0978d7677ac290a0d98df39ca422660acb0dbcd4eb969f9a",
+        "score": 0.002110676817399157,
+        "logit": -6.158633708953857,
+        "elapsedMs": 828.6211070000027
+      },
+      {
+        "sha256": "cab82b851f2dda87669b1bf673ec41e1277fbad2d8bdd8b7a5e1a7c390bfcc06",
+        "score": 0.06741258151187894,
+        "logit": -2.627131223678589,
+        "elapsedMs": 810.3111969999991
+      },
+      {
+        "sha256": "e661831e8ce99d63282738a567b0e30d7f60cac4b8428f90a2ded9dab94d6183",
+        "score": 0.000687836733441621,
+        "logit": -7.281270980834961,
+        "elapsedMs": 910.0436060000029
+      },
+      {
+        "sha256": "4c98c97616a5ffe21d13198470b5dc8bd94a89e032b5153d43518bf3e4dd4412",
+        "score": 0.00035559706100955936,
+        "logit": -7.941356658935547,
+        "elapsedMs": 792.5917770000015
+      },
+      {
+        "sha256": "f3afa37b22baac1d7f740cf45b14a2ae8624d0f0a79982e5e1da8e8f0fda172a",
+        "score": 0.061166002682316686,
+        "logit": -2.7310471534729004,
+        "elapsedMs": 849.7114549999969
+      },
+      {
+        "sha256": "c0a4d7eec031c4a777c1a6c24a085ed52d438cf58c06e0b2336eaff27979d7f4",
+        "score": 4.139527895563757e-05,
+        "logit": -10.092302322387695,
+        "elapsedMs": 828.8389320000024
+      },
+      {
+        "sha256": "92ab8beb6039c087d4b9181be1133c832742b32e6a9385021de8c17aec106fb4",
+        "score": 0.00016325037061888789,
+        "logit": -8.720062255859375,
+        "elapsedMs": 996.0599519999996
+      },
+      {
+        "sha256": "31a8197c01d7b34ff031f7180b7557ba378387173e6bfae8faac8eb68332c24f",
+        "score": 0.41124727038867837,
+        "logit": -0.358811616897583,
+        "elapsedMs": 951.8462279999985
+      },
+      {
+        "sha256": "02f41994bb3f691d0b7490c668f6fdbdb02527167c329f6b8bc7957ea7b6b548",
+        "score": 0.019442643105298366,
+        "logit": -3.920652389526367,
+        "elapsedMs": 828.6053659999998
+      },
+      {
+        "sha256": "7aa0b52bf6269a68834748fb8ff26f02c71a8a7ead8447fad17b23ea28491aca",
+        "score": 0.007571499084188028,
+        "logit": -4.875763893127441,
+        "elapsedMs": 906.4504510000006
+      },
+      {
+        "sha256": "325474acdfa5c1a0302430b82d900791d717eb6aa4ac3158b09a0d45dd878429",
+        "score": 0.5778478529132639,
+        "logit": 0.31394481658935547,
+        "elapsedMs": 869.9754649999995
+      },
+      {
+        "sha256": "571ea4b0d4378d0747bca84c8fa6763cbd78804362aee279fb435be73f5a27c6",
+        "score": 0.5583668559766225,
+        "logit": 0.23453664779663086,
+        "elapsedMs": 1030.2728950000019
+      },
+      {
+        "sha256": "0f137e6b300d04242e997eb8668c2abf76c6e57154de25baf4cb592237456b21",
+        "score": 0.004082290454936779,
+        "logit": -5.497006416320801,
+        "elapsedMs": 911.765572999997
+      },
+      {
+        "sha256": "deb65c941b80e79db3686c7ad4c0b7d422698175559cea484c5c5f3a8fac2e22",
+        "score": 0.000774438432324865,
+        "logit": -7.16259765625,
+        "elapsedMs": 965.6871609999944
+      }
+    ]
+  }
+}

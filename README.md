@@ -25,7 +25,7 @@ After bootstrap, run `python3 tools/demo_page.py` and open `http://127.0.0.1:876
 | `packages/detector`, `ml` | Local ONNX Runtime Web image inference, temporal video features, checksummed model provisioning, policy gates and developer measurements. |
 | `tools`, `tests` | Evaluation, package auditing, reproducible ZIPs, browser acceptance tests, Apple packaging and generated test fixtures. |
 
-No account or backend is required. Media, frames, addresses, hashes and model outputs are never sent to an analysis service. A qualifying content-addressed image can be read from the publisher using a credential-free GET. An ordinary eligible JPEG can be read from the browser cache under bounded conditions. The extension ignores remote credential references. See the [privacy description](docs/PRIVACY.md).
+No account or backend is required. Media, frames, addresses, hashes and model outputs are never sent to an analysis service. A qualifying content-addressed image can be read from the publisher using a credential-free GET. An eligible same-origin JPEG or static PNG can be read from the browser cache after matching displayed pixels. Supported immutable same-origin Blob objects are read locally, including complete MP4 originals. The extension ignores remote credential references. See the [privacy description](docs/PRIVACY.md).
 
 ## Verify a build
 
@@ -40,4 +40,4 @@ make package
 
 Run `make safari-xcode` and `python3 tools/build_apple_host.py artifacts/safari-xcode` on macOS. The standalone browser test accepts `--browser /path/to/executable` to exercise the desktop browsers listed in the support matrix. The macOS CI job also runs the real signature verifier in native Safari through Apple’s WebDriver. Test the unmodified ZIP in a real profile before sharing it. The headless loopback test uses a temporary copy with a pregranted fixture origin to exercise the permission and labeling flow.
 
-[Specification](LABEL_AI_SPECIFICATION.md) · [Browser support](docs/BROWSER_SUPPORT.md) · [Apple’s Safari testing guide](https://developer.apple.com/documentation/safariservices/running-your-safari-web-extension) · [Progress and verification](docs/PROGRESS.md) · [Release gates](docs/RELEASE_GATES.md) · [Requirements](docs/REQUIREMENTS_TRACEABILITY.md) · [Evaluation](docs/EVALUATION.md)
+[Specification](LABEL_AI_SPECIFICATION.md) · [Browser support](docs/BROWSER_SUPPORT.md) · [Safari acceptance](docs/SAFARI_ACCEPTANCE.md) · [Apple’s Safari testing guide](https://developer.apple.com/documentation/safariservices/running-your-safari-web-extension) · [Progress and verification](docs/PROGRESS.md) · [Completion audit](docs/COMPLETION_AUDIT.md) · [Release gates](docs/RELEASE_GATES.md) · [Requirements](docs/REQUIREMENTS_TRACEABILITY.md) · [Evaluation](docs/EVALUATION.md)

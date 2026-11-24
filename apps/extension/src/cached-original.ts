@@ -41,7 +41,48 @@ export function eligibleJpeg(bytes: Uint8Array, width: number, height: number): 
   return false;
 }
 
-async function readBounded(response: Response): Promise<Uint8Array<ArrayBuffer> | undefined> {
+export function eligiblePng(bytes: Uint8Array, width: number, height: number): boolean {
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (
+    bytes.length < 45 ||
+    !signature.every((value, index) => bytes[index] === value) ||
+    width < 1 ||
+    height < 1 ||
+    width * height > MAX_COMPARE_PIXELS
+  )
+    return false;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (
+    view.getUint32(8) !== 13 ||
+    view.getUint32(12) !== 0x49484452 || // IHDR
+    view.getUint32(16) !== width ||
+    view.getUint32(20) !== height
+  )
+    return false;
+  let hasImageData = false;
+  for (let offset = 33; offset + 12 <= bytes.length; ) {
+    const length = view.getUint32(offset);
+    const tag = view.getUint32(offset + 4);
+    const next = offset + length + 12;
+    if (next > bytes.length) return false;
+    if ([0x6163544c, 0x6663544c, 0x66644154, 0x49484452].includes(tag)) return false; // APNG or repeated IHDR
+    if (tag === 0x49444154) hasImageData = true; // IDAT
+    if (tag === 0x49454e44) return hasImageData && length === 0 && next === bytes.length; // IEND
+    offset = next;
+  }
+  return false;
+}
+
+function eligibleOriginal(bytes: Uint8Array, mime: string, width: number, height: number): boolean {
+  return mime === 'image/jpeg'
+    ? eligibleJpeg(bytes, width, height)
+    : mime === 'image/png' && eligiblePng(bytes, width, height);
+}
+
+async function readBounded(
+  response: Response,
+  signal: AbortSignal,
+): Promise<Uint8Array<ArrayBuffer> | undefined> {
   const reader = response.body?.getReader();
   if (!reader) return;
   let size = 0;
@@ -51,12 +92,13 @@ async function readBounded(response: Response): Promise<Uint8Array<ArrayBuffer> 
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_ORIGINAL_BYTES) {
+      if (size > MAX_ORIGINAL_BYTES || signal.aborted) {
         await reader.cancel();
         return;
       }
       parts.push(value);
     }
+    if (signal.aborted) return;
     const result = new Uint8Array(size);
     let offset = 0;
     for (const part of parts) {
@@ -72,9 +114,11 @@ async function readBounded(response: Response): Promise<Uint8Array<ArrayBuffer> 
 export async function readCachedOriginal(
   image: HTMLImageElement,
   source: string,
+  signal?: AbortSignal,
 ): Promise<Original | undefined> {
   const { naturalWidth: width, naturalHeight: height } = image;
   const current = () =>
+    !signal?.aborted &&
     image.isConnected &&
     image.complete &&
     image.currentSrc === source &&
@@ -89,7 +133,9 @@ export async function readCachedOriginal(
   )
     return;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1500);
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  const timeout = setTimeout(abort, 1500);
   try {
     const response = await fetch(source, {
       cache: 'only-if-cached',
@@ -103,33 +149,37 @@ export async function readCachedOriginal(
       .toLowerCase()
       .split(',')
       .map((v) => v.trim().split('=')[0]);
+    const mime = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
     if (
+      controller.signal.aborted ||
       !response.ok ||
       response.redirected ||
       response.url !== source ||
       !directives.includes('public') ||
       directives.includes('private') ||
       directives.includes('no-store') ||
-      response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'image/jpeg' ||
+      (mime !== 'image/jpeg' && mime !== 'image/png') ||
       Number(response.headers.get('content-length')) > MAX_ORIGINAL_BYTES
     )
       return;
-    const bytes = await readBounded(response);
-    if (!bytes || !current() || !eligibleJpeg(bytes, width, height)) return;
-    if (!(await matchesDisplayedJpeg(image, source, bytes, controller.signal))) return;
-    return { base64: encodeBase64(bytes), mime: 'image/jpeg' };
+    const bytes = await readBounded(response, controller.signal);
+    if (!bytes || !current() || !eligibleOriginal(bytes, mime, width, height)) return;
+    if (!(await matchesDisplayedOriginal(image, source, bytes, mime, controller.signal))) return;
+    return { base64: encodeBase64(bytes), mime };
   } catch {
     return;
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener('abort', abort);
     controller.abort();
   }
 }
 
-export async function matchesDisplayedJpeg(
+export async function matchesDisplayedOriginal(
   image: HTMLImageElement,
   source: string,
   bytes: Uint8Array,
+  mime: string,
   signal?: AbortSignal,
 ): Promise<boolean> {
   const { naturalWidth: width, naturalHeight: height } = image;
@@ -145,12 +195,12 @@ export async function matchesDisplayedJpeg(
     width < 1 ||
     height < 1 ||
     bytes.length > MAX_ORIGINAL_BYTES ||
-    !eligibleJpeg(bytes, width, height)
+    !eligibleOriginal(bytes, mime, width, height)
   )
     return false;
   let bitmap: ImageBitmap | undefined;
   try {
-    bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' }));
+    bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: mime }));
     if (!current() || signal?.aborted || bitmap.width !== width || bitmap.height !== height)
       return false;
     const canvas = document.createElement('canvas');
@@ -160,8 +210,11 @@ export async function matchesDisplayedJpeg(
     if (!ctx) return false;
     for (let row = 0; row < height; row += canvas.height) {
       const rows = Math.min(canvas.height, height - row);
+      if (signal?.aborted) return false;
+      ctx.clearRect(0, 0, width, rows);
       ctx.drawImage(image, 0, row, width, rows, 0, 0, width, rows);
       const displayed = ctx.getImageData(0, 0, width, rows).data;
+      ctx.clearRect(0, 0, width, rows);
       ctx.drawImage(bitmap, 0, row, width, rows, 0, 0, width, rows);
       const cached = ctx.getImageData(0, 0, width, rows).data;
       if (!displayed.every((v, i) => v === cached[i])) return false;

@@ -14,3 +14,41 @@ it('leaves a private document before mounting an overlay or observing its media'
   await script.main({} as ContentScriptContext);
   expect(ui).not.toHaveBeenCalled();
 });
+
+it('checks every accessible frame ancestor before acquiring pixels and rejects an inaccessible parent', async () => {
+  const { eligibleDocumentChain } = await import('../src/core/policy');
+  const settings = {
+    enabled: true,
+    consentVersion: 1,
+    approvedOrigins: ['https://public.example'],
+  };
+  function frame(url: string, password = false, parent?: Window) {
+    const result = {
+      location: new URL(url),
+      document: { querySelector: () => (password ? {} : null) },
+    } as unknown as Window;
+    Object.defineProperty(result, 'parent', { value: parent ?? result });
+    return result;
+  }
+  const top = frame('https://public.example/news');
+  expect(eligibleDocumentChain(top, settings)).toBe(true);
+  expect(eligibleDocumentChain(frame('https://public.example/embed', false, top), settings)).toBe(
+    true,
+  );
+  const privateParent = frame('https://public.example/messages');
+  expect(
+    eligibleDocumentChain(frame('https://public.example/embed', false, privateParent), settings),
+  ).toBe(false);
+  const loginParent = frame('https://public.example/news', true);
+  expect(
+    eligibleDocumentChain(frame('https://public.example/embed', false, loginParent), settings),
+  ).toBe(false);
+  const inaccessible = Object.defineProperty({}, 'location', {
+    get() {
+      throw new DOMException('cross-origin');
+    },
+  }) as Window;
+  expect(
+    eligibleDocumentChain(frame('https://public.example/embed', false, inaccessible), settings),
+  ).toBe(false);
+});

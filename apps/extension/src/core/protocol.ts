@@ -5,7 +5,7 @@ export interface Binding {
 }
 
 export interface LocalDecision extends Binding {
-  status: 'COMPLETED' | 'UNSUPPORTED' | 'FAILED' | 'CANCELED';
+  status: 'COMPLETED' | 'UNSUPPORTED' | 'FAILED' | 'CANCELED' | 'BUSY';
   shouldLabel: boolean;
   policyVersion: string;
   expiresAt: number;
@@ -128,6 +128,7 @@ export function isAnalyzeRequest(value: unknown): value is AnalyzeRequest {
       !Number.isFinite(item.durationMs) ||
       (item.durationMs ?? 0) <= 0 ||
       typeof item.coverage !== 'number' ||
+      !Number.isFinite(item.coverage) ||
       item.coverage < 0 ||
       item.coverage > 1
     )

@@ -1,8 +1,8 @@
 """Installed Safari WebExtension checks using Apple's WebDriver Classic endpoints.
 
-No product modules or detector policy are modified. A disclosed, disposable
-manifest/bootstrap copy can supply only the loopback fixture grant and an options
-tab when SafariDriver cannot interact with a native permission prompt.
+The exact package install check and the installed-overlay acceptance run are
+independent sessions. The latter may explicitly select a disposable, loopback-only
+test manifest/bootstrap. Product modules and detector policy are never modified.
 """
 import hashlib
 import json
@@ -23,7 +23,7 @@ TEXT = "AI Slop Detected 🤮"
 
 
 class SetupUnavailable(AssertionError):
-    """Only origin discovery or native permission interaction may use a test copy."""
+    """Native origin discovery or permission prompting could not be exercised."""
 
 
 def step(name, **details):
@@ -113,6 +113,7 @@ def diagnostics(driver):
       return {url:location.protocol+'//'+location.host+location.pathname,
         focused:document.hasFocus(),hidden:document.hidden,
         overlays:document.querySelectorAll('label-ai-overlay').length,
+        optionsStatus:document.querySelector('#site-heading') ? (document.querySelector('[role=status]')?.textContent||'').slice(0,300) : null,
         images:Array.from(document.images).slice(0,3).map(i=>({id:i.id,complete:i.complete,
           naturalWidth:i.naturalWidth,width:i.getBoundingClientRect().width,
           sourceScheme:(i.currentSrc||i.src).split(':')[0]}))};
@@ -227,7 +228,7 @@ def find_opened_options(driver, origin):
 def request_consent(driver, options, origin):
     driver.switch(options)
     private = driver.script("return (globalThis.browser||globalThis.chrome).extension?.inIncognitoContext===true;")
-    step("options.context", incognito=private)
+    step("options.context", incognito=private, focused=driver.script("return document.hasFocus();"))
     assert not private, "SafariDriver extension context is private; production guard must remain active"
     element = driver.element("#site")
     driver.call("/element/" + quote(element, safe="") + "/clear", "POST", {})
@@ -338,7 +339,37 @@ def exercise(driver, options, site, origin, requests, modified):
             "network_observation_scope": "loopback publisher requests; not browser-wide network capture"}
 
 
-def run_extension(session, request, build):
+def cleanup(driver, identifier):
+    try:
+        uninstall(driver, identifier)
+        return True
+    except RuntimeError as error:
+        # A vendor cleanup error does not undo an acknowledged installation.
+        # The disposable SafariDriver session closes separately.
+        step("uninstall.failed", error=str(error)[:300])
+        return False
+
+
+def run_install_smoke(session, request, build):
+    """Require a genuine install acknowledgement for the exact shipped package."""
+    build = build.resolve()
+    manifest_path = build / "manifest.json"
+    manifest_bytes = manifest_path.read_bytes()
+    assert json.loads(manifest_bytes)["name"] == "Label.ai"
+    driver = Driver(session, request)
+    identifier = install(driver, build)
+    try:
+        assert manifest_path.read_bytes() == manifest_bytes, "shipping package was modified"
+        digest = hashlib.sha256(manifest_bytes).hexdigest()
+        step("untouched_package.installed", manifest_sha256=digest)
+    finally:
+        cleaned = cleanup(driver, identifier)
+    return {"unmodified_package_installed": True, "manifest_sha256": digest,
+            "cleanup_completed": cleaned, "overlay_acceptance_exercised": False}
+
+
+def run_extension(session, request, build, *, pregrant_test_origin=False):
+    """Strict overlay acceptance. Choose the test copy explicitly, in a fresh session."""
     build = build.resolve()
     manifest_bytes = (build / "manifest.json").read_bytes()
     manifest = json.loads(manifest_bytes)
@@ -348,39 +379,29 @@ def run_extension(session, request, build):
     driver = Driver(session, request)
     driver.call("/timeouts", "POST", {"script": 35000, "pageLoad": 20000, "implicit": 0})
     identifier = None
-    modified = False
-    untouched_options = False
     with publisher() as (origin, requests), TemporaryDirectory(prefix="label-ai-safari-test-") as temporary:
         try:
-            identifier = install(driver, build)
-            step("untouched_package.installed", manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest())
-            try:
-                options = open_original_options(driver, identifier, options_path)
-                untouched_options = True
-                step("untouched_options.complete")
-                site = driver.call("/window/new", "POST", {"type": "tab"})["handle"]
-                driver.switch(site)
-                driver.navigate(origin + "/")
-                badge_count(driver, 0, 5)
-                request_consent(driver, options, origin)
-            except SetupUnavailable as error:
-                step("test_setup_fallback", reason=str(error)[:500],
-                     disclosure="Disposable copy adds only loopback host grant, onInstalled options bootstrap, and loopback-only options URL discovery; production scripts, detector checks and private-browsing guards stay intact.")
-                uninstall(driver, identifier)
-                identifier = None
+            if pregrant_test_origin:
+                step("test_setup", disclosure="Disposable copy adds only loopback host grant, onInstalled options bootstrap, and loopback-only options URL discovery; production scripts, detector checks and private-browsing guards stay intact.")
                 copied = disposable_copy(build, Path(temporary) / "extension", manifest)
-                modified = True
                 identifier = install(driver, copied, modified=True)
                 options = find_opened_options(driver, origin)
                 step("test_copy_options.complete")
-                site = driver.call("/window/new", "POST", {"type": "tab"})["handle"]
-                driver.switch(site)
-                driver.navigate(origin + "/")
-                badge_count(driver, 0, 5)
-                request_consent(driver, options, origin)
-            result = exercise(driver, options, site, origin, requests, modified)
-            result.update({"unmodified_package_installed": True, "unmodified_options": untouched_options,
-                           "disposable_test_copy": modified, "native_optional_permission_grant": not modified})
+            else:
+                identifier = install(driver, build)
+                step("untouched_package.installed", manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest())
+                options = open_original_options(driver, identifier, options_path)
+                step("untouched_options.complete")
+            site = driver.call("/window/new", "POST", {"type": "tab"})["handle"]
+            driver.switch(site)
+            driver.navigate(origin + "/")
+            badge_count(driver, 0, 5)
+            request_consent(driver, options, origin)
+            result = exercise(driver, options, site, origin, requests, pregrant_test_origin)
+            result.update({"unmodified_package_installed": not pregrant_test_origin,
+                           "unmodified_options": not pregrant_test_origin,
+                           "disposable_test_copy": pregrant_test_origin,
+                           "native_optional_permission_grant": not pregrant_test_origin})
             step("all_checks.complete", result=result)
             return result
         except Exception:
@@ -390,9 +411,6 @@ def run_extension(session, request, build):
                 step("failure.diagnostics_unavailable", error=str(diagnostic_error)[:300])
             raise
         finally:
-            assert (build / "manifest.json").read_bytes() == manifest_bytes, "shipping package was modified"
             if identifier:
-                try:
-                    uninstall(driver, identifier)
-                except Exception as error:
-                    step("uninstall.failed", error=str(error)[:300])
+                cleanup(driver, identifier)
+            assert (build / "manifest.json").read_bytes() == manifest_bytes, "shipping package was modified"

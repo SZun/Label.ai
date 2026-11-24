@@ -43,8 +43,10 @@ A positive requires all of the following in the report returned by the real SDK:
   contradictory untrusted, revoked, expired, or mismatched status.
 - An explicit `c2pa.created` action in the active manifest's recognized actions
   assertion with the IPTC `trainedAlgorithmicMedia` source type.
-- No conflicting creation source, region or temporal restriction, or ambiguous
-  ingredient scope.
+- No conflicting source, region or temporal restriction, or ingredient-linked
+  scope. Explicitly incomplete action histories abstain. The active action list
+  may contain creation and non-content-changing publication; subsequent edits,
+  content insertion and unrecognized processing abstain.
 
 Generation mentioned only in an ingredient, an editing action, or a partial
 video interval cannot authorize a whole-asset label. Ordinary capture, digital

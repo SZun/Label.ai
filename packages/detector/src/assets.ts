@@ -23,6 +23,10 @@ export async function validateModelBytes(bytes: Uint8Array): Promise<void> {
   return validatePinnedBytes(bytes, MODEL);
 }
 
+export async function validateWasmBytes(bytes: Uint8Array): Promise<void> {
+  return validatePinnedBytes(bytes, WASM_RUNTIME);
+}
+
 async function validatePinnedBytes(bytes: Uint8Array, asset: PinnedAsset): Promise<void> {
   if (bytes.byteLength !== asset.bytes) throw new Error('Packaged asset size mismatch');
   const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer);

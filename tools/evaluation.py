@@ -79,6 +79,7 @@ def summarize(pairs, target_prevalence):
     projected = project(target_prevalence, worst_recall, worst_fpr)
     return dict(n=n,tp=tp,fp=fp,fn=fn,tn=tn,abstentions=abstentions,failures=failures,
                 precision=ratio(tp,tp+fp),recall=recall,fpr=fpr,coverage=ratio(n-abstentions,n),
+                precision_lower95=lower_bound(tp,tp+fp),coverage_lower95=lower_bound(n-abstentions,n),
                 fpr_upper95=upper_bound(fp,fp+tn),recall_lower95=lower_bound(tp,tp+fn),
                 target_prevalence=target_prevalence, projected_precision_lower95=projected,
                 prevalence_sensitivity={str(p): project(p,recall,fpr) for p in (.01,.05,.1,.25,.5)},
@@ -86,7 +87,9 @@ def summarize(pairs, target_prevalence):
                             and upper_bound(fp,fp+tn)<=.001 and recall>=.5))
 
 
-def evaluate(manifest, predictions, prevalence=.01):
+def evaluate(manifest, predictions, prevalence=.01, modality=None):
+    if modality not in {None, "image", "video"}:
+        raise ValueError("Unknown release modality")
     if not 0 < prevalence < 1:
         raise ValueError("prevalence must lie strictly between 0 and 1")
     release, groups, units, seen = {}, {}, set(), set()
@@ -101,7 +104,7 @@ def evaluate(manifest, predictions, prevalence=.01):
             raise ValueError("invalid asset provenance, modality, split, rights or ground truth")
         if groups.setdefault(group,split) != split:
             raise ValueError("source group leaks across dataset splits")
-        if split == "release":
+        if split == "release" and (modality is None or modality == row["kind"]):
             if group in units:
                 raise ValueError("release intervals require independent source groups; preselect one asset per group")
             units.add(group)
@@ -123,7 +126,8 @@ def evaluate(manifest, predictions, prevalence=.01):
         by_slice[(asset["kind"],asset["slice"])].append(observation)
     if not release or matched != set(release) or len(versions)!=1:
         raise ValueError("predictions must cover every release asset using a single frozen policy and route")
-    results = {k:summarize(by_kind[k],prevalence) for k in ("image","video")}
+    kinds = (modality,) if modality else ("image", "video")
+    results = {k:summarize(by_kind[k],prevalence) for k in kinds}
     return dict(policy=next(iter(versions))[0],route=next(iter(versions))[1],
                 by_modality=results, by_slice={f"{k}/{s}":summarize(v,prevalence) for (k,s),v in by_slice.items()},
                 passes=all(r["passes"] for r in results.values()))
@@ -134,6 +138,7 @@ def main():
     parser.add_argument("manifest",type=Path)
     parser.add_argument("predictions",type=Path)
     parser.add_argument("--prevalence",type=float,default=.01)
+    parser.add_argument("--modality", choices=("image", "video"), help="Evaluate one independently frozen candidate modality")
     parser.add_argument("--require-pass",action="store_true")
     args = parser.parse_args()
     def read(path):
@@ -142,7 +147,7 @@ def main():
     try:
         assets, a = read(args.manifest)
         predictions, b = read(args.predictions)
-        report = evaluate(assets,predictions,args.prevalence)
+        report = evaluate(assets,predictions,args.prevalence,args.modality)
         print(json.dumps(dict(report,manifest_sha256=a,predictions_sha256=b),indent=2,allow_nan=False))
         return int(args.require_pass and not report["passes"])
     except (ValueError,KeyError,OSError,TypeError) as e:

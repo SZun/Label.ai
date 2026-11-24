@@ -132,3 +132,41 @@ test('malformed validation status collections cannot be silently treated as succ
     }
   }
 });
+
+test('an active generation declaration followed by content replacement does not prove the whole asset', () => {
+  for (const action of ['c2pa.placed', 'c2pa.edited', 'c2pa.transcoded', 'c2pa.unknown']) {
+    const store = trustedStore();
+    store.manifests[active].assertions[0].data.actions.push({ action, digitalSourceType: SOURCE + 'digitalCapture' });
+    assert.equal(evaluateManifest(store, POLICY).shouldLabel, false, action);
+  }
+});
+
+test('compositing or unknown content-changing actions cannot inherit pure generation by omission', () => {
+  const store = trustedStore();
+  const actions = store.manifests[active].assertions[0].data.actions;
+  actions.push({ action: 'c2pa.placed', digitalSourceType: SOURCE + 'trainedAlgorithmicMedia' });
+  assert.equal(evaluateManifest(store, POLICY).shouldLabel, false);
+  Object.assign(actions[1], { action: 'c2pa.edited', digitalSourceType: undefined });
+  assert.equal(evaluateManifest(store, POLICY).shouldLabel, false);
+});
+
+test('a signed action list explicitly declared incomplete cannot establish whole-asset generation', () => {
+  const store = trustedStore();
+  Object.assign(store.manifests[active].assertions[0].data, { allActionsIncluded: false });
+  assert.equal(evaluateManifest(store, POLICY).shouldLabel, false);
+});
+
+test('ingredient-linked assets abstain even when the active action declares generation', () => {
+  const store = trustedStore();
+  Object.assign(store.manifests[active], { ingredients: [{ relationship: 'componentOf' }] });
+  assert.equal(evaluateManifest(store, POLICY).shouldLabel, false);
+});
+
+test('publication alone does not change the signed creation scope', () => {
+  const store = trustedStore();
+  Object.assign(store.manifests[active].assertions[0].data, { actions: [
+    { action: 'c2pa.created', digitalSourceType: SOURCE + 'trainedAlgorithmicMedia' },
+    { action: 'c2pa.published' },
+  ] });
+  assert.equal(evaluateManifest(store, POLICY).shouldLabel, true);
+});

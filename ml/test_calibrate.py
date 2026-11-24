@@ -42,12 +42,37 @@ class CalibrationTests(unittest.TestCase):
         self.assertGreater(abs(result["coefficients"]["secondOrderResidual"]), 0)
         self.assertIn("consecutive", result["featureVersion"])
 
+    def test_release_split_can_be_frozen_before_calibration(self):
+        frozen = [{**holdout()[0], "split": "release"}]
+        self.assertGreater(fit_calibration(rows(), frozen, "image", "f" * 64)["slope"], 0)
+        for bad in (
+            [{**frozen[0], "sha256": "not-a-digest"}],
+            [{**frozen[0], "group": ""}],
+            frozen * 2,
+        ):
+            with self.assertRaises(ValueError):
+                fit_calibration(rows(), bad, "image", "f" * 64)
+
     def test_blocks_training_on_holdout_and_group_or_content_leakage(self):
         for bad in ["split", "group", "sha256"]:
             data = rows()
             data[0][bad] = {"split": "test", "group": "separate-test-group", "sha256": "e" * 64}[bad]
             with self.assertRaisesRegex(ValueError, "split|leakage"):
                 fit_calibration(data, holdout(), "image", "f" * 64)
+
+    def test_failed_and_ineligible_inferences_cannot_enter_fit(self):
+        candidates = rows("video")
+        for row in candidates:
+            row["status"] = "COMPLETED"
+            row["temporal"]["eligible"] = True
+            row["reasonCodes"] = ["LOCAL_TEMPORAL_FEATURES"]
+        unusable = {**candidates[0], "sha256": "0" * 64, "group": "unsupported",
+                    "status": "FAILED", "temporal": None}
+        fit = fit_calibration(candidates + [unusable], holdout(), "video", "f" * 64)
+        self.assertEqual(fit["intercept"], fit_calibration(candidates, holdout(), "video", "f" * 64)["intercept"])
+        candidates[0]["temporal"]["eligible"] = False
+        with self.assertRaisesRegex(ValueError, "independent groups"):
+            fit_calibration(candidates, holdout(), "video", "f" * 64)
 
     def test_blocks_duplicate_assets_nonfinite_features_and_missing_classes(self):
         duplicate = rows()

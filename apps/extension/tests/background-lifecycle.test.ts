@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
   focused: true,
   hooks: {} as Record<string, ((...args: any[]) => any)[]>,
   verify: vi.fn(),
+  registered: vi.fn(),
 }));
 vi.mock('wxt/browser', () => {
   const event = (name: string) => ({
@@ -39,7 +40,7 @@ vi.mock('wxt/browser', () => {
         onRemoved: event('revoked'),
       },
       scripting: {
-        getRegisteredContentScripts: vi.fn(async () => []),
+        getRegisteredContentScripts: state.registered,
         registerContentScripts: vi.fn(),
         unregisterContentScripts: vi.fn(),
       },
@@ -89,6 +90,7 @@ beforeEach(async () => {
   state.focused = true;
   state.hooks = {};
   state.verify.mockReset();
+  state.registered.mockReset().mockResolvedValue([]);
   vi.stubGlobal('defineBackground', (main: () => void) => main);
   const { default: start } = await import('../entrypoints/background');
   (start as unknown as () => void)();
@@ -139,4 +141,55 @@ it('cancels running work immediately when its window loses focus', async () => {
   await flush();
   expect((await result).status).toBe('CANCELED');
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it('returns retryable backpressure when the local background queue is full', async () => {
+  state.verify.mockReturnValue(new Promise(() => {}));
+  const pending = Array.from({ length: 8 }, (_, index) => send('pending-' + index, 1));
+  await flush();
+  const full = await send('full', 1);
+  expect(full.status).toBe('BUSY');
+  expect(full.shouldLabel).toBe(false);
+  state.hooks.removed[0](1);
+  expect((await Promise.all(pending)).every((result) => result.status === 'CANCELED')).toBe(true);
+});
+
+it('does not analyze when the sending tab private state is not known', async () => {
+  state.verify.mockResolvedValue({ shouldLabel: true, policyVersion: 'verified' });
+  const reply = await state.hooks.message[0](
+    {
+      type: 'label-ai:analyze',
+      kind: 'video',
+      instanceId: 'video',
+      generation: 0,
+      requestId: 'unknown-private',
+      original: { mime: 'video/mp4', base64: 'AQID' },
+    },
+    { id: 'test', url: 'https://news.example/story', tab: { id: 1, windowId: 7 } },
+  );
+  expect(reply.shouldLabel).toBe(false);
+  expect(state.verify).not.toHaveBeenCalled();
+});
+
+it('preserves an equivalent persistent content registration when a worker restarts', async () => {
+  const { browser } = await import('wxt/browser');
+  const getRegistered = state.registered;
+  const register = vi.mocked(browser.scripting.registerContentScripts);
+  const unregister = vi.mocked(browser.scripting.unregisterContentScripts);
+  register.mockClear();
+  unregister.mockClear();
+  getRegistered.mockResolvedValueOnce([
+    {
+      id: 'label-ai-media',
+      js: ['content-scripts/media.js'],
+      matches: ['https://news.example/*'],
+      allFrames: true,
+      runAt: 'document_idle',
+      persistAcrossSessions: true,
+    },
+  ]);
+  state.hooks.startup[0]();
+  await flush();
+  expect(unregister).not.toHaveBeenCalled();
+  expect(register).not.toHaveBeenCalled();
 });

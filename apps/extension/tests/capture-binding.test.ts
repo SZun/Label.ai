@@ -1,11 +1,11 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { captureImage } from '../src/media/capture';
 import { fetchContentAddressed } from '../src/transport/acquire';
-import { matchesDisplayedJpeg, readCachedOriginal } from '../src/cached-original';
+import { matchesDisplayedOriginal, readCachedOriginal } from '../src/cached-original';
 
 vi.mock('../src/transport/acquire', () => ({ fetchContentAddressed: vi.fn() }));
 vi.mock('../src/cached-original', () => ({
-  matchesDisplayedJpeg: vi.fn(),
+  matchesDisplayedOriginal: vi.fn(),
   readCachedOriginal: vi.fn(),
 }));
 const candidate = { base64: '/9j/2Q==', mime: 'image/jpeg' };
@@ -32,21 +32,22 @@ function image() {
   return element;
 }
 it('requires displayed pixels to match a hash-addressed signed candidate', async () => {
-  vi.mocked(matchesDisplayedJpeg).mockResolvedValue(false);
+  vi.mocked(matchesDisplayedOriginal).mockResolvedValue(false);
   const result = await captureImage(image(), source, new AbortController().signal);
   expect(result.original).toBeUndefined();
   expect(result.frame).toBeDefined();
 });
 it('admits addressed JPEG originals only after full displayed source comparison', async () => {
-  vi.mocked(matchesDisplayedJpeg).mockResolvedValue(true);
+  vi.mocked(matchesDisplayedOriginal).mockResolvedValue(true);
   const element = image();
   const controller = new AbortController();
   const result = await captureImage(element, source, controller.signal);
   expect(result.original).toEqual(candidate);
-  expect(matchesDisplayedJpeg).toHaveBeenCalledWith(
+  expect(matchesDisplayedOriginal).toHaveBeenCalledWith(
     element,
     source,
     Uint8Array.from([255, 216, 255, 217]),
+    'image/jpeg',
     controller.signal,
   );
 });

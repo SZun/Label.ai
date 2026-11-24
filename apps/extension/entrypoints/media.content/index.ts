@@ -3,10 +3,10 @@ import { browser } from 'wxt/browser';
 import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import OverlayRoot, { type LabelPlacement } from '../../src/components/OverlayRoot.svelte';
 import {
-  isEligiblePage,
   DEFAULT_SETTINGS,
   normalizeSettings,
   type LocalSettings,
+  eligibleDocumentChain,
 } from '../../src/core/policy';
 import {
   acceptsDecision,
@@ -16,8 +16,9 @@ import {
 } from '../../src/core/protocol';
 import { BoundedQueue } from '../../src/core/queue';
 import { CaptureSlots } from '../../src/core/capture-slots';
+import { RetryBudget, retryableReply } from '../../src/core/retry';
 import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capture';
-import { embeddedVideoOriginal } from '../../src/media/video-original';
+import { acquireVideoOriginal } from '../../src/media/video-original';
 import { readSettings, SETTINGS_KEY } from '../../src/transport/settings';
 import '../../src/styles/label.scss';
 
@@ -31,6 +32,7 @@ interface MediaEntry {
   visible: boolean;
   animated: boolean;
   attempted: boolean;
+  retry: RetryBudget;
   originalAttempted: boolean;
   frames: FramePayload[];
   frameCallback?: number;
@@ -45,7 +47,7 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
   runAt: 'document_idle',
   async main(ctx) {
-    if (browser.extension?.inIncognitoContext) return;
+    if (browser.extension?.inIncognitoContext !== false) return;
     let settings: LocalSettings = { ...DEFAULT_SETTINGS };
     let ended = false;
     const entries = new Map<Element, MediaEntry>();
@@ -70,19 +72,15 @@ export default defineContentScript({
       'position:fixed;inset:0;width:0;height:0;pointer-events:none;z-index:2147483646;';
 
     const active = () =>
-      !ended &&
-      !document.hidden &&
-      document.hasFocus() &&
-      isEligiblePage(
-        location.href,
-        settings,
-        Boolean(document.querySelector('input[type="password"]')),
-      );
+      !ended && !document.hidden && document.hasFocus() && eligibleDocumentChain(window, settings);
 
     function cancel(entry: MediaEntry) {
       queue.cancel(entry.id);
-      if (entry.captureLease) videoCaptures.release(entry.captureLease);
-      entry.captureLease = undefined;
+      // Keep the capture lease until a running inference releases its frame buffers.
+      if (!queue.has(entry.id) && entry.captureLease) {
+        videoCaptures.release(entry.captureLease);
+        entry.captureLease = undefined;
+      }
       if (entry.captureTimer !== undefined) clearTimeout(entry.captureTimer);
       entry.captureTimer = undefined;
       entry.captureAbort?.abort();
@@ -125,8 +123,26 @@ export default defineContentScript({
       entry.attempted = false;
       entry.originalAttempted = false;
       entry.decision = undefined;
-      entry.animated = false;
+      entry.retry.reset();
+      entry.animated = animatedSources.get(entry.element) === entry.source;
       schedule();
+    }
+
+    function shown(element: Element): boolean {
+      // IntersectionObserver alone may report transparent or hidden media as intersecting.
+      for (let current: Element | null = element; current; ) {
+        const style = getComputedStyle(current);
+        if (
+          style.visibility === 'hidden' ||
+          style.visibility === 'collapse' ||
+          style.display === 'none' ||
+          Number.parseFloat(style.opacity) === 0
+        )
+          return false;
+        const root = current.getRootNode();
+        current = current.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+      }
+      return true;
     }
 
     function place(entry: MediaEntry): LabelPlacement | null {
@@ -156,12 +172,7 @@ export default defineContentScript({
           bottom = Math.min(bottom, clip.bottom);
         }
       }
-      if (
-        right - left < 182 ||
-        bottom - top < 44 ||
-        getComputedStyle(entry.element).visibility === 'hidden'
-      )
-        return null;
+      if (right - left < 182 || bottom - top < 44 || !shown(entry.element)) return null;
       if (document.fullscreenElement && !document.fullscreenElement.contains(ui.shadowHost))
         return null;
       const placement = {
@@ -194,29 +205,45 @@ export default defineContentScript({
     async function submit(entry: MediaEntry, payload: object) {
       const binding = bound(entry);
       entry.binding = binding;
-      const result: unknown = await browser.runtime.sendMessage({
-        type: 'label-ai:analyze',
-        ...binding,
-        ...payload,
-      });
+      let result: unknown;
+      let interrupted = false;
+      try {
+        result = await browser.runtime.sendMessage({
+          type: 'label-ai:analyze',
+          ...binding,
+          ...payload,
+        });
+      } catch {
+        // A browser can suspend or restart the extension worker mid-message.
+        interrupted = true;
+      }
+      if (entry.binding?.requestId !== binding.requestId) return;
+      entry.binding = undefined;
       if (
-        entry.binding?.requestId !== binding.requestId ||
         !active() ||
         !entry.visible ||
+        !shown(entry.element) ||
         !entry.element.isConnected ||
         sourceFor(entry.element) !== entry.source
       )
-        return false;
+        return;
       if (acceptsDecision(binding, result)) entry.decision = result;
-      entry.binding = undefined;
+      else if (interrupted || result === undefined || retryableReply(binding, result)) retry(entry);
       render();
-      return Boolean(entry.decision);
+    }
+
+    function retry(entry: MediaEntry) {
+      if (entry.retry.defer()) {
+        entry.attempted = false;
+        entry.originalAttempted = false;
+      }
     }
 
     function startVideo(entry: MediaEntry) {
       const video = entry.element as HTMLVideoElement;
       if (
         entry.frameCallback != null ||
+        entry.captureLease ||
         entry.attempted ||
         video.paused ||
         !video.requestVideoFrameCallback
@@ -234,8 +261,15 @@ export default defineContentScript({
       }, 20_000);
       const sample = (_now: number, metadata: VideoFrameCallbackMetadata) => {
         entry.frameCallback = undefined;
-        if (entry.generation !== generation) return;
-        if (!active() || !entry.visible || !video.isConnected || video.paused || entry.attempted) {
+        if (entry.generation !== generation || entry.captureLease !== captureLease) return;
+        if (
+          !active() ||
+          !entry.visible ||
+          !shown(video) ||
+          !video.isConnected ||
+          video.paused ||
+          entry.attempted
+        ) {
           suspendEntry(entry);
           return;
         }
@@ -267,7 +301,14 @@ export default defineContentScript({
             );
             const queued = queue.enqueue(entry.id, async () => {
               try {
-                if (entry.generation === generation && active() && entry.visible)
+                if (
+                  entry.generation === generation &&
+                  entry.captureLease === captureLease &&
+                  active() &&
+                  entry.visible &&
+                  shown(entry.element) &&
+                  sourceFor(entry.element) === entry.source
+                )
                   await submit(entry, { kind: 'video', frames, durationMs, coverage });
               } catch {
                 /* Failure renders no label. */
@@ -278,6 +319,7 @@ export default defineContentScript({
               }
             });
             if (!queued) {
+              retry(entry);
               videoCaptures.release(captureLease);
               if (entry.captureLease === captureLease) entry.captureLease = undefined;
             }
@@ -316,7 +358,12 @@ export default defineContentScript({
           entry.attempted = false;
           entry.originalAttempted = false;
         }
-        if (!active() || !entry.visible || entry.attempted || !entry.source) continue;
+        if (entry.visible && !shown(entry.element)) {
+          suspendEntry(entry);
+          continue;
+        }
+        if (!active() || !entry.visible || entry.attempted || !entry.source || !entry.retry.ready())
+          continue;
         const rect = entry.element.getBoundingClientRect();
         if (
           rect.width < 128 ||
@@ -326,16 +373,37 @@ export default defineContentScript({
         if (entry.element instanceof HTMLVideoElement) {
           if (!entry.originalAttempted && entry.element.readyState >= 1) {
             entry.originalAttempted = true;
-            if (entry.source.startsWith('data:video/mp4;base64,')) {
+            if (
+              entry.source.startsWith('data:video/mp4;base64,') ||
+              entry.source.startsWith('blob:')
+            ) {
               const generation = entry.generation;
               const accepted = queue.enqueue(entry.id, async () => {
                 try {
-                  if (active() && entry.visible && generation === entry.generation) {
-                    const original = embeddedVideoOriginal(
+                  if (
+                    active() &&
+                    entry.visible &&
+                    shown(entry.element) &&
+                    generation === entry.generation
+                  ) {
+                    const controller = new AbortController();
+                    entry.captureAbort = controller;
+                    const original = await acquireVideoOriginal(
                       entry.element as HTMLVideoElement,
                       entry.source,
+                      controller.signal,
                     );
-                    if (original) await submit(entry, { kind: 'video', original });
+                    if (entry.captureAbort === controller) entry.captureAbort = undefined;
+                    if (
+                      original &&
+                      !controller.signal.aborted &&
+                      active() &&
+                      entry.visible &&
+                      shown(entry.element) &&
+                      entry.generation === generation &&
+                      sourceFor(entry.element) === entry.source
+                    )
+                      await submit(entry, { kind: 'video', original });
                   }
                 } catch {
                   /* Failed credentials remain unlabeled. */
@@ -362,24 +430,29 @@ export default defineContentScript({
         )
           continue;
         const accepted = queue.enqueue(entry.id, async () => {
-          if (!active() || !entry.visible) {
+          if (!active() || !entry.visible || !shown(entry.element)) {
             entry.attempted = false;
             return;
           }
           const generation = entry.generation;
+          const controller = new AbortController();
           try {
-            entry.captureAbort = new AbortController();
-            const payload = await captureImage(
-              entry.element,
-              entry.source,
-              entry.captureAbort.signal,
-            );
-            if (generation === entry.generation && active() && entry.visible)
+            entry.captureAbort = controller;
+            const payload = await captureImage(entry.element, entry.source, controller.signal);
+            if (
+              !controller.signal.aborted &&
+              generation === entry.generation &&
+              active() &&
+              entry.visible &&
+              shown(entry.element) &&
+              sourceFor(entry.element) === entry.source
+            )
               await submit(entry, { kind: 'image', ...payload });
           } catch {
             /* Tainted canvas, unsupported media and errors remain unlabeled. */
           } finally {
-            entry.captureAbort = undefined;
+            if (entry.captureAbort === controller) entry.captureAbort = undefined;
+            schedule();
           }
         });
         if (accepted) entry.attempted = true;
@@ -444,6 +517,7 @@ export default defineContentScript({
         visible: true,
         animated: animatedSources.get(element) === source,
         attempted: false,
+        retry: new RetryBudget(),
         originalAttempted: false,
         frames: [],
       };
@@ -552,6 +626,7 @@ export default defineContentScript({
       for (const entry of entries.values()) {
         cancel(entry);
         entry.decision = undefined;
+        entry.retry.reset();
         entry.attempted = false;
         entry.originalAttempted = false;
       }

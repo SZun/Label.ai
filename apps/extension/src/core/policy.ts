@@ -86,3 +86,27 @@ export function normalizeSettings(value: unknown): LocalSettings {
       : [],
   };
 }
+
+/** Verify the complete same-origin frame ancestry before reading any visible pixels. */
+export function eligibleDocumentChain(frame: Window, settings: LocalSettings): boolean {
+  try {
+    const origin = frame.location.origin;
+    let ancestor = frame;
+    while (true) {
+      if (
+        ancestor.location.origin !== origin ||
+        !isEligiblePage(
+          ancestor.location.href,
+          settings,
+          Boolean(ancestor.document.querySelector('input[type="password"]')),
+        )
+      )
+        return false;
+      if (ancestor.parent === ancestor) return true;
+      ancestor = ancestor.parent;
+    }
+  } catch {
+    // Cross-origin or opaque frame ancestry cannot establish a private-context decision.
+    return false;
+  }
+}

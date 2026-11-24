@@ -86,13 +86,58 @@ python ml/calibrate.py --modality image \
   --output local-data/image-calibration-artifact.json
 ```
 
-For video use `--modality video` and include the exact `temporal` features returned by this runtime. Each calibration JSONL row must include `sha256`, `group`, `split: "calibration"`, matching `kind`, independently established `origin` (`generated`, `genuine`, or `camera`), and documented `license` or `rights`. Images supply `logit`; videos supply the seven named temporal features. The holdout manifest supplies `sha256`, `group`, and `split: "test"` or `"validation"`.
+For video use `--modality video` and include the exact `temporal` features returned by this runtime. Each calibration JSONL row must include `sha256`, `group`, `split: "calibration"`, matching `kind`, independently established `origin` (`generated`, `genuine`, or `camera`), and documented `license` or `rights`. Images supply `logit`; videos supply the seven named temporal features. The holdout manifest supplies `sha256`, `group`, and `split: "test"`, `"validation"` or `"release"`.
 
 The fitter rejects duplicate assets, content/group overlap with the holdout, invalid/nonfinite features, and insufficient independent groups per class. Group weights prevent multiple variants of the same source from dominating the fit. It standardizes features, fits regularized logistic regression, and converts coefficients back to runtime units. At least 20 groups per class is a fitting floor, **not** a claim of adequate release evidence.
 
 Every generated artifact starts `release_approved: false`. Freeze that artifact, run the separate repository evaluator on a genuinely untouched holdout, inspect error slices and generator/site coverage, and review promotion as a build change. The runtime's route gate requires projected precision lower bound ≥99%, FPR upper bound ≤0.1%, and recall ≥50%, with matching model/preprocessing/calibration/threshold. It requires evidence hashes and rejects use of the same calibration and holdout manifest. A fabricated JSON report cannot be made trustworthy by software consistency checks; the evidence review remains necessary.
 
 Do not enable the route because its smoke examples look convincing, and do not reuse test examples to tune the threshold. The user-facing label contains no probability or diagnostic score.
+
+### Reproducible local corpus evaluation
+
+The developer-only runner executes the same model/session, WASM bytes, spatial
+preprocessing, and temporal engine as the extension. Supply local, licensed
+assets and a JSONL inventory with one row per file. Each row requires
+`file` (relative to the manifest's directory), `sha256`, `kind`, `origin`,
+`source`, `license`, `group`, `split` and `slice`. Image and video release
+inventories are separate. Maintain the same source group for all renditions,
+edits and derivatives. The runner checks input file identities and both pinned
+runtime artifacts before analysis. It never enables the production route.
+
+For a fresh independent image corpus, prepare separate locked calibration and
+release inventories, then run:
+
+```sh
+node --experimental-strip-types packages/detector/tests/run-corpus.ts \
+  --manifest local-data/image-calibration-manifest.jsonl --split calibration \
+  --output local-data/image-calibration-outputs.jsonl
+python ml/calibrate.py --modality image \
+  --input local-data/image-calibration-outputs.jsonl \
+  --holdout-manifest local-data/image-release-manifest.jsonl \
+  --threshold 0.99 --output local-data/image-candidate.json
+node --experimental-strip-types packages/detector/tests/run-corpus.ts \
+  --manifest local-data/image-release-manifest.jsonl --split release \
+  --candidate local-data/image-candidate.json \
+  --output local-data/image-release-predictions.jsonl
+python tools/evaluation.py local-data/image-release-manifest.jsonl \
+  local-data/image-release-predictions.jsonl --modality image --require-pass
+```
+
+The candidate binds threshold, fitted parameters, exact holdout bytes, model
+and preprocessing. The output records the candidate's SHA-256 in its policy
+identifier; runtime failure and unsupported media count as misses in recall.
+The evaluator reports modality/slice counts, exact one-sided confidence bounds,
+and prevalence sensitivity. Repeat for video using a separate candidate.
+Keep all calibration rows (including failed/ineligible ones) in the source
+inventory so split checks remain complete; only usable inference features enter
+the fit. The fitter reports excluded counts. Do not change the candidate after
+viewing a release report or reuse that holdout to select a route.
+
+This evaluation is offline developer evidence. Pillow/ffmpeg decoding and
+video timestamps approximate browser acquisition; native browser color
+management, playback offsets, cross-origin access and actual visibility require
+separate installed-extension evaluation for product-level recall.
 
 ## Tests and actual media evidence
 
@@ -126,3 +171,74 @@ Recorded development results:
 These measurements are Linux x64/Node24/WASM developer smoke evidence. They are not Chrome/Safari latency guarantees and do not establish general detection accuracy. The two flower encodings are one underlying camera clip, not two independent negative examples. Reports are in [reports/image-smoke-wasm.json](reports/image-smoke-wasm.json) and [reports/video-smoke-wasm.json](reports/video-smoke-wasm.json). Browser integration results are maintained by the extension's acceptance suite.
 
 Tests were written and run against missing behavior before implementation. They cover normalization/aspect/alpha, input limits, PNG decode boundaries, canceled/stale native results, serialized session lifetime, cancellation between video frames, asset origin/size checks, temporal coverage, isolated posters, short generated intros, second differences, policy consistency, and calibration split leakage. Runtime mocks are confined to contract/unit tests; the separate media test uses real weights and computation.
+
+
+## November 2026 frontier-generator development comparison
+
+On November 24, 2026, the pinned local model executed on 82 files from the
+October 2026 [WasItAIGenerated Frontier Image & Video Benchmark](https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10)
+public revision `e6a8b83d15fab1da958848368fcd07e943afafd0`. The pinned metadata
+and selected asset digests, generator, source, author, license, elapsed local
+execution time and decision are recorded in
+[reports/frontier-dev-2026-10.json](reports/frontier-dev-2026-10.json).
+The images are attribution-licensed (generated CC BY 4.0, genuine per-file free
+licenses); the raw media is not redistributed here. The report represents
+44 source groups: 38 image groups (each has a paired Instagram rendition)
+and six original clips. No benchmark asset was used to fit or tune a policy.
+
+| Local uncalibrated diagnostic | Generated scores ≥ 0.99 | Generated scores ≥ 0.5 | Genuine scores ≥ 0.5 |
+| --- | ---: | ---: | ---: |
+| Images from 19 current generators | 0/19 | 4/19 | 0/19 |
+| Instagram renditions of those images | 0/19 | 2/19 | 0/19 |
+| Videos from three current generators | 0/3 | 0/3 | 1/3 |
+
+All 82 analyses completed. The extension's disabled statistical route yielded
+no labels. The video diagnostic is a lower-quartile frame score; only one of
+three generated clips passed the temporal-eligibility guard. The genuine clip
+with a raw score of 0.5454 failed the mixed-frame guard. These observations
+expose a serious generalization gap in the current model: the early diffusion
+smoke results did not predict behavior on current generators. These are
+development results, not release confidence bounds. The subset has unknown
+training overlap, lacks dedicated art/CGI/hybrid slices, and is far too small
+for the project's release FPR and precision requirements.
+
+Reproduce the sample locally without uploading any media:
+
+```sh
+python tools/prepare_frontier_dev.py
+node --experimental-strip-types packages/detector/tests/run-corpus.ts \
+  --manifest artifacts/frontier-dev/image-manifest.jsonl \
+  --output artifacts/frontier-dev/image-rerun.jsonl
+node --experimental-strip-types packages/detector/tests/run-corpus.ts \
+  --manifest artifacts/frontier-dev/video-manifest.jsonl \
+  --output artifacts/frontier-dev/video-rerun.jsonl
+```
+
+### Candidate research for the next model comparison
+
+Two compact ONNX image candidates have public model cards, but neither has been
+measured in Label.ai or cleared for its distribution:
+
+- [Slop Detect ViT-S int8](https://huggingface.co/Loke-60000/slop-detect-vit-s-onnx):
+  MIT-declared checkpoint; the publisher describes web-degraded training and
+  reports 85.3% balanced accuracy on 21 unseen generators. Its CLIP
+  normalization differs from the current model and training-data rights need
+  review.
+- [GPTTrace CF ViT-S fine-tune](https://huggingface.co/nakas/gpttrace-cf-vit-ft-v1):
+  24 MB ONNX, CC BY-SA 4.0 weights, trained on newer generators; its
+  publisher reports especially weak FLUX dev and GPT Image results on its
+  in-house test. Adopting it requires preprocessing parity and review of
+  share-alike rights.
+
+For video, [AEGIS](https://huggingface.co/MusapYildiz/aegis-video-detector)
+has MIT-declared PyTorch checkpoints targeting whole-video generation, not
+an audited portable ONNX export. Its authors' validation FPR of 2.18% also
+exceeds Label.ai's 0.1% maximum. It would require training-data rights review,
+an export, device profiling and independent full-clip evaluation.
+
+At 1% target prevalence, even a detector with a joint lower recall bound of
+50% would require roughly 72,300 source-independent negatives with zero false
+positives for the current projected 99% precision lower-bound criterion. That
+calculation is a feasibility bound; calibrated recall and actual observed errors
+will determine the necessary size. Neither this development corpus nor the
+publicly available frontier split satisfies that acceptance condition.

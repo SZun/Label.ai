@@ -78,14 +78,27 @@ export function evaluateManifest(value: unknown, policyVersion: string): Provena
   }
 
   const creationActions: RecordValue[] = [];
+  // A generation event does not describe later compositing, replacement or unknown
+  // processing. Only creation and non-content-changing publication are supported.
+  if (manifest.ingredients !== undefined &&
+      (!Array.isArray(manifest.ingredients) || manifest.ingredients.length > 0)) {
+    return result('verified-other', 'C2PA_GENERATION_SCOPE_AMBIGUOUS');
+  }
   for (const assertion of manifest.assertions) {
     const item = record(assertion);
     if (typeof item?.label !== 'string' || !/^c2pa\.actions(?:\.v[123])?$/.test(item.label)) continue;
-    const actions = record(item.data)?.actions;
-    if (!Array.isArray(actions)) continue;
-    for (const action of actions) {
+    const data = record(item.data);
+    if (!Array.isArray(data?.actions) || data.allActionsIncluded === false) {
+      return result('verified-other', 'C2PA_GENERATION_SCOPE_AMBIGUOUS');
+    }
+    for (const action of data.actions) {
       const candidate = record(action);
-      if (candidate?.action === 'c2pa.created') creationActions.push(candidate);
+      if (candidate?.action === 'c2pa.created') {
+        creationActions.push(candidate);
+      } else if (candidate?.action !== 'c2pa.published' ||
+          (candidate.digitalSourceType !== undefined && candidate.digitalSourceType !== GENERATED)) {
+        return result('verified-other', 'C2PA_GENERATION_SCOPE_AMBIGUOUS');
+      }
     }
   }
   if (creationActions.length === 0 || creationActions.some((action) => action.digitalSourceType !== GENERATED)) {

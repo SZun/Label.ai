@@ -13,57 +13,147 @@
   let settings: LocalSettings = $state({ ...DEFAULT_SETTINGS });
   let site = $state('');
   let message = $state('');
+  let busy = $state(true);
   onMount(async () => {
-    settings = await readSettings();
+    try {
+      settings = await readSettings();
+    } catch {
+      message = 'Local settings could not be loaded. Reopen this page to try again.';
+    } finally {
+      busy = false;
+    }
   });
 
   async function enable() {
+    if (busy) return;
     const origin = normalizeOrigin(site.trim());
     if (!origin) {
       message = 'Enter a public HTTPS site address.';
       return;
     }
-    // Permission request remains directly inside the user gesture.
-    const granted = await browser.permissions.request({
-      origins: [hostPermissionPattern(origin)!],
-    });
-    if (!granted) {
-      message = 'Site access was not granted. Nothing will be analyzed.';
-      return;
+    busy = true;
+    message = '';
+    try {
+      const permission = { origins: [hostPermissionPattern(origin)!] };
+      // Request directly in the user gesture. Safari may reject or deny a redundant
+      // request; an existing grant counts only when the browser confirms it.
+      const request = browser.permissions.request(permission).catch(() => false);
+      const existing = browser.permissions.contains(permission).catch(() => false);
+      const alreadyGranted = new Promise<boolean>((resolve) => {
+        void existing.then((granted) => {
+          if (granted) resolve(true);
+        });
+      });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const expired = new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), 30_000);
+      });
+      const granted = await Promise.race([
+        request.then(async (granted) => granted || (await existing)),
+        alreadyGranted,
+        expired,
+      ]);
+      clearTimeout(timer);
+      if (!granted) {
+        message =
+          'Site access was not granted. Check this website’s browser extension permission and try again.';
+        return;
+      }
+      const previous = await readSettings();
+      if (!previous.approvedOrigins.includes(origin) && previous.approvedOrigins.length >= 100) {
+        message = 'The site limit has been reached. Remove an approved site and try again.';
+        return;
+      }
+      const next = {
+        enabled: true,
+        consentVersion: CONSENT_VERSION,
+        approvedOrigins: [...new Set([...previous.approvedOrigins, origin])],
+      };
+      await writeSettings(next);
+      settings = next;
+      const registration = await browser.runtime.sendMessage({ type: 'label-ai:sync' });
+      if (!registration?.registered) throw new Error('Registration failed');
+      message = 'Local analysis enabled. Reload existing pages on this site.';
+    } catch {
+      message =
+        'Label.ai could not activate this site. Check the browser extension permission and try again.';
+    } finally {
+      busy = false;
     }
-    settings = {
-      enabled: true,
-      consentVersion: CONSENT_VERSION,
-      approvedOrigins: [...new Set([...settings.approvedOrigins, origin])],
-    };
-    await writeSettings(settings);
-    await browser.runtime.sendMessage({ type: 'label-ai:sync' });
-    message = 'Local analysis enabled. Reload existing pages on this site.';
   }
+
   async function pause() {
-    settings = { ...settings, enabled: false };
-    await writeSettings(settings);
-    message = 'Paused. Existing labels have been removed.';
+    if (busy) return;
+    busy = true;
+    try {
+      const next = { ...(await readSettings()), enabled: false };
+      await writeSettings(next);
+      settings = next;
+      message = 'Paused. Existing labels have been removed.';
+    } catch {
+      message = 'Pausing failed. Try again or disable Label.ai in your browser.';
+    } finally {
+      busy = false;
+    }
   }
+
   async function remove(origin: string) {
-    settings = {
-      ...settings,
-      approvedOrigins: settings.approvedOrigins.filter((entry) => entry !== origin),
-    };
-    await writeSettings(settings);
-    const pattern = hostPermissionPattern(origin)!;
-    if (!settings.approvedOrigins.some((entry) => hostPermissionPattern(entry) === pattern))
-      await browser.permissions.remove({ origins: [pattern] });
+    if (busy) return;
+    busy = true;
+    try {
+      const previous = await readSettings();
+      const next = {
+        ...previous,
+        approvedOrigins: previous.approvedOrigins.filter((entry) => entry !== origin),
+      };
+      await writeSettings(next);
+      settings = next;
+      const pattern = hostPermissionPattern(origin)!;
+      if (!next.approvedOrigins.some((entry) => hostPermissionPattern(entry) === pattern))
+        if (!(await browser.permissions.remove({ origins: [pattern] }))) {
+          message =
+            'Local consent removed. To withdraw the remaining browser grant, use browser settings.';
+          return;
+        }
+      message = 'Site access removed.';
+    } catch {
+      message =
+        'Removing site access could not finish. Check the browser extension settings and try again.';
+    } finally {
+      busy = false;
+    }
   }
+
   async function clear() {
-    const origins = [
-      ...new Set(settings.approvedOrigins.map((origin) => hostPermissionPattern(origin)!)),
-    ];
-    settings = { ...DEFAULT_SETTINGS };
-    await writeSettings(settings);
-    await browser.runtime.sendMessage({ type: 'label-ai:clear' });
-    if (origins.length) await browser.permissions.remove({ origins });
-    message = 'Local settings and in-memory analysis results cleared.';
+    if (busy) return;
+    busy = true;
+    try {
+      const previous = await readSettings();
+      const origins = [
+        ...new Set(previous.approvedOrigins.map((origin) => hostPermissionPattern(origin)!)),
+      ];
+      await writeSettings({ ...DEFAULT_SETTINGS });
+      settings = { ...DEFAULT_SETTINGS };
+      const [clearResult, permissionResult] = await Promise.allSettled([
+        browser.runtime.sendMessage({ type: 'label-ai:clear' }),
+        origins.length ? browser.permissions.remove({ origins }) : Promise.resolve(true),
+      ]);
+      if (
+        clearResult.status !== 'fulfilled' ||
+        !clearResult.value?.cleared ||
+        permissionResult.status !== 'fulfilled' ||
+        !permissionResult.value
+      ) {
+        message =
+          'Local consent cleared. Check browser permissions and reopen Label.ai to try clearing again.';
+        return;
+      }
+      message = 'Local settings and in-memory analysis results cleared.';
+    } catch {
+      message = 'Clearing could not finish. Check browser extension settings and try again.';
+    } finally {
+      busy = false;
+    }
   }
 </script>
 
@@ -96,10 +186,11 @@
       id="site"
       type="url"
       bind:value={site}
+      disabled={busy}
       placeholder="https://example.com"
       autocomplete="off"
     />
-    <Button variant="raised" onclick={enable}>Enable on this site</Button>
+    <Button variant="raised" onclick={enable} disabled={busy}>Enable on this site</Button>
     <p class="small">
       Enabling confirms local media analysis on the public pages of this site. Your browser will
       also ask for site access.
@@ -108,13 +199,15 @@
         {#each settings.approvedOrigins as origin}<li>
             <span>{origin}</span><Button
               onclick={() => remove(origin)}
+              disabled={busy}
               aria-label={`Remove ${origin}`}>Remove</Button
             >
           </li>{/each}
       </ul>{/if}
     <div class="actions">
-      <Button onclick={pause}>Pause local analysis</Button><Button onclick={clear}
-        >Clear local data</Button
+      <Button onclick={pause} disabled={busy}>Pause local analysis</Button><Button
+        onclick={clear}
+        disabled={busy}>Clear local data</Button
       >
     </div>
     <p role="status">{message}</p>

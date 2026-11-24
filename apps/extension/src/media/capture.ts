@@ -8,7 +8,8 @@ import {
   type FramePayload,
 } from '../core/protocol';
 import { fetchContentAddressed } from '../transport/acquire';
-import { matchesDisplayedJpeg, readCachedOriginal } from '../cached-original';
+import { matchesDisplayedOriginal, readCachedOriginal } from '../cached-original';
+import { readBlobOriginal } from './blob-original';
 
 export function sourceFor(element: Element): string {
   if (element instanceof HTMLImageElement) return element.currentSrc || element.src;
@@ -55,23 +56,49 @@ export async function captureImage(element: Element, source: string, signal: Abo
     await image.decode();
     frame = pixels(image, image.naturalWidth, image.naturalHeight, MAX_SIDE, 0);
   }
+  if (signal.aborted || sourceFor(element) !== source) throw new Error('Obsolete image capture');
   let original = embeddedOriginal(source);
-  const addressed = contentAddressedSource(source, location.href);
-  if (!original && addressed?.mime === 'image/jpeg' && element instanceof HTMLImageElement) {
-    const candidate = await fetchContentAddressed(addressed.url, location.href, signal);
+  if (!original && element instanceof HTMLImageElement && source.startsWith('blob:')) {
+    const candidate = await readBlobOriginal(
+      source,
+      location.origin,
+      ['image/jpeg', 'image/png'],
+      signal,
+    );
     if (
       candidate &&
-      (await matchesDisplayedJpeg(
+      (await matchesDisplayedOriginal(
         element,
         source,
         decodeBase64(candidate.base64, MAX_ORIGINAL_BYTES),
+        candidate.mime,
+        signal,
+      ))
+    )
+      original = candidate;
+  }
+  const addressed = contentAddressedSource(source, location.href);
+  if (
+    !original &&
+    (addressed?.mime === 'image/jpeg' || addressed?.mime === 'image/png') &&
+    element instanceof HTMLImageElement
+  ) {
+    const candidate = await fetchContentAddressed(addressed.url, location.href, signal);
+    if (
+      candidate &&
+      (await matchesDisplayedOriginal(
+        element,
+        source,
+        decodeBase64(candidate.base64, MAX_ORIGINAL_BYTES),
+        candidate.mime,
         signal,
       ))
     )
       original = candidate;
   }
   if (!original && !signal.aborted && element instanceof HTMLImageElement)
-    original = await readCachedOriginal(element, source);
+    original = await readCachedOriginal(element, source, signal);
+  if (signal.aborted || sourceFor(element) !== source) throw new Error('Obsolete image capture');
   return { frame, ...(original ? { original } : {}) };
 }
 

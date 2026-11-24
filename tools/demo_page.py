@@ -10,7 +10,8 @@ import struct
 from threading import Event, Thread
 import zlib
 
-SIGNED = Path(__file__).resolve().parents[1] / "tests/fixtures/provenance/firefly-generated.jpg"
+FIXTURES = Path(__file__).resolve().parents[1] / "tests/fixtures/provenance"
+SIGNED = FIXTURES / "firefly-generated.jpg"
 
 
 def ramp_png():
@@ -26,6 +27,9 @@ def publisher(port=0):
     blobs = {"signed":SIGNED.read_bytes(), "unsigned":ramp_png()}
     resources = {"/assets/"+hashlib.sha256(v).hexdigest()+(".jpg" if k=="signed" else ".png"):v for k,v in blobs.items()}
     paths = list(resources)
+    video = (FIXTURES / "sora.mp4").read_bytes()
+    video_path = "/assets/" + hashlib.sha256(video).hexdigest() + ".mp4"
+    resources[video_path] = video
     requests=[]
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*_):
@@ -34,14 +38,14 @@ def publisher(port=0):
             requests.append(("GET",self.path))
             if self.path in resources:
                 data=resources[self.path]
-                mime="image/jpeg" if self.path.endswith(".jpg") else "image/png"
+                mime={".jpg":"image/jpeg", ".png":"image/png", ".mp4":"video/mp4"}[Path(self.path).suffix]
             elif self.path=="/":
                 uris={k:"data:image/"+("jpeg" if k=="signed" else "png")+";base64,"+base64.b64encode(v).decode() for k,v in blobs.items()}
                 data=(f'<!doctype html><meta charset=utf-8><title>Label.ai verification page</title>'
                       f'<link rel=icon href="data:,"><style>img{{width:240px;height:170px;object-fit:contain}}</style>'
                       f'<img id=asset alt="Fixture artwork" src="{uris["signed"]}">'
                       f'<img id=control alt="Conventional gradient" src="{uris["unsigned"]}">'
-                      f'<script>globalThis.signedSource={json.dumps(uris["signed"])};globalThis.addressed={json.dumps(paths[0])};</script>').encode()
+                      f'<script>globalThis.signedSource={json.dumps(uris["signed"])};globalThis.addressed={json.dumps(paths[0])};globalThis.videoFixture={json.dumps(video_path)};</script>').encode()
                 mime="text/html"
             else:
                 self.send_error(404)

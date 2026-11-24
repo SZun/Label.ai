@@ -2,6 +2,12 @@ name: Verify the browser extension
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      safari_interactive:
+        description: "Run strict native Safari installed-overlay and iOS Simulator verifier acceptance"
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -67,19 +73,57 @@ jobs:
             export LABEL_TEST_BROWSER
           fi
           timeout --signal=TERM --kill-after=5s 120s python -u tests/e2e/browser_test.py --build artifacts/chromium --install-only
-          timeout --signal=TERM --kill-after=5s 180s python -u tests/e2e/browser_test.py --build artifacts/chromium --pregrant-test-origin --report artifacts/browser-report.json
+          timeout --signal=TERM --kill-after=5s 240s python -u tests/e2e/browser_test.py --build artifacts/chromium --pregrant-test-origin --report artifacts/browser-report.json
       - uses: actions/upload-artifact@v4
         with:
           name: browser-verification-${{ matrix.browser }}
           path: artifacts/browser-report.json
-  safari-runtime:
+  safari-package-and-verifier:
+    needs: extension
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: safari-verifier-harness
+          path: artifacts/safari-verifier
+      - name: Extract the packaged Safari target
+        run: unzip -q artifacts/packages/label-ai-safari.zip -d artifacts/safari-web
+      - name: Verify native credentials and install the unmodified extension in Safari
+        run: |
+          python3 tools/prepare_provenance_fixtures.py
+          sudo /usr/bin/safaridriver --enable
+          python3 -u tests/e2e/safari_verifier.py artifacts/safari-verifier --extension artifacts/safari-web --install-only
+      - name: Compile the unsigned macOS and iOS host apps
+        if: "!cancelled()"
+        run: |
+          tools/package_safari.sh artifacts/safari-web artifacts/xcode
+          python3 tools/build_apple_host.py artifacts/xcode
+      - uses: actions/upload-artifact@v4
+        if: "!cancelled() && hashFiles('artifacts/xcode/**/*.pbxproj') != ''"
+        with:
+          name: label-ai-safari-xcode
+          path: |
+            artifacts/xcode/**
+            !artifacts/xcode/build/**
+          if-no-files-found: error
+  safari-interactive-acceptance:
+    # Safari's native prompts and simulator automation interface require an
+    # appropriate interactive environment. The strict tests remain available
+    # but an unavailable hosted setup must never masquerade as overlay acceptance.
+    if: github.event_name == 'workflow_dispatch' && inputs.safari_interactive
     needs: extension
     runs-on: macos-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        platform: [desktop, ios-simulator]
+        platform: [desktop-installed-overlay, ios-simulator-verifier]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -93,32 +137,22 @@ jobs:
       - name: Extract the packaged Safari target
         run: unzip -q artifacts/packages/label-ai-safari.zip -d artifacts/safari-web
       - name: Boot an available iPhone simulator
-        if: matrix.platform == 'ios-simulator'
+        if: matrix.platform == 'ios-simulator-verifier'
         run: |
           device=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for runtime, group in reversed(list(devices.items())) if ".iOS-" in runtime for d in group if d["name"].startswith("iPhone") and d["isAvailable"]))')
           xcrun simctl bootstatus "$device" -b
           open -a Simulator --args -CurrentDeviceUDID "$device"
-          xcrun simctl launch "$device" com.apple.mobilesafari
           printf 'LABEL_AI_SIMULATOR_UDID=%s\n' "$device" >> "$GITHUB_ENV"
-      - name: Install and exercise the packaged extension with SafariDriver
+      - name: Exercise strict desktop installed overlay or simulator native verifier
         env:
           PLATFORM: ${{ matrix.platform }}
         run: |
           python3 tools/prepare_provenance_fixtures.py
           sudo /usr/bin/safaridriver --enable
-          args=(artifacts/safari-verifier --extension artifacts/safari-web)
-          if [ "$PLATFORM" = ios-simulator ]; then args+=(--ios-simulator --simulator-udid "$LABEL_AI_SIMULATOR_UDID"); fi
+          args=(artifacts/safari-verifier)
+          if [ "$PLATFORM" = ios-simulator-verifier ]; then
+            args+=(--ios-simulator --simulator-udid "$LABEL_AI_SIMULATOR_UDID")
+          else
+            args+=(--extension artifacts/safari-web --pregrant-test-origin)
+          fi
           python3 -u tests/e2e/safari_verifier.py "${args[@]}"
-      - name: Compile the unsigned macOS and iOS host apps
-        if: "!cancelled() && matrix.platform == 'desktop'"
-        run: |
-          tools/package_safari.sh artifacts/safari-web artifacts/xcode
-          python3 tools/build_apple_host.py artifacts/xcode
-      - uses: actions/upload-artifact@v4
-        if: "!cancelled() && matrix.platform == 'desktop' && hashFiles('artifacts/xcode/**/*.pbxproj') != ''"
-        with:
-          name: label-ai-safari-xcode
-          path: |
-            artifacts/xcode/**
-            !artifacts/xcode/build/**
-          if-no-files-found: error

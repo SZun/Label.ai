@@ -1,10 +1,10 @@
-import * as ort from 'onnxruntime-web/wasm';
 import { loadPackagedModel, loadPackagedWasm } from './assets.ts';
-import { createDetectorEngine, type LocalResult } from './engine.ts';
+import { type LocalResult } from './engine.ts';
+import { createWasmEngine } from './session.ts';
 import { inspectBoundedPng } from './encoding.ts';
 import { MODEL } from './model.ts';
 import { DEFAULT_POLICY, type LocalPolicy } from './policy.ts';
-import { checkCanceled, INPUT_SIZE } from './preprocess.ts';
+import { checkCanceled } from './preprocess.ts';
 
 export { MODEL } from './model.ts';
 export { DEFAULT_POLICY } from './policy.ts';
@@ -20,34 +20,10 @@ export type { RgbaInput } from './preprocess.ts';
 export async function createLocalDetector(options: { assetBaseUrl: string; policy?: LocalPolicy; executionProvider?: 'wasm' }) {
   const { assetBaseUrl, policy = DEFAULT_POLICY } = options;
   if (options.executionProvider && options.executionProvider !== 'wasm') throw new TypeError('Only the verified WASM execution provider is available');
-  ort.env.wasm.numThreads = 1; // Works without cross-origin isolation / SharedArrayBuffer, including Safari.
-  ort.env.wasm.proxy = false; // Service workers cannot spawn workers; no blob worker under MV3 CSP.
-  // The pinned package's /wasm ESM export embeds its JS glue. Supplying an mjs
-  // path would override that bundle and trigger forbidden dynamic import() in MV3.
-  delete ort.env.wasm.wasmPaths;
+  // The pinned package embeds its WASM JS glue. The binary bytes come only from
+  // the current extension package; no dynamic worker or remote fallback is needed.
   const [bytes, wasm] = await Promise.all([loadPackagedModel(assetBaseUrl), loadPackagedWasm(assetBaseUrl)]);
-  ort.env.wasm.wasmBinary = wasm;
-  const session = await ort.InferenceSession.create(bytes, {
-    executionProviders: ['wasm'], graphOptimizationLevel: 'all', executionMode: 'sequential',
-  });
-  if (session.inputNames.length !== 1 || session.inputNames[0] !== MODEL.input || !session.outputNames.includes(MODEL.output)) {
-    await session.release();
-    throw new Error('Packaged model interface mismatch');
-  }
-  const engine = createDetectorEngine({
-    async run(input) {
-      const tensor = new ort.Tensor('float32', input, [1, 3, INPUT_SIZE, INPUT_SIZE]);
-      try {
-        const outputs = await session.run({ [MODEL.input]: tensor });
-        try {
-          const output = outputs[MODEL.output];
-          if (!output || output.data.length !== 1 || typeof output.data[0] !== 'number') throw new Error('Invalid inference output');
-          return output.data[0];
-        } finally { for (const output of Object.values(outputs)) output.dispose(); }
-      } finally { tensor.dispose(); }
-    },
-    dispose: () => session.release(),
-  }, policy);
+  const engine = await createWasmEngine(bytes, wasm, policy);
 
   return {
     ...engine,

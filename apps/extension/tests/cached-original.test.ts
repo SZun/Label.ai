@@ -102,3 +102,67 @@ it('only binds cached originals with equal intrinsic pixels and the current sour
     vi.unstubAllGlobals();
   }
 });
+
+it('binds static PNG originals but rejects animation, oversized dimensions, and malformed chunks', async () => {
+  const { eligiblePng } = await import('../src/cached-original');
+  const png = new Uint8Array([
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 30, 0, 0, 0, 20, 8, 2, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 73, 68, 65, 84, 0, 0, 0, 0, 0, 0, 0, 0, 0, 73, 69, 78, 68, 0, 0,
+    0, 0,
+  ]);
+  expect(eligiblePng(png, 30, 20)).toBe(true);
+  expect(eligiblePng(png, 29, 20)).toBe(false);
+  expect(eligiblePng(png.subarray(0, 40), 30, 20)).toBe(false);
+  const animated = new Uint8Array([
+    ...png.subarray(0, 33),
+    0,
+    0,
+    0,
+    8,
+    97,
+    99,
+    84,
+    76,
+    0,
+    0,
+    0,
+    2,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    ...png.subarray(33),
+  ]);
+  expect(eligiblePng(animated, 30, 20)).toBe(false);
+});
+
+it('does not read a canceled cached image or continue scanning after parent capture aborts', async () => {
+  vi.stubGlobal('location', new URL(source));
+  const controller = new AbortController();
+  const fetch = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+    controller.abort();
+    expect(init.signal?.aborted).toBe(true);
+    const res = new Response(frame, { headers: header('public') });
+    Object.defineProperty(res, 'url', { value: source });
+    return res;
+  });
+  vi.stubGlobal('fetch', fetch);
+  const image = {
+    currentSrc: source,
+    naturalWidth: 30,
+    naturalHeight: 20,
+    complete: true,
+    isConnected: true,
+  } as HTMLImageElement;
+  try {
+    expect(await readCachedOriginal(image, source, controller.signal)).toBeUndefined();
+    expect(await readCachedOriginal(image, source, controller.signal)).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

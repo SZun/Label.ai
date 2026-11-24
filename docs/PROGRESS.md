@@ -16,7 +16,13 @@ On revision fd7b9d0, the Linux Chromium 151.0.7922.34, Google Chrome for Testing
 
 ## Completion estimate
 
-The preview covers roughly two thirds of the original production goal. This engineering estimate weights general image/video detection and real-device behavior more heavily than scaffolding or passing unit tests. It is separate from accuracy. A signed, verifiable original can trigger a label today. Most media without usable credentials remains unlabeled because the public forensic routes lack independent release evidence.
+The audited preview covers approximately 70% of the original production goal. This engineering estimate weights general image/video detection and real-device behavior more heavily than scaffolding or passing unit tests. It is separate from accuracy. A signed, verifiable original can trigger a label today. Most media without usable credentials remains unlabeled because the public forensic routes lack independent release evidence.
+
+## November 24 completion audit
+
+The [audit](COMPLETION_AUDIT.md) records scanner fixes, expanded source-bound acquisition, interrupted-job recovery, frame and consent policy, a complete developer inference/calibration workflow and the independent Safari acceptance boundary. The previous required Chromium matrix at b7d139a passed all five desktop browsers. Its Safari job confirmed six actual credential decisions, unmodified installation and both Apple host builds; a separate disposable test copy opened the real options UI but timed out trying to activate the fixture origin. See [run 45501017688](https://github.com/SZun/Label.ai/actions/runs/45501017688). The latest required workflow separates exact Safari installation from the explicit strict installed-overlay/simulator run. See [Safari acceptance](SAFARI_ACCEPTANCE.md).
+
+All 82 local ONNX executions in the October 2026 frontier development comparison completed, including 19 generated image sources and 19 genuine photo sources (originals and paired Instagram variants), and three generated plus three genuine clips. The existing raw-score threshold 0.99 recognized zero generated inputs. At 0.5 raw score, 4/19 generated originals and 2/19 generated Instagram variants crossed the threshold; 0/19 genuine renditions crossed in each slice. The video raw frame-score distributions overlapped. These small, uncalibrated, dependent development observations have no independent release significance and affirm that the production statistical gate must remain closed. See [actual benchmark results](../ml/reports/frontier-dev-2026-10.json).
 
 ## Acceptance still open
 

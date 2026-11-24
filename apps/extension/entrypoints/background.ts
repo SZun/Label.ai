@@ -56,8 +56,22 @@ export default defineBackground(() => {
           origins.push(pattern);
       }
     const scripts = await browser.scripting.getRegisteredContentScripts();
-    if (scripts.some((script) => script.id === 'label-ai-media'))
-      await browser.scripting.unregisterContentScripts({ ids: ['label-ai-media'] });
+    const existing = scripts.find((script) => script.id === 'label-ai-media');
+    // MV3 workers wake on ordinary messages. Keep an equivalent persistent registration
+    // instead of briefly leaving all permitted sites unregistered on every wake.
+    if (
+      existing &&
+      origins.length > 0 &&
+      existing.matches?.length === origins.length &&
+      origins.every((origin) => existing.matches?.includes(origin)) &&
+      existing.js?.length === 1 &&
+      existing.js[0].replace(/^\//, '') === 'content-scripts/media.js' &&
+      existing.allFrames === true &&
+      existing.runAt === 'document_idle' &&
+      existing.persistAcrossSessions !== false
+    )
+      return;
+    if (existing) await browser.scripting.unregisterContentScripts({ ids: ['label-ai-media'] });
     if (origins.length)
       await browser.scripting.registerContentScripts([
         {
@@ -83,7 +97,7 @@ export default defineBackground(() => {
     if (
       sender.id !== browser.runtime.id ||
       typeof sender.tab?.id !== 'number' ||
-      sender.tab.incognito ||
+      sender.tab.incognito !== false ||
       !sender.url ||
       !isEligiblePage(sender.url, settings)
     )
@@ -91,7 +105,15 @@ export default defineBackground(() => {
     if (!(await browser.permissions.contains({ origins: [hostPermissionPattern(sender.url)!] })))
       return false;
     const tab = await browser.tabs.get(sender.tab.id);
-    if (!tab.active || tab.incognito) return false;
+    if (!tab.active || tab.incognito !== false) return false;
+    if (
+      sender.frameId !== undefined &&
+      sender.frameId > 0 &&
+      (!tab.url ||
+        !isEligiblePage(tab.url, settings) ||
+        new URL(tab.url).origin !== new URL(sender.url).origin)
+    )
+      return false;
     return (await browser.windows.get(tab.windowId)).focused;
   }
 
@@ -189,7 +211,7 @@ export default defineBackground(() => {
       if (!accepted) {
         clearTimeout(timeout);
         pending.delete(key);
-        finish(noLabel(input, 'UNSUPPORTED'));
+        finish(noLabel(input, 'BUSY'));
       }
     });
   }

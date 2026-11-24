@@ -46,6 +46,15 @@ class EvaluationTests(unittest.TestCase):
         self.assertIsNone(r["by_modality"]["image"]["precision"])
         self.assertFalse(r["passes"])
 
+    def test_modality_specific_release_and_confidence_bounds(self):
+        a,b = asset(1, "generated"), asset(2, "genuine")
+        report = evaluate([a,b], [prediction(a,"label"), prediction(b,"abstain")], modality="image")
+        self.assertEqual(set(report["by_modality"]), {"image"})
+        self.assertIsNotNone(report["by_modality"]["image"]["precision_lower95"])
+        self.assertIsNotNone(report["by_modality"]["image"]["coverage_lower95"])
+        with self.assertRaises(ValueError):
+            evaluate([a,b], [prediction(a,"label"), prediction(b,"abstain")], modality="video")
+
     def test_exact_one_sided_boundary(self):
         self.assertGreater(upper_bound(0,2994),.001)
         self.assertLess(upper_bound(0,3000),.001)
