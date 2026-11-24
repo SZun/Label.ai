@@ -14,14 +14,14 @@ npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:chrome
 ```
 
 1. In a desktop Chromium browser, open the extensions manager. In Chrome this is `chrome://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select `apps/extension/.output/chrome-mv3`. If you already loaded that directory, click **Reload** on its extension card. Disable **Label.ai (Local Test)** if installed.
-2. Check that the card says **Label.ai**, website access is **On all sites**, and scanning is active. Open or refresh a public webpage. The extension scans as you scroll or play a short clip. There is no site list, server to start, or file to upload. The toolbar opens global pause, resume and data controls.
+2. Check that the card says **Label.ai** version **0.1.1** or later, website access is **On all sites**, and scanning is active. Open or refresh a public webpage. The extension scans as you scroll or play a short clip. There is no site list, server to start, or file to upload. The toolbar opens global pause, resume and data controls.
 3. The badge appears over eligible positive media. The model needs readable pixels, enough visible space for the badge, and sufficient consistent playback for video. Browser-internal pages, private contexts, DRM and cross-origin media whose pixels the browser protects are outside coverage. An unlabeled item has no authenticity verdict.
 
 For Safari, run `npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:safari`. On macOS select the unpacked `apps/extension/.output/safari-mv3` in **Add Temporary Extension…** in Safari’s developer settings where available. For an Apple containing app use `make safari-xcode` on a Mac with Xcode. Enable the extension and grant **All Websites** access in Safari. See [Safari acceptance](docs/SAFARI_ACCEPTANCE.md) for the verification status.
 
 ### Try a public example
 
-With the regular extension active, open [this unsigned Qwen image from the public frontier benchmark](https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i0fa00aa62b5f.png) directly in a foreground tab. Its original pixels scored 0.914 in the pinned local developer run, above the regular image cutoff of 0.65. A thumbnail or re-encoded copy may give a different result.
+With the regular extension active, open the public [Keras textual inversion tutorial](https://keras.io/examples/generative/fine_tune_via_textual_inversion/#taking-the-fine-tuned-model-for-a-spin). Scroll to the first row of generated samples in **Taking the Fine Tuned Model for a Spin**. Keep that row in view while the model runs. The label attaches to the output image on the tutorial page.
 
 ### Optional repeatable check
 

@@ -16,12 +16,12 @@ ROOT = Path(__file__).resolve().parents[2]
 NEWS = "http://news.example.test"
 ART = "https://art.example.test"
 CDN = "https://media.example.test"
-# Pinned public PNG in ml/reports/frontier-dev-2026-10.json. This integration
-# check is separate from the offline, intercepted publisher tests.
-PUBLIC_IMAGE = (
-    "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/"
-    "resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i0fa00aa62b5f.png"
+PUBLIC_TUTORIAL = (
+    "https://keras.io/examples/generative/fine_tune_via_textual_inversion/"
+    "#taking-the-fine-tuned-model-for-a-spin"
 )
+PUBLIC_OUTPUT = 'img[src$="/fine_tune_via_textual_inversion_42_1.png"]'
+
 
 
 def make_video(image, directory):
@@ -87,15 +87,27 @@ def run(build, live=False):
             assert not denied, denied
             if live:
                 context.unroute_all(behavior="wait")
-                site.goto(PUBLIC_IMAGE, wait_until="domcontentloaded", timeout=45_000)
-                wait_for_label(site, "img", True)
+                response = site.goto(PUBLIC_TUTORIAL, wait_until="domcontentloaded", timeout=45_000)
+                assert response and response.ok, "Public tutorial unavailable"
+                try:
+                    wait_for_label(site, PUBLIC_OUTPUT, True)
+                except Exception:
+                    details = site.locator(PUBLIC_OUTPUT).evaluate("""image => ({
+                      size: [image.naturalWidth, image.naturalHeight],
+                      rect: image.getBoundingClientRect().toJSON(),
+                      focused: document.hasFocus(), visible: !document.hidden,
+                      passwordForm: Boolean(document.querySelector('input[type=password]')),
+                      overlays: document.querySelectorAll('label-ai-overlay').length
+                    })""")
+                    print(json.dumps({"live_tutorial_image": details}), flush=True)
+                    raise
     return {"same_origin_unsigned_image": True, "dynamic_cors_cdn_image_on_second_origin": True,
-            "video_pan_of_generated_still": True, "public_unsigned_png_labeled": live, "unexpected_http_requests": denied}
+            "video_pan_of_generated_still": True, "public_keras_tutorial_image_labeled": live, "unexpected_http_requests": denied}
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", required=True, type=Path)
-    parser.add_argument("--live", action="store_true", help="Also visit a pinned public image on Hugging Face")
+    parser.add_argument("--live", action="store_true", help="Also visit the public Keras tutorial and check its first sample output")
     args = parser.parse_args()
     print(json.dumps(run(args.build, args.live)))

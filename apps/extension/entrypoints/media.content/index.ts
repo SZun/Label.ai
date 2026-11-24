@@ -201,7 +201,8 @@ export default defineContentScript({
     }
 
     function place(entry: MediaEntry): LabelPlacement | null {
-      if (!entry.decision || !entry.visible || !entry.element.isConnected || !active()) return null;
+      if (!entry.decision?.shouldLabel || !entry.visible || !entry.element.isConnected || !active())
+        return null;
       if (entry.decision.expiresAt <= Date.now() || sourceFor(entry.element) !== entry.source)
         return null;
       const rect = entry.element.getBoundingClientRect();
@@ -442,7 +443,8 @@ export default defineContentScript({
         )
           continue;
         if (entry.element instanceof HTMLVideoElement) {
-          if (!entry.originalAttempted && entry.element.readyState >= 1) {
+          if (!entry.originalAttempted) {
+            if (entry.element.readyState < 1) continue;
             entry.originalAttempted = true;
             if (
               entry.source.startsWith('data:video/mp4;base64,') ||
@@ -499,6 +501,8 @@ export default defineContentScript({
                 continue;
               }
               entry.originalAttempted = false;
+              // A full queue cannot bypass the credential check by starting frame sampling.
+              continue;
             }
           }
           startVideo(entry);

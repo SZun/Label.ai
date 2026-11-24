@@ -217,6 +217,7 @@ export default defineBackground(() => {
               finish({
                 ...noLabel(input, 'COMPLETED'),
                 shouldLabel: provenance.shouldLabel,
+                verifiedOriginal: true,
                 policyVersion: provenance.policyVersion,
                 expiresAt: Math.min(Date.now() + 60_000, Date.parse(PROVENANCE_TRUST_EXPIRES_AT)),
               });

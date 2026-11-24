@@ -193,6 +193,10 @@ it('respects a verified non-generation or ambiguous credential on a high-scoring
   const result = await sendImage('https://news.example/story', true);
   expect(result.status).toBe('COMPLETED');
   expect(result.shouldLabel).toBe(false);
+  expect(result.verifiedOriginal).toBe(true);
+  const videoOriginal = await send('verified-mp4', 1);
+  expect(videoOriginal.shouldLabel).toBe(false);
+  expect(videoOriginal.verifiedOriginal).toBe(true);
   expect(state.inference).not.toHaveBeenCalled();
 });
 

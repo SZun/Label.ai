@@ -14,6 +14,7 @@ export interface Binding {
 export interface LocalDecision extends Binding {
   status: 'COMPLETED' | 'UNSUPPORTED' | 'FAILED' | 'CANCELED' | 'BUSY';
   shouldLabel: boolean;
+  verifiedOriginal?: true;
   policyVersion: string;
   expiresAt: number;
 }
@@ -30,7 +31,8 @@ export function acceptsDecision(
     response.generation === binding.generation &&
     response.requestId === binding.requestId &&
     response.status === 'COMPLETED' &&
-    response.shouldLabel === true &&
+    (response.shouldLabel === true ||
+      (response.shouldLabel === false && response.verifiedOriginal === true)) &&
     typeof response.policyVersion === 'string' &&
     response.policyVersion.length > 0 &&
     typeof response.expiresAt === 'number' &&

@@ -32,6 +32,15 @@ describe('DISC-04 and UX-06 positive source binding', () => {
   ])('rejects a stale, malformed or nonpositive response', (value) => {
     expect(acceptsDecision(binding, value, 100)).toBe(false);
   });
+  it('retains a bound verified-original abstention so a later video estimate cannot override it', () => {
+    const abstention = { ...positive, shouldLabel: false, verifiedOriginal: true };
+    expect(acceptsDecision(binding, abstention, 100)).toBe(true);
+    expect(acceptsDecision(binding, { ...abstention, verifiedOriginal: undefined }, 100)).toBe(
+      false,
+    );
+    expect(acceptsDecision(binding, { ...abstention, requestId: 'obsolete' }, 100)).toBe(false);
+    expect(acceptsDecision(binding, abstention, 201)).toBe(false);
+  });
   it('bounds decoded local payloads and rejects malformed base64', () => {
     expect(Array.from(decodeBase64('AQID', 3))).toEqual([1, 2, 3]);
     expect(() => decodeBase64('AQID', 2)).toThrow();

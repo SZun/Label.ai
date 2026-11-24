@@ -25,7 +25,8 @@ export function galleryReplyState(
   value: unknown,
   now = Date.now(),
 ): GalleryState {
-  if (acceptsDecision(binding, value, now)) return 'labeled';
+  if (acceptsDecision(binding, value, now))
+    return value.shouldLabel ? 'labeled' : 'completed-no-label';
   if (!value || typeof value !== 'object') return 'failed';
   const response = value as Partial<LocalDecision>;
   if (
