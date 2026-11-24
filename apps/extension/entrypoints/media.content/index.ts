@@ -45,6 +45,7 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
   runAt: 'document_idle',
   async main(ctx) {
+    if (browser.extension?.inIncognitoContext) return;
     let settings: LocalSettings = { ...DEFAULT_SETTINGS };
     let ended = false;
     const entries = new Map<Element, MediaEntry>();
@@ -68,7 +69,6 @@ export default defineContentScript({
 
     const active = () =>
       !ended &&
-      !browser.extension?.inIncognitoContext &&
       !document.hidden &&
       document.hasFocus() &&
       isEligiblePage(
