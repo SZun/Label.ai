@@ -105,3 +105,15 @@ class GalleryTests(unittest.TestCase):
             self.assertIn(b'local-media-', source)
             self.assertNotIn(b'fetch(', source)
             self.assertNotIn(b'XMLHttpRequest', source)
+
+    def test_gallery_exposes_build_and_result_diagnostics(self):
+        with gallery(root=self.root) as (origin, _):
+            _, _, body = self.request(origin, 'GET', '/')
+            self.assertIn(b'<meta name="label-ai-test-gallery" content="1">', body)
+            self.assertIn(b'apps/extension/.output/chrome-mv3', body)
+            self.assertIn(b'class="analysis-status"', body)
+            _, _, script = self.request(origin, 'GET', '/gallery.js')
+            for value in (b'data-label-ai-build', b'data-label-ai-test-state', b'completed-no-label',
+                          b'local-test', b'production', b'outdated', b'Not yet scanned'):
+                self.assertIn(value, script)
+            self.assertIn(b'attributeFilter', script)

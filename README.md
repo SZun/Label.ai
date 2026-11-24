@@ -1,37 +1,33 @@
 # Label.ai
 
-Label.ai is a WXT browser extension that automatically scans visible media on browser-permitted public websites. When it can verify a signed declaration that the visual was AI-generated, it adds **AI Slop Detected 🤮** to the upper-left corner. There is one brief animation, with a static version for people who prefer reduced motion. The badge has no tooltip, score or click action.
+Label.ai is a WXT browser extension that automatically scans visible images and playing videos on eligible HTTP and HTTPS pages in the active tab. The regular **Label.ai** build displays **AI Slop Detected 🤮** when it verifies a signed generation credential or its on-device model flags the media. The badge animates once and honors reduced motion. It has no tooltip, score or click action.
 
-This is a development preview for Chromium, Google Chrome, Edge, Brave, Opera, and Safari. Most social-network images and videos do not expose an intact, verifiable credential to an extension. Such media may stay unlabeled. The included local image and video analysis code is experimental. Its scores cannot currently create a public label. A missing label conveys no information about authenticity.
+The model can flag genuine work and miss AI-generated work. At the regular preview threshold, four of 19 modern generated originals and zero of 19 genuine originals crossed the image threshold in the recorded developer sample. None of three modern generated clips qualified. These small samples do not establish accuracy on other sites. The [per-file measurements](ml/reports/frontier-dev-2026-10.json) and [release criteria](docs/RELEASE_GATES.md) are available for review.
 
-## Try the development build
+## Use the extension on the web
 
-1. Install Node.js 24, pnpm 11.25.0 and Python 3.12. Clone this repository and check out the development branch or its merged successor.
-2. Run `make bootstrap` and `make build`. The first bootstrap downloads pinned development dependencies, model weights and test fixtures. Browser analysis runs locally with package resources.
-3. In a desktop Chromium browser with unpacked extension support, open its extensions manager, enable Developer mode, choose **Load unpacked** and select `apps/extension/.output/chrome-mv3`. The ZIP made by `make package` contains the same directory contents. Extract it before loading.
-4. Grant browser-wide website access during installation. Label.ai automatically scans eligible webpages you visit. Refresh a tab that was already open when you installed the extension. The toolbar opens global pause, resume and data-clearing controls. No site addresses need to be entered.
-5. For a temporary macOS Safari install, use **Add Temporary Extension…** in Safari’s developer settings and select the unpacked `safari-mv3` directory. For an Apple containing app, run `make safari-xcode` on a Mac with Xcode to create the containing apps. Build the macOS app or the iOS app for a simulator/device in Xcode, then enable the extension in Safari settings and grant **All Websites** access where supported. The Safari ZIP contains WebExtension resources for packaging. See the compatibility and release documents before distribution.
-
-### Interactive local detector test
-
-The Local Test build automatically exercises exploratory forensic labels on browser-permitted HTTP loopback test pages. It uses the real on-device model's uncalibrated score and retains the normal source, visibility, permission and cancellation guards. The regular Chromium and Safari packages retain the production quality gate. False positives and missed positives are expected in Local Test.
-
-From the project root, with bootstrap already completed:
+From the project root with Node.js 24 and Python 3 installed, build the regular extension. These commands use the project’s pinned pnpm and avoid invoking an older Corepack installation.
 
 ```sh
-npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:chrome:test
-python3 tools/test_gallery.py --prepare
+npm exec --yes --package=pnpm@11.25.0 -- make bootstrap
+npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:chrome
 ```
 
-Use the first command to avoid old Corepack loader incompatibilities. The build is in `apps/extension/.output/chrome-mv3-local-test`. In Chrome's extensions manager, disable the regular Label.ai extension to avoid duplicate overlays, then choose **Load unpacked** and select that directory. Check that the installed name reads **Label.ai (Local Test)**.
+1. In a desktop Chromium browser, open the extensions manager. In Chrome this is `chrome://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select `apps/extension/.output/chrome-mv3`. If you already loaded that directory, click **Reload** on its extension card. Disable **Label.ai (Local Test)** if installed.
+2. Check that the card says **Label.ai**, website access is **On all sites**, and scanning is active. Open or refresh a public webpage. The extension scans as you scroll or play a short clip. There is no site list, server to start, or file to upload. The toolbar opens global pause, resume and data controls.
+3. The badge appears over eligible positive media. The model needs readable pixels, enough visible space for the badge, and sufficient consistent playback for video. Browser-internal pages, private contexts, DRM and cross-origin media whose pixels the browser protects are outside coverage. An unlabeled item has no authenticity verdict.
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765) and the Local Test build will scan it automatically. If this gallery was already open, reload it. Keep the page in focus while scrolling through reference images. The gallery contains authentic samples, signed and unsigned generated images, and an optional local file picker. The file picker displays selected images and clips using browser object URLs without submitting them to the publisher or another service. Run with `--videos` to include the pinned video reference clips (combine with `--prepare` for the first run). Ground truth shown by the gallery only identifies the reference asset; the extension must independently score the displayed media.
+For Safari, run `npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:safari`. On macOS select the unpacked `apps/extension/.output/safari-mv3` in **Add Temporary Extension…** in Safari’s developer settings where available. For an Apple containing app use `make safari-xcode` on a Mac with Xcode. Enable the extension and grant **All Websites** access in Safari. See [Safari acceptance](docs/SAFARI_ACCEPTANCE.md) for the verification status.
 
-The model can fail to identify even a known generated file. A badge in this package is an experimental decision, and not a certified origin verdict. The production release model and documented benchmark results are in [ml/README.md](ml/README.md).
+### Try a public example
 
-### Try a known positive
+With the regular extension active, open [this unsigned Qwen image from the public frontier benchmark](https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/images/i0fa00aa62b5f.png) directly in a foreground tab. Its original pixels scored 0.914 in the pinned local developer run, above the regular image cutoff of 0.65. A thumbnail or re-encoded copy may give a different result.
 
-After bootstrap, run `python3 tools/demo_page.py` and open `http://127.0.0.1:8765`. Label.ai automatically scans the page when browser access is allowed. The tabby cat carries a signed Adobe Firefly creation record and should receive the badge. The conventional gradient should stay unlabeled. The server binds to loopback and only serves sample media. Press Ctrl+C to close it.
+### Optional repeatable check
+
+Run `python3 tools/test_gallery.py --prepare` and open [the local gallery](http://127.0.0.1:8765) in the regular extension. Scroll through the signed Firefly cat, four unsigned Stable Diffusion images and four genuine photographs. The gallery reports the detected build and each item’s actual scanner state separately from its known origin. Add `--videos` to download the two optional clips. The local file picker displays files as browser object URLs.
+
+Developers who specifically want to explore lower thresholds can run `npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:chrome:test`. That separate **Label.ai (Local Test)** package is limited to HTTP loopback pages.
 
 ## What runs on the device
 

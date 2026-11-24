@@ -5,7 +5,7 @@ This branch started from f390a4c, which contained the plan and specification but
 ## Evidence
 
 - The official C2PA WASM verifier labeled the signed Firefly example and rejected the tampered version, expired credential, unrelated trust root and unsigned image. The edited camera example received no generation label. Fixture verification used the same WASM binary as the extension with external fetch forbidden.
-- The pinned image model ran on four generated and four camera images. Raw generated scores ranged from 0.99205 to 0.999999 and camera scores from 0.000517 to 0.06872. Each example was a developer smoke input. Independent images from unseen generators, artwork and mixed cases are needed before activation.
+- The pinned image model ran on four generated and four camera images. Raw generated scores ranged from 0.99205 to 0.999999 and camera scores from 0.000517 to 0.06872. Each example was a developer smoke input. Independent images from unseen generators, artwork and mixed cases are needed before an accuracy-qualified release.
 - Video testing decoded twelve frames per file on a generated Kling clip and camera footage encoded as MP4 and WebM. The generated video's lower-quartile frame score was approximately 0.656. The camera encodings were approximately 0.002. The trained temporal release policy and independently measured false-positive/recall bounds remain open. The two encodings are one source.
 - Source, checksums, runtime, timings, representation and predictions are recorded under ml/reports and tests/fixtures. The model takes roughly 1.4–1.5 seconds per image on the development CPU. Browser and device timings can differ.
 - Unit, policy, WASM, type checking and package verification are automated. CI builds both WXT targets. The browser jobs install the Chromium package and exercise permission, signed embedded and publisher image labeling, stale-source removal, reduced motion, offline inference and revocation. The macOS job converts the Safari target and compiles the macOS and iOS containing apps. Follow the PR checks for results on its exact revision.
@@ -16,7 +16,7 @@ On revision fd7b9d0, the Linux Chromium 151.0.7922.34, Google Chrome for Testing
 
 ## Completion estimate
 
-The audited preview covers approximately 70% of the original production goal. This engineering estimate weights general image/video detection and real-device behavior more heavily than scaffolding or passing unit tests. It is separate from accuracy. A signed, verifiable original can trigger a label today. Most media without usable credentials remains unlabeled because the public forensic routes lack independent release evidence.
+The audited preview covers approximately 70% of the original production goal. This engineering estimate weights general image/video detection and real-device behavior more heavily than scaffolding or passing unit tests. It is separate from accuracy. A signed, verifiable original can trigger a label today. Unsigned media can receive a model-based badge in the all-sites preview. Its quality on representative websites remains unverified.
 
 ## November 24 completion audit
 
@@ -26,8 +26,8 @@ All 82 local ONNX executions in the October 2026 frontier development comparison
 
 ## Automatic scanning and interactive testing
 
-The owner superseded manual per-site selection with browser-wide HTTP/HTTPS installation access and global pause/resume. The separate Chromium Local Test package uses a compile-time experimental policy on HTTP loopback only, so unsigned media can exercise actual forensic labels without activating uncertified scores on public sites. The gallery serves pinned generated and genuine examples and allows local files to be displayed in browser-owned Blob URLs. See the README for commands. Earlier per-site grant test results above describe older revisions.
+The owner superseded manual per-site selection with browser-wide HTTP/HTTPS installation access and global pause/resume. The separate Chromium Local Test package uses a compile-time experimental policy on HTTP loopback only, so unsigned media can exercise actual forensic labels at a more permissive threshold than the regular build. The gallery serves pinned generated and genuine examples and allows local files to be displayed in browser-owned Blob URLs. See the README for commands. Earlier per-site grant test results above describe older revisions.
 
 ## Acceptance still open
 
-Representative holdouts and licensed diversity, large-feed resource measurements, private versus public context ambiguity, real public-site performance, device-specific UI behavior and native Safari enable/grant/scan acceptance remain release work. Missing credentials and withheld statistical labels leave much of today's web content unlabeled. The package is a development preview.
+Representative holdouts and licensed diversity, large-feed resource measurements, private versus public context ambiguity, real public-site performance, device-specific UI behavior and native Safari enable/grant/scan acceptance remain release work. Model coverage is limited, particularly on recent generators and video. The package is a development preview.

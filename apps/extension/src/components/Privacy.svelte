@@ -113,9 +113,9 @@
   </p>
   {#if !LOCAL_TEST_BUILD}
     <p>
-      A label indicates an enabled detection policy found sufficient evidence. Missing labels do not
-      prove authenticity. Experimental forensic models remain disabled for positive labels until
-      release accuracy requirements are met.
+      Labels can come from a verified AI-generation credential or a local model estimate. Model
+      estimates can flag genuine images and miss generated ones. Video estimates also require
+      consistent evidence across visible playback frames.
     </p>
   {/if}
   <section aria-labelledby="site-heading">

@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   registered: vi.fn(),
   detector: vi.fn(),
   inference: vi.fn(),
+  videoInference: vi.fn(),
 }));
 vi.mock('wxt/browser', () => {
   const event = (name: string) => ({
@@ -97,7 +98,7 @@ async function send(requestId: string, tabId: number): Promise<LocalDecision> {
     },
   );
 }
-async function sendImage(url: string): Promise<LocalDecision> {
+async function sendImage(url: string, includeOriginal = false): Promise<LocalDecision> {
   return state.hooks.message[0](
     {
       type: 'label-ai:analyze',
@@ -106,6 +107,7 @@ async function sendImage(url: string): Promise<LocalDecision> {
       generation: 0,
       requestId: 'test-image-request',
       frame: { width: 1, height: 1, timestampMs: 0, rgba: 'AAAA/w==' },
+      ...(includeOriginal && { original: { mime: 'image/png', base64: 'AQID' } }),
     },
     {
       id: 'test',
@@ -135,18 +137,23 @@ beforeEach(async () => {
   state.verify.mockReset();
   state.registered.mockReset().mockResolvedValue([]);
   state.inference.mockReset();
-  state.detector.mockReset().mockResolvedValue({ analyzeRgba: state.inference, dispose: vi.fn() });
+  state.videoInference.mockReset();
+  state.detector.mockReset().mockResolvedValue({
+    analyzeRgba: state.inference,
+    analyzeVideoFrames: state.videoInference,
+    dispose: vi.fn(),
+  });
   vi.stubGlobal('defineBackground', (main: () => void) => main);
   await startWorker();
 });
 
-it('only the explicitly enabled local test build can turn an unvalidated raw score into a loopback label', async () => {
+it('keeps the permissive local-test threshold confined to the loopback build', async () => {
   const loopback = 'http://127.0.0.1:8765';
   state.inference.mockResolvedValue({
     status: 'COMPLETED',
     shouldLabel: false,
     policyVersion: 'local-v1-unvalidated',
-    rawScore: 0.95,
+    rawScore: 0.25,
   });
   expect((await sendImage(loopback)).shouldLabel).toBe(false);
   vi.stubGlobal('__LABEL_AI_LOCAL_TEST__', true);
@@ -159,6 +166,69 @@ it('only the explicitly enabled local test build can turn an unvalidated raw sco
   state.focused = false;
   expect((await sendImage(loopback)).shouldLabel).toBe(false);
   expect(state.inference).toHaveBeenCalledTimes(3);
+});
+it('labels unsigned media on an ordinary website using the regular browsing policy', async () => {
+  const url = 'https://news.example/story';
+  state.inference.mockResolvedValue({
+    status: 'COMPLETED',
+    shouldLabel: false,
+    policyVersion: 'local-v1-unvalidated',
+    rawScore: 0.65,
+  });
+  const result = await sendImage(url);
+  expect(result.shouldLabel).toBe(true);
+  expect(result.policyVersion).toBe('browsing-model-estimate-v1');
+  state.hostAllowed = false;
+  expect((await sendImage(url)).shouldLabel).toBe(false);
+  expect(state.inference).toHaveBeenCalledTimes(1);
+});
+
+it('respects a verified non-generation or ambiguous credential on a high-scoring original', async () => {
+  state.verify.mockResolvedValue({
+    shouldLabel: false,
+    status: 'verified-other',
+    policyVersion: 'verified',
+  });
+  state.inference.mockResolvedValue({ status: 'COMPLETED', shouldLabel: false, rawScore: 0.999 });
+  const result = await sendImage('https://news.example/story', true);
+  expect(result.status).toBe('COMPLETED');
+  expect(result.shouldLabel).toBe(false);
+  expect(state.inference).not.toHaveBeenCalled();
+});
+
+it('uses multiple eligible video frames in the regular browsing policy', async () => {
+  const frames = Array.from({ length: 8 }, (_, index) => ({
+    width: 1,
+    height: 1,
+    rgba: 'AAAA/w==',
+    timestampMs: index * 500,
+  }));
+  state.videoInference.mockResolvedValue({
+    status: 'COMPLETED',
+    shouldLabel: false,
+    rawScore: 0.93,
+    temporal: { eligible: true },
+  });
+  const response = await state.hooks.message[0](
+    {
+      type: 'label-ai:analyze',
+      kind: 'video',
+      instanceId: 'clip',
+      generation: 0,
+      requestId: 'clip',
+      frames,
+      durationMs: 3500,
+      coverage: 1,
+    },
+    {
+      id: 'test',
+      url: 'https://film.example/watch',
+      tab: { id: 1, windowId: 7, incognito: false },
+    },
+  );
+  expect(response.shouldLabel).toBe(true);
+  expect(response.policyVersion).toBe('browsing-model-estimate-v1');
+  expect(state.videoInference.mock.calls[0][0].frames).toHaveLength(8);
 });
 afterEach(() => {
   vi.clearAllTimers();

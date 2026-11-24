@@ -1,4 +1,4 @@
-import type { LocalResult } from '@label-ai/detector';
+import { meetsModelThreshold, type ModelEvidence } from './model-label';
 
 // WXT defines this constant explicitly in each build. The production bundle
 // receives false; a webpage, setting or detector result cannot enable it.
@@ -24,29 +24,13 @@ export function isLocalTestUrl(input: string | undefined): boolean {
   }
 }
 
-type RawTestResult = Pick<LocalResult, 'status' | 'rawScore'> & {
-  temporal?: Pick<NonNullable<LocalResult['temporal']>, 'eligible'>;
-};
-
 /** Exploratory labels only for a separately built and explicitly granted loopback page. */
 export function localTestDecision(
   enabled: boolean,
   pageUrl: string | undefined,
   kind: 'image' | 'video',
-  result: RawTestResult,
+  result: ModelEvidence,
 ): boolean {
-  const score = result.rawScore;
-  if (
-    !enabled ||
-    !isLocalTestUrl(pageUrl) ||
-    result.status !== 'COMPLETED' ||
-    typeof score !== 'number' ||
-    !Number.isFinite(score) ||
-    score < 0 ||
-    score > 1
-  )
-    return false;
-  return kind === 'image'
-    ? score >= LOCAL_TEST_IMAGE_THRESHOLD
-    : result.temporal?.eligible === true && score >= LOCAL_TEST_VIDEO_THRESHOLD;
+  const threshold = kind === 'image' ? LOCAL_TEST_IMAGE_THRESHOLD : LOCAL_TEST_VIDEO_THRESHOLD;
+  return enabled && isLocalTestUrl(pageUrl) && meetsModelThreshold(kind, result, threshold);
 }

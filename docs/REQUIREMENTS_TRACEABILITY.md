@@ -43,7 +43,7 @@ The IDs and short descriptions come from the preserved original proposal. Status
 | ML-06 | Actual video inference | Partial | Actual model executions on a generated video and camera footage in two formats. Production video calibration pending. |
 | ML-07 | Temporal analysis and scope | Partial | Timestamp-aware dynamics, temporal differences, scope and coverage tests. No validated full-video threshold. |
 | ML-08 | Evidence fusion | Partial | Signed assertion policy and guarded forensic policies. Additional signal providers/conflicts lack release evidence. |
-| ML-09 | Calibrated abstention/versioning | Partial | Versioned contracts, abort/expiry and disabled statistical routes. Release fit and verification pending. |
+| ML-09 | Calibrated abstention/versioning | Partial | Versioned contracts, abort/expiry and preview estimates and independently gated calibrated routes. Release fit and verification pending. |
 | ML-10 | Licensed reproducible ML assets | Partial | Model and runtime digests, notices and development data sources tracked. Complete release rights review pending. |
 | EVAL-01 | Independent evaluation datasets | Partial | Group-disjoint evaluator, frozen candidate workflow and 82 actual development examples across 44 source groups. Independent production corpus acquisition remains. |
 | EVAL-02 | Image release quality | Open | Frontier development measurements expose the current model's generalization gap. No locked image precision/FPR release result. |

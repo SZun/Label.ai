@@ -19,6 +19,7 @@ import {
   type LocalDecision,
 } from '../src/core/protocol';
 import { BoundedQueue } from '../src/core/queue';
+import { BROWSING_MODEL_POLICY_VERSION, browsingModelLabel } from '../src/core/model-label';
 import { migrateSettings, readSettings, SETTINGS_KEY } from '../src/transport/settings';
 import { localProvenance, clearProvenance } from '../src/transport/provenance';
 
@@ -209,13 +210,13 @@ export default defineBackground(() => {
           if (original) {
             const provenance = await localProvenance(original, abort.signal);
             if (
-              provenance?.shouldLabel === true &&
+              (provenance?.shouldLabel === true || provenance?.status === 'verified-other') &&
               !abort.signal.aborted &&
               (await validSender(sender, await readSettings()))
             ) {
               finish({
                 ...noLabel(input, 'COMPLETED'),
-                shouldLabel: true,
+                shouldLabel: provenance.shouldLabel,
                 policyVersion: provenance.policyVersion,
                 expiresAt: Math.min(Date.now() + 60_000, Date.parse(PROVENANCE_TRUST_EXPIRES_AT)),
               });
@@ -251,12 +252,18 @@ export default defineBackground(() => {
                 });
           const allowed =
             !abort.signal.aborted && (await validSender(sender, await readSettings()));
-          const experimental =
-            LOCAL_TEST_BUILD && localTestDecision(true, sender.url, input.kind, result);
+          const estimated = LOCAL_TEST_BUILD
+            ? localTestDecision(true, sender.url, input.kind, result)
+            : browsingModelLabel(input.kind, result);
+          const estimateVersion = LOCAL_TEST_BUILD
+            ? LOCAL_TEST_POLICY_VERSION
+            : BROWSING_MODEL_POLICY_VERSION;
           finish({
             ...noLabel(input, result.status),
-            shouldLabel: allowed && (result.shouldLabel || experimental),
-            policyVersion: experimental ? LOCAL_TEST_POLICY_VERSION : result.policyVersion,
+            shouldLabel:
+              allowed && result.status === 'COMPLETED' && (result.shouldLabel || estimated),
+            policyVersion:
+              result.shouldLabel || !estimated ? result.policyVersion : estimateVersion,
             expiresAt: Date.now() + 60_000,
           });
         } catch {

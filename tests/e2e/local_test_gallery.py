@@ -1,4 +1,4 @@
-"""Exercise real unsigned images through the separate Local Test extension."""
+"""Exercise the installed extension against known unsigned images and genuine controls."""
 import argparse
 import json
 from pathlib import Path
@@ -14,7 +14,7 @@ from browser_test import browser_session, wait_for_registration
 
 
 def wait_for_label(page, selector, expected, timeout=45_000):
-    page.locator(selector).scroll_into_view_if_needed()
+    page.locator(selector).evaluate("(element) => element.scrollIntoView({block: 'center'})")
     page.wait_for_function(
         """([selector, expected]) => {
           const target = document.querySelector(selector);
@@ -92,22 +92,17 @@ def run(build, production=False):
             site.bring_to_front()
             site.goto(origin)
             wait_for_label(site, "#signed", True)
-            if not production:
-                wait_for_label(site, "#generated-1", True)
-            if production:
-                site.locator("#generated-1").scroll_into_view_if_needed()
-                result = actual_decision(worker, "#generated-1")
-                assert result["status"] == "COMPLETED" and result["shouldLabel"] is False, result
-                wait_for_label(site, "#generated-1", False)
-                assert not forbidden, forbidden
-                assert all(method in {"GET", "HEAD"} for method, _ in requests), requests
-                return {"production_unsigned_abstention": True, "unexpected_requests": forbidden}
-            site.locator("#genuine-1").scroll_into_view_if_needed()
-            # Wait for an actual completed inference on a known genuine input before
-            # asserting no badge; an instant empty overlay would not prove abstention.
-            result = actual_decision(worker, "#genuine-1")
-            assert result["status"] == "COMPLETED" and not result["shouldLabel"], result
-            wait_for_label(site, "#genuine-1", False)
+            mode = "production" if production else "local-test"
+            site.locator(f'label-ai-overlay[data-label-ai-build="{mode}"]').wait_for(state="attached")
+            for number in range(1, 5):
+                wait_for_label(site, f"#generated-{number}", True)
+                photo = f"#genuine-{number}"
+                site.locator(photo).evaluate("(element) => element.scrollIntoView({block: 'center'})")
+                # Wait for the scanner's actual completed inference before checking
+                # the absence of a badge. An empty overlay alone proves nothing.
+                site.locator(f'{photo}[data-label-ai-test-state="completed-no-label"]').wait_for(
+                    state="attached", timeout=45_000)
+                wait_for_label(site, photo, False)
             context.set_offline(True)
             # An already loaded generated asset must produce a fresh decision even
             # when the local test browser context has no connection.
@@ -125,14 +120,14 @@ def run(build, production=False):
             assert site.locator("#local-media-1").count() == 0
             assert not forbidden, forbidden
             assert all(method in {"GET", "HEAD"} for method, _ in requests), requests
-        return {"signed_positive": True, "unsigned_generated_positive": True,
-                "genuine_negative": True, "local_file_positive": True, "offline_local_inference": True,
+        return {"signed_positive": True, "unsigned_generated_labeled": 4,
+                "genuine_completed_without_label": 4, "local_file_positive": True, "offline_local_inference": True,
                 "unexpected_requests": forbidden}
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
-    parser.add_argument("--production", action="store_true", help="Check that the ordinary package abstains on the same unsigned generated fixture")
+    parser.add_argument("--production", action="store_true", help="Exercise the regular all-sites package")
     args = parser.parse_args()
     print(json.dumps(run(args.build, args.production)))

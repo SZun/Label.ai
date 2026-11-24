@@ -111,8 +111,12 @@ jobs:
       - run: python tools/prepare_smoke_media.py
       - name: Test unsigned generated and genuine images through the local test build
         run: timeout --signal=TERM --kill-after=5s 180s python -u tests/e2e/local_test_gallery.py --build artifacts/local-test/unpacked
-      - name: Confirm the regular Chromium package keeps the production quality gate
-        run: timeout --signal=TERM --kill-after=5s 120s python -u tests/e2e/local_test_gallery.py --build artifacts/local-test/production --production
+      - name: Test every gallery image with the standard all-sites package
+        run: timeout --signal=TERM --kill-after=5s 240s python -u tests/e2e/local_test_gallery.py --build artifacts/local-test/production --production
+      - name: Scan unsigned images and moving generated content on ordinary HTTPS pages
+        run: |
+          command -v ffmpeg || sudo apt-get install -y ffmpeg
+          timeout --signal=TERM --kill-after=5s 240s python -u tests/e2e/ordinary_pages.py --build artifacts/local-test/production --live
   safari-package-and-verifier:
     needs: extension
     runs-on: macos-latest

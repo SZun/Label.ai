@@ -1,3 +1,10 @@
+/** Opaque per-document job identifiers also work on plain HTTP publisher pages. */
+export function newScanId(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
 export interface Binding {
   instanceId: string;
   generation: number;

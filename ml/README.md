@@ -2,7 +2,7 @@
 
 Label.ai performs media analysis on the user's device. The extension uses the real, pinned Detectra ONNX image model through ONNX Runtime Web/WASM. The model is never queried through a hosted API. This directory contains developer provisioning, local calibration tools, license notices, and actual inference reports.
 
-**The image and video statistical label routes are disabled in the shipped policy.** Real scores are computed internally, but a strong model score is insufficient evidence to put an accusation on somebody's media. No held-out dataset currently establishes this application's required precision/FPR bounds, and no fitted temporal calibration artifact is bundled. Verified C2PA provenance is a separate route owned by `packages/provenance`; canvas pixels cannot establish original-file provenance.
+The ordinary browser extension uses a versioned **preview** policy: a completed image raw score of at least 0.65 can trigger a badge. For video, the lower-quartile frame score must reach 0.65 and the whole-clip temporal checks must pass. A verified, applicable credential takes priority. The detector package’s separate calibrated release routes remain disabled. No held-out dataset establishes the target precision or false-positive bounds, and no fitted temporal calibration artifact is bundled.
 
 ## What is implemented
 
@@ -12,7 +12,7 @@ Label.ai performs media analysis on the user's device. The extension uses the re
 | Preprocessing | RGBA composited on white; preserve aspect ratio; shortest edge 440; bilinear resize; center crop 384; ImageNet normalization; planar float32 |
 | Temporal analysis | Up to 12 actual video frame inferences; frame-score distribution; 32×32 luma changes and consecutive second differences; scene discontinuities; per-second logit changes |
 | Coverage | Computes bounded temporal support from timestamps. Caller-provided coverage is ignored. Distant first/last frames cannot imply full coverage |
-| Video scoring | Supports a supervised logistic model over image and temporal features; requires a separately fitted artifact. The uncalibrated lower-quartile frame score is only a diagnostic |
+| Video scoring | Supports a supervised logistic model over image and temporal features; requires a separately fitted artifact. The extension preview can use the uncalibrated lower-quartile frame score after temporal checks |
 | Policy | Build-time, reviewed route evidence must match the pinned model, preprocessing, fitted calibration version, threshold, and quality bounds |
 | Failure behavior | Missing assets, checksum mismatch, invalid input, cancellation, low temporal coverage, contradictory frame evidence, or unvalidated route yields no label |
 | Privacy | Runtime fetches only two pinned extension resources: ONNX weights and WASM. No media, source URL, hash, embedding, logits, or diagnostic output is uploaded |
@@ -161,7 +161,7 @@ The integration script verifies model and fixture hashes, decodes actual supplie
 
 Recorded development results:
 
-| Inputs | Actual internal output | Observed CPU elapsed time | Shipped visible behavior |
+| Inputs | Actual internal output | Observed CPU elapsed time | Detector-only result at time of measurement |
 | --- | --- | --- | --- |
 | Four early Stable Diffusion images | Raw scores 0.99205–0.999999 | 1.39–1.52 s/image | No label; unvalidated route |
 | Four genuine photos | Raw scores 0.000517–0.06872 | 1.40–1.50 s/image | No label |
@@ -192,7 +192,7 @@ and six original clips. No benchmark asset was used to fit or tune a policy.
 | Instagram renditions of those images | 0/19 | 2/19 | 0/19 |
 | Videos from three current generators | 0/3 | 0/3 | 1/3 |
 
-All 82 analyses completed. The extension's disabled statistical route yielded
+All 82 analyses completed. At the time of measurement, the disabled statistical route yielded
 no labels. The video diagnostic is a lower-quartile frame score; only one of
 three generated clips passed the temporal-eligibility guard. The genuine clip
 with a raw score of 0.5454 failed the mixed-frame guard. These observations

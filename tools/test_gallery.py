@@ -130,7 +130,8 @@ def sample_card(asset):
         media = f'<video {attrs} controls playsinline preload="metadata" aria-label="{title}"></video>'
     else:
         media = f'<img {attrs} loading="eager" alt="{title}">'
-    return f'<figure>{media}<figcaption><strong>{title}</strong><small>{escape(asset.description)}</small></figcaption></figure>'
+    return (f'<figure>{media}<figcaption><strong>{title}</strong><small>{escape(asset.description)}</small>'
+            '<small class="analysis-status">Not yet scanned.</small></figcaption></figure>')
 
 
 def page(samples, port):
@@ -139,6 +140,7 @@ def page(samples, port):
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="label-ai-test-gallery" content="1">
 <title>Label.ai local test gallery</title>
 <link rel="icon" href="data:,"><link rel="stylesheet" href="/gallery.css">
 <script src="/gallery.js" defer></script>
@@ -146,9 +148,10 @@ def page(samples, port):
 <body>
 <main>
 <header><h1>Label.ai test gallery</h1>
-<p>Load the Local Test extension and open <code>http://127.0.0.1:{port}</code>. Scanning starts automatically. Refresh pages opened before installation and keep this tab in the foreground. Wait for the on-device model, then scroll to test more samples.</p>
-<p>The captions document the fixture origins. Label.ai adds its animated overlay only when it independently labels the media. The experimental local build can exercise unsigned images and videos; its scores have not passed the release accuracy checks. <a href="#local-title">Try your own files.</a></p>
-<p id="scanner-status" role="status">Waiting for the extension. Check that it is installed, browser site access is allowed and scanning is active, then refresh.</p></header>
+<p>Load Label.ai and open <code>http://127.0.0.1:{port}</code>. Scanning starts automatically. Refresh this page after installation or extension reload. Keep this tab in the foreground, scroll to each sample, and wait for its scan to finish.</p>
+<p>The captions document the fixture origins. Label.ai adds its animated overlay when it independently labels the media. The on-device detector also analyzes unsigned media. Statistical detection can miss AI-generated content or produce false positives. <a href="#local-title">Try your own files.</a></p>
+<p id="scanner-status" role="status">Waiting for the extension. Check that scanning is active, then refresh.</p>
+<p id="build-help">Use the latest regular build from <code>apps/extension/.output/chrome-mv3</code>. In <code>chrome://extensions</code>, reload the updated extension, disable older or duplicate installs, and grant website access.</p></header>
 <section aria-labelledby="samples-title"><h2 id="samples-title">Known-origin samples</h2><div class="grid">{cards}</div></section>
 <section aria-labelledby="local-title"><h2 id="local-title">Try your own files</h2>
 <p>Select an image or video, or drag files onto the picker. Your browser displays each file from a local object URL. The server never receives your files. Play short videos normally and keep the page visible until analysis finishes.</p>
@@ -172,6 +175,8 @@ figure { overflow: hidden; margin: 0; border: 1px solid #d9e0ea; background: whi
 figure img, figure video { display: block; width: 100%; height: 230px; object-fit: contain; background: #e9edf2; }
 figcaption { padding: 12px; font-size: .91rem; overflow-wrap: anywhere; }
 figcaption small { color: #495462; display: block; margin-top: 4px; }
+figcaption .analysis-status { border-top: 1px solid #e1e5eb; margin-top: 8px; padding-top: 6px; font-weight: 600; }
+#scanner-status { font-weight: 650; }
 .actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
 button { padding: 7px 12px; color: #263246; background: white; border: 1px solid #8b99ac; border-radius: 6px; cursor: pointer; }
 label { font-weight: 600; font-size: .92rem; }
@@ -183,14 +188,44 @@ const picker = document.getElementById("local-files");
 const container = document.getElementById("local-media");
 const status = document.getElementById("local-status");
 const scannerStatus = document.getElementById("scanner-status");
+const stateMessages = Object.freeze({
+  pending: "Scanning…",
+  labeled: "Last scan: AI-generated label applied.",
+  "completed-no-label": "Last scan completed without a label.",
+  unsupported: "Last scan: unsupported media.",
+  failed: "Last scan failed. Refresh or retry in the foreground.",
+  canceled: "Scan canceled. Keep this sample in view to retry.",
+});
 function updateScannerStatus() {
-  const message = document.querySelector("label-ai-overlay")
-    ? "Label.ai overlay container found. Keep this page visible while it analyzes media."
-    : "Waiting for the extension. Check that it is installed, browser site access is allowed and scanning is active, then refresh.";
+  const hosts = Array.from(document.querySelectorAll("label-ai-overlay"));
+  const build = hosts[0]?.getAttribute("data-label-ai-build");
+  let message;
+  if (!hosts.length) {
+    message = "Waiting for Label.ai. Check that scanning is active and browser site access is allowed, then refresh.";
+  } else if (hosts.length > 1) {
+    message = "Multiple Label.ai overlays found. Disable duplicate extensions, then refresh.";
+  } else if (build === "production") {
+    message = "Connected: Label.ai (regular build). Keep this page visible while it scans.";
+  } else if (build === "local-test") {
+    message = "Connected: Label.ai (Local Test). Keep this page visible while it scans.";
+  } else {
+    message = "Label.ai overlay found, but the build is outdated or unknown. Rebuild and reload the extension, then refresh.";
+  }
   if (scannerStatus.textContent !== message) scannerStatus.textContent = message;
+  for (const media of document.querySelectorAll("figure > img, figure > video")) {
+    const result = media.parentElement.querySelector(".analysis-status");
+    const state = media.getAttribute("data-label-ai-test-state");
+    const text = Object.hasOwn(stateMessages, state) ? stateMessages[state] : "Not yet scanned. Scroll this sample into view.";
+    if (result && result.textContent !== text) result.textContent = text;
+  }
 }
 const observer = new MutationObserver(updateScannerStatus);
-observer.observe(document.body, {childList: true, subtree: true});
+observer.observe(document.body, {
+  childList: true,
+  subtree: true,
+  attributes: true,
+  attributeFilter: ["data-label-ai-build", "data-label-ai-test-state"],
+});
 updateScannerStatus();
 let objectUrls = [];
 function clearLocal() {
@@ -226,10 +261,15 @@ function display(files) {
     }
     const card = document.createElement("figure");
     const caption = document.createElement("figcaption");
-    caption.textContent = file.name + " — user-selected, origin unknown";
+    const captionTitle = document.createElement("span");
+    captionTitle.textContent = file.name + " — user-selected, origin unknown";
+    const analysisStatus = document.createElement("small");
+    analysisStatus.className = "analysis-status";
+    analysisStatus.textContent = "Not yet scanned.";
+    caption.append(captionTitle, analysisStatus);
     media.addEventListener("error", () => {
       if (!media.isConnected) return;
-      caption.textContent = file.name + " — unable to display this file";
+      captionTitle.textContent = file.name + " — unable to display this file";
       failed++;
       updateStatus();
     }, {once: true});

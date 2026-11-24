@@ -10,6 +10,7 @@ import {
 } from '../../src/core/policy';
 import {
   acceptsDecision,
+  newScanId,
   type Binding,
   type FramePayload,
   type LocalDecision,
@@ -17,6 +18,12 @@ import {
 import { BoundedQueue } from '../../src/core/queue';
 import { CaptureSlots } from '../../src/core/capture-slots';
 import { ScanningPermission } from '../../src/core/scanning-permission';
+import { LOCAL_TEST_BUILD } from '../../src/core/local-test';
+import {
+  galleryDiagnosticPage,
+  galleryReplyState,
+  type GalleryState,
+} from '../../src/core/gallery-diagnostics';
 import { RetryBudget, retryableReply } from '../../src/core/retry';
 import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capture';
 import { acquireVideoOriginal } from '../../src/media/video-original';
@@ -91,9 +98,23 @@ export default defineContentScript({
     ui.shadowHost.style.cssText =
       'position:fixed;inset:0;width:0;height:0;pointer-events:none;z-index:2147483646;';
 
+    const gallery = () => galleryDiagnosticPage(location.href, document, window.top === window);
+    const galleryAttribute = 'data-label-ai-test-state';
+    if (gallery()) {
+      ui.shadowHost.setAttribute(
+        'data-label-ai-build',
+        LOCAL_TEST_BUILD ? 'local-test' : 'production',
+      );
+    }
+
     const eligible = () =>
       !ended && !document.hidden && document.hasFocus() && eligibleDocumentChain(window, settings);
     const active = () => eligible() && permission.allowed;
+
+    function markState(entry: MediaEntry, state: GalleryState) {
+      if (gallery() && entry.element.isConnected && sourceFor(entry.element) === entry.source)
+        entry.element.setAttribute(galleryAttribute, state);
+    }
 
     function refreshPermission() {
       if (!eligible()) {
@@ -137,6 +158,7 @@ export default defineContentScript({
         queue.has(entry.id) || entry.binding || entry.captureAbort || entry.frameCallback != null;
       cancel(entry);
       if (pending && !entry.decision) {
+        markState(entry, 'canceled');
         entry.attempted = false;
         entry.originalAttempted = false;
       }
@@ -150,6 +172,7 @@ export default defineContentScript({
 
     function reset(entry: MediaEntry) {
       cancel(entry);
+      if (gallery()) entry.element.removeAttribute(galleryAttribute);
       entry.source = sourceFor(entry.element);
       entry.generation += 1;
       entry.attempted = false;
@@ -231,12 +254,13 @@ export default defineContentScript({
     }
 
     function bound(entry: MediaEntry): Binding {
-      return { instanceId: entry.id, generation: entry.generation, requestId: crypto.randomUUID() };
+      return { instanceId: entry.id, generation: entry.generation, requestId: newScanId() };
     }
 
     async function submit(entry: MediaEntry, payload: object) {
       const binding = bound(entry);
       entry.binding = binding;
+      markState(entry, 'pending');
       let result: unknown;
       let interrupted = false;
       try {
@@ -257,8 +281,13 @@ export default defineContentScript({
         !shown(entry.element) ||
         !entry.element.isConnected ||
         sourceFor(entry.element) !== entry.source
-      )
+      ) {
+        markState(entry, 'canceled');
+        entry.attempted = false;
+        entry.originalAttempted = false;
         return;
+      }
+      markState(entry, galleryReplyState(binding, result));
       if (acceptsDecision(binding, result)) entry.decision = result;
       else if (interrupted || result === undefined || retryableReply(binding, result)) retry(entry);
       render();
@@ -282,12 +311,14 @@ export default defineContentScript({
       )
         return;
       const generation = entry.generation;
-      const captureLease = `${entry.id}:${generation}:${crypto.randomUUID()}`;
+      const captureLease = `${entry.id}:${generation}:${newScanId()}`;
       if (!videoCaptures.acquire(captureLease)) return;
       entry.captureLease = captureLease;
+      markState(entry, 'pending');
       entry.captureTimer = setTimeout(() => {
         if (entry.generation !== generation) return;
         cancel(entry);
+        markState(entry, 'canceled');
         entry.attempted = true;
         schedule();
       }, 20_000);
@@ -308,6 +339,7 @@ export default defineContentScript({
         const durationMs = video.duration * 1000;
         if (!Number.isFinite(durationMs) || durationMs <= 0 || durationMs > 300_000) {
           cancel(entry);
+          markState(entry, 'unsupported');
           entry.attempted = true;
           return;
         }
@@ -343,7 +375,7 @@ export default defineContentScript({
                 )
                   await submit(entry, { kind: 'video', frames, durationMs, coverage });
               } catch {
-                /* Failure renders no label. */
+                if (entry.generation === generation) markState(entry, 'failed');
               } finally {
                 videoCaptures.release(captureLease);
                 if (entry.captureLease === captureLease) entry.captureLease = undefined;
@@ -356,8 +388,14 @@ export default defineContentScript({
               if (entry.captureLease === captureLease) entry.captureLease = undefined;
             }
           }
-        } catch {
+        } catch (error) {
           cancel(entry);
+          markState(
+            entry,
+            error instanceof DOMException && error.name === 'SecurityError'
+              ? 'unsupported'
+              : 'failed',
+          );
           entry.attempted = true;
         }
         if (!entry.attempted) entry.frameCallback = video.requestVideoFrameCallback(sample);
@@ -387,6 +425,7 @@ export default defineContentScript({
         }
         if (entry.decision && entry.decision.expiresAt <= Date.now()) {
           entry.decision = undefined;
+          if (gallery()) entry.element.removeAttribute(galleryAttribute);
           entry.attempted = false;
           entry.originalAttempted = false;
         }
@@ -434,11 +473,19 @@ export default defineContentScript({
                       shown(entry.element) &&
                       entry.generation === generation &&
                       sourceFor(entry.element) === entry.source
-                    )
+                    ) {
                       await submit(entry, { kind: 'video', original });
+                    } else if (generation === entry.generation) {
+                      markState(
+                        entry,
+                        controller.signal.aborted || !active() ? 'canceled' : 'unsupported',
+                      );
+                    }
+                  } else if (generation === entry.generation) {
+                    markState(entry, 'canceled');
                   }
                 } catch {
-                  /* Failed credentials remain unlabeled. */
+                  if (generation === entry.generation) markState(entry, 'failed');
                 } finally {
                   if (generation === entry.generation && !entry.decision) {
                     entry.attempted = false;
@@ -447,6 +494,7 @@ export default defineContentScript({
                 }
               });
               if (accepted) {
+                markState(entry, 'pending');
                 entry.attempted = true;
                 continue;
               }
@@ -463,6 +511,7 @@ export default defineContentScript({
           continue;
         const accepted = queue.enqueue(entry.id, async () => {
           if (!active() || !entry.visible || !shown(entry.element)) {
+            markState(entry, 'canceled');
             entry.attempted = false;
             return;
           }
@@ -478,16 +527,32 @@ export default defineContentScript({
               entry.visible &&
               shown(entry.element) &&
               sourceFor(entry.element) === entry.source
-            )
+            ) {
               await submit(entry, { kind: 'image', ...payload });
-          } catch {
-            /* Tainted canvas, unsupported media and errors remain unlabeled. */
+            } else if (entry.generation === generation) {
+              markState(entry, 'canceled');
+              entry.attempted = false;
+            }
+          } catch (error) {
+            if (entry.generation === generation) {
+              markState(
+                entry,
+                controller.signal.aborted
+                  ? 'canceled'
+                  : error instanceof DOMException && error.name === 'SecurityError'
+                    ? 'unsupported'
+                    : 'failed',
+              );
+            }
           } finally {
             if (entry.captureAbort === controller) entry.captureAbort = undefined;
             schedule();
           }
         });
-        if (accepted) entry.attempted = true;
+        if (accepted) {
+          markState(entry, 'pending');
+          entry.attempted = true;
+        }
       }
       render();
     }
@@ -543,7 +608,7 @@ export default defineContentScript({
       const source = sourceFor(element);
       const entry: MediaEntry = {
         element,
-        id: crypto.randomUUID(),
+        id: newScanId(),
         source,
         generation: 0,
         visible: true,
@@ -671,6 +736,7 @@ export default defineContentScript({
       permission.invalidate();
       for (const entry of entries.values()) {
         cancel(entry);
+        if (gallery()) entry.element.removeAttribute(galleryAttribute);
         entry.decision = undefined;
         entry.retry.reset();
         entry.attempted = false;
@@ -684,7 +750,10 @@ export default defineContentScript({
       ended = true;
       permission.invalidate();
       queue.clear();
-      for (const entry of entries.values()) cancel(entry);
+      for (const entry of entries.values()) {
+        cancel(entry);
+        if (gallery()) entry.element.removeAttribute(galleryAttribute);
+      }
       entries.clear();
       pendingScans = [];
       mutation.disconnect();
