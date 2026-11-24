@@ -1,6 +1,7 @@
 import { boundedDimensions, embeddedOriginal, contentAddressedSource } from '../core/media';
-import { encodeBase64, MAX_SIDE, VIDEO_MAX_SIDE, type FramePayload } from '../core/protocol';
+import { decodeBase64, encodeBase64, MAX_ORIGINAL_BYTES, MAX_SIDE, VIDEO_MAX_SIDE, type FramePayload } from '../core/protocol';
 import { fetchContentAddressed } from '../transport/acquire';
+import { matchesDisplayedJpeg, readCachedOriginal } from '../cached-original';
 
 export function sourceFor(element: Element): string {
   if (element instanceof HTMLImageElement) return element.currentSrc || element.src;
@@ -40,7 +41,11 @@ export async function captureImage(element: Element, source: string, signal: Abo
   }
   let original = embeddedOriginal(source);
   const addressed = contentAddressedSource(source, location.href);
-  if (!original && addressed) original = await fetchContentAddressed(addressed.url, location.href, signal);
+  if (!original && addressed?.mime === 'image/jpeg' && element instanceof HTMLImageElement) {
+    const candidate = await fetchContentAddressed(addressed.url, location.href, signal);
+    if (candidate && await matchesDisplayedJpeg(element, source, decodeBase64(candidate.base64, MAX_ORIGINAL_BYTES), signal)) original = candidate;
+  }
+  if (!original && !signal.aborted && element instanceof HTMLImageElement) original = await readCachedOriginal(element, source);
   return { frame, ...(original ? { original } : {}) };
 }
 

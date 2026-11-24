@@ -47,3 +47,21 @@ test('DET-RUN-04 no filename, metadata claim, malformed input, or model error ca
   assert.equal(bad.status, 'UNSUPPORTED');
   assert.equal(bad.shouldLabel, false);
 });
+
+test('VID-RUN-05 yields between native calls so cancellation can stop the remaining frames', async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  const engine = createDetectorEngine({
+    run: async () => { calls++; if (calls === 1) setTimeout(() => controller.abort(), 0); return 4; },
+    dispose: async () => {},
+  });
+  const frames = Array.from({ length: 12 }, (_, index) => {
+    const rgba = new Uint8Array(128 * 128 * 4);
+    for (let i = 0; i < rgba.length; i += 4) rgba.set([50 + index * 4, 50, 50, 255], i);
+    return { rgba, width: 128, height: 128, timestampMs: index * 500 };
+  });
+  const result = await engine.analyzeVideoFrames({ frames, durationMs: 5500, signal: controller.signal });
+  assert.equal(result.status, 'CANCELED');
+  assert.equal(result.shouldLabel, false);
+  assert.equal(calls, 1, 'queued frame inference must stop at the next yield');
+});

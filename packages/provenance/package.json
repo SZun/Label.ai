@@ -8,5 +8,6 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
-  "dependencies": {"@contentauth/c2pa-web": "0.17.2"}
+  "dependencies": {"@contentauth/c2pa-wasm": "0.15.2"},
+  "devDependencies": {"typescript": "5.9.3"}
 }

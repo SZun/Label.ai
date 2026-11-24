@@ -1,7 +1,8 @@
-import { evaluateManifest, provenanceResult, type ProvenanceResult } from './policy.ts';
+import { provenanceResult, type ProvenanceResult } from './policy.ts';
 import { validatePackagedAssetUrl } from './guards.ts';
 import { offlineTrustSettings, PROVENANCE_POLICY_VERSION, PROVENANCE_TRUST_EXPIRES_AT } from './trust.ts';
-import type { C2pa } from '@contentauth/c2pa-web';
+import { initializeWasm, verifyBytes } from './wasm.ts';
+import { WASM_SRI } from '@contentauth/c2pa-wasm';
 export type { ProvenanceResult, ProvenanceStatus } from './policy.ts';
 export { PROVENANCE_POLICY_VERSION, PROVENANCE_TRUST_EXPIRES_AT } from './trust.ts';
 
@@ -24,8 +25,8 @@ const FORMATS = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 
 const MAX_QUEUED_BYTES = 128 * 1024 * 1024;
 
 /**
- * Run only in an extension-owned document or dedicated worker, never a page main world.
- * c2pa-web owns its dedicated WASM worker; an MV3 service worker cannot host it directly.
+ * Run only in an extension-owned document/worker, never a page main world.
+ * The official byte API does not need FileReaderSync or a nested Worker.
  * Original bytes stay local. This module has no URL acquisition or remote-verification path.
  */
 export function createProvenanceVerifier(options: ProvenanceOptions): ProvenanceVerifier {
@@ -36,7 +37,7 @@ export function createProvenanceVerifier(options: ProvenanceOptions): Provenance
   }
 
   let disposed = false;
-  let sdk: Promise<C2pa> | undefined;
+  let sdk: Promise<void> | undefined;
   let queue: Promise<void> = Promise.resolve();
   let queuedCount = 0;
   let queuedBytes = 0;
@@ -44,36 +45,31 @@ export function createProvenanceVerifier(options: ProvenanceOptions): Provenance
     provenanceResult(status, PROVENANCE_POLICY_VERSION, reason);
 
   function resetRuntime() {
-    const previous = sdk;
     sdk = undefined;
-    void previous?.then((runtime) => runtime.dispose(), () => undefined);
   }
 
-  async function runtime(): Promise<C2pa> {
-    sdk ??= import('@contentauth/c2pa-web').then(({ createC2pa }) => createC2pa({ wasmSrc: wasmUrl }));
+  async function runtime(): Promise<void> {
+    sdk ??= (async () => {
+      const response = await fetch(wasmUrl, { integrity: WASM_SRI, credentials: 'omit', redirect: 'error' });
+      if (!response.ok) throw new Error('Packaged WASM unavailable');
+      await initializeWasm(await WebAssembly.compileStreaming(response));
+    })();
     return sdk;
   }
 
   async function read(blob: Blob): Promise<ProvenanceResult> {
-    let c2pa: C2pa;
     try {
-      c2pa = await runtime();
+      await runtime();
     } catch {
       resetRuntime();
       return result('unavailable', 'C2PA_RUNTIME_UNAVAILABLE');
     }
-    const { Reader, Context } = await import('@contentauth/c2pa-web');
-    let reader: Awaited<ReturnType<typeof Reader.fromBlob>> = null;
     try {
-      reader = await Reader.fromBlob(c2pa, blob.type, blob, new Context(offlineTrustSettings()));
-      if (!reader) return result('missing', 'C2PA_NO_ACTIVE_MANIFEST');
-      const store = await reader.manifestStore();
-      return evaluateManifest(store, PROVENANCE_POLICY_VERSION);
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      return await verifyBytes(bytes, blob.type, offlineTrustSettings(), PROVENANCE_POLICY_VERSION);
     } catch {
       // Never expose SDK exception strings: malformed metadata can contain arbitrary private text.
       return result('invalid', 'C2PA_READING_FAILED');
-    } finally {
-      await reader?.free().catch(() => undefined);
     }
   }
 
@@ -84,6 +80,7 @@ export function createProvenanceVerifier(options: ProvenanceOptions): Provenance
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
     let abort: (() => void) | undefined;
+    const started = performance.now();
     const interruption = new Promise<ProvenanceResult>((resolve) => {
       abort = () => {
         resetRuntime();
@@ -97,6 +94,9 @@ export function createProvenanceVerifier(options: ProvenanceOptions): Provenance
     });
     try {
       const answer = await Promise.race([read(blob), interruption]);
+      // Wasm parsing can occupy this context synchronously; never accept an overdue result
+      // merely because the timer callback could not run until parsing finished.
+      if (performance.now() - started > timeoutMs) return result('unavailable', 'C2PA_TIMEOUT');
       return disposed || signal?.aborted ? result('unavailable', 'C2PA_CANCELED') : answer;
     } finally {
       if (timer !== undefined) clearTimeout(timer);

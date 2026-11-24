@@ -1,9 +1,10 @@
 import { browser } from 'wxt/browser';
 import { createLocalDetector } from '@label-ai/detector';
-import { isEligiblePage, type LocalSettings } from '../src/core/policy';
+import { PROVENANCE_TRUST_EXPIRES_AT } from '@label-ai/provenance';
+import { hostPermissionPattern, isEligiblePage, type LocalSettings } from '../src/core/policy';
 import { isAnalyzeRequest, decodeBase64, type AnalyzeRequest, type LocalDecision } from '../src/core/protocol';
 import { BoundedQueue } from '../src/core/queue';
-import { readSettings, SETTINGS_KEY } from '../src/transport/settings';
+import { readSettings, writeSettings, SETTINGS_KEY } from '../src/transport/settings';
 import { localProvenance, clearProvenance } from '../src/transport/provenance';
 
 export default defineBackground(() => {
@@ -17,17 +18,20 @@ export default defineBackground(() => {
   async function updateRegistration() {
     const settings = await readSettings();
     const origins: string[] = [];
-    if (settings.enabled) for (const origin of settings.approvedOrigins) if (await browser.permissions.contains({ origins: [`${origin}/*`] })) origins.push(`${origin}/*`);
+    if (settings.enabled) for (const origin of settings.approvedOrigins) {
+      const pattern = hostPermissionPattern(origin);
+      if (pattern && !origins.includes(pattern) && await browser.permissions.contains({ origins: [pattern] })) origins.push(pattern);
+    }
     const scripts = await browser.scripting.getRegisteredContentScripts();
     if (scripts.some((script) => script.id === 'label-ai-media')) await browser.scripting.unregisterContentScripts({ ids: ['label-ai-media'] });
     if (origins.length) await browser.scripting.registerContentScripts([{ id: 'label-ai-media', js: ['content-scripts/media.js'], matches: origins, allFrames: true, runAt: 'document_idle', persistAcrossSessions: true }]);
   }
   let registration = Promise.resolve();
-  const syncRegistration = () => { registration = registration.then(updateRegistration).catch(() => {}); };
+  const syncRegistration = () => { registration = registration.catch(() => {}).then(updateRegistration); return registration; };
 
   async function validSender(sender: Parameters<Parameters<typeof browser.runtime.onMessage.addListener>[0]>[1], settings: LocalSettings) {
-    if (sender.id !== browser.runtime.id || !sender.tab?.id || sender.tab.incognito || !sender.url || !isEligiblePage(sender.url, settings)) return false;
-    if (!await browser.permissions.contains({ origins: [`${new URL(sender.url).origin}/*`] })) return false;
+    if (sender.id !== browser.runtime.id || typeof sender.tab?.id !== 'number' || sender.tab.incognito || !sender.url || !isEligiblePage(sender.url, settings)) return false;
+    if (!await browser.permissions.contains({ origins: [hostPermissionPattern(sender.url)!] })) return false;
     const tab = await browser.tabs.get(sender.tab.id);
     return tab.active && !tab.incognito;
   }
@@ -38,22 +42,32 @@ export default defineBackground(() => {
     const documentId = sender.documentId ?? `${sender.frameId ?? 0}:${sender.url}`;
     const key = scopedKey(tabId, documentId, input.requestId);
     if (pending.has(key)) return noLabel(input);
-    return new Promise((finish) => {
+    return new Promise((resolve) => {
       const abort = new AbortController();
-      const timeout = setTimeout(() => abort.abort(), 45_000);
+      let settled = false;
+      const finish = (result: LocalDecision) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        queue.cancel(key);
+        pending.delete(key);
+        resolve(result);
+      };
+      const timeout = setTimeout(() => { abort.abort(); finish(noLabel(input, 'CANCELED')); }, 45_000);
       pending.set(key, { tabId, documentId, abort, finish, input });
       const accepted = queue.enqueue(key, async () => {
         try {
           if (abort.signal.aborted || !await validSender(sender, await readSettings())) { finish(noLabel(input, 'CANCELED')); return; }
           const original = input.original;
           if (original) {
-            const provenance = await localProvenance(original);
+            const provenance = await localProvenance(original, abort.signal);
             if (provenance?.shouldLabel === true && !abort.signal.aborted && await validSender(sender, await readSettings())) {
-              finish({ ...noLabel(input, 'COMPLETED'), shouldLabel: true, policyVersion: provenance.policyVersion, expiresAt: Date.now() + 60_000 });
+              finish({ ...noLabel(input, 'COMPLETED'), shouldLabel: true, policyVersion: provenance.policyVersion, expiresAt: Math.min(Date.now() + 60_000, Date.parse(PROVENANCE_TRUST_EXPIRES_AT)) });
               return;
             }
           }
           if (abort.signal.aborted) { finish(noLabel(input, 'CANCELED')); return; }
+          if (input.kind === 'video' && !input.frames) { finish(noLabel(input, 'UNSUPPORTED')); return; }
           detector ??= createLocalDetector({ assetBaseUrl: new URL('models/', browser.runtime.getURL('/options.html')).href });
           const engine = await detector;
           const decode = (frame: NonNullable<AnalyzeRequest['frame']>) => {
@@ -77,7 +91,9 @@ export default defineBackground(() => {
     queue.clear();
     for (const job of pending.values()) { job.abort.abort(); job.finish(noLabel(job.input, 'CANCELED')); }
     pending.clear();
-    if (detector) { try { (await detector).dispose(); } catch { /* Failed initialization owns no usable session. */ } detector = undefined; }
+    const previous = detector;
+    detector = undefined;
+    if (previous) { try { await (await previous).dispose(); } catch { /* Failed initialization owns no usable session. */ } }
     await clearProvenance();
   }
 
@@ -90,13 +106,30 @@ export default defineBackground(() => {
       if (job) { job.abort.abort(); queue.cancel(key); job.finish(noLabel(job.input, 'CANCELED')); pending.delete(key); }
     }
     if (message?.type === 'label-ai:clear' && sender.url?.startsWith(browser.runtime.getURL('/options.html'))) return clear().then(() => ({ cleared: true }));
+    if (message?.type === 'label-ai:sync' && sender.id === browser.runtime.id && sender.url?.startsWith(browser.runtime.getURL('/options.html'))) return syncRegistration().then(() => ({ registered: true }));
   });
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes[SETTINGS_KEY]) { void clear(); syncRegistration(); }
+    if (area === 'local' && changes[SETTINGS_KEY]) { void clear(); void syncRegistration().catch(() => {}); }
   });
-  browser.permissions.onRemoved.addListener(() => { void clear(); syncRegistration(); });
-  browser.runtime.onInstalled.addListener(syncRegistration);
-  browser.runtime.onStartup.addListener(syncRegistration);
+  browser.permissions.onRemoved.addListener(() => {
+    void clear();
+    void (async () => {
+      const settings = await readSettings();
+      const approvedOrigins: string[] = [];
+      for (const origin of settings.approvedOrigins) if (await browser.permissions.contains({ origins: [hostPermissionPattern(origin)!] })) approvedOrigins.push(origin);
+      if (approvedOrigins.length !== settings.approvedOrigins.length && JSON.stringify(await readSettings()) === JSON.stringify(settings)) await writeSettings({ ...settings, approvedOrigins });
+      await syncRegistration();
+    })().catch(() => {});
+  });
+  browser.permissions.onAdded.addListener(() => { void syncRegistration().catch(() => {}); });
+  browser.tabs.onActivated.addListener(({ tabId }) => {
+    for (const [key, job] of pending) if (job.tabId !== tabId) { job.abort.abort(); queue.cancel(key); job.finish(noLabel(job.input, 'CANCELED')); }
+  });
+  browser.tabs.onRemoved.addListener((tabId) => {
+    for (const [key, job] of pending) if (job.tabId === tabId) { job.abort.abort(); queue.cancel(key); job.finish(noLabel(job.input, 'CANCELED')); }
+  });
+  browser.runtime.onInstalled.addListener(() => { void syncRegistration().catch(() => {}); });
+  browser.runtime.onStartup.addListener(() => { void syncRegistration().catch(() => {}); });
   browser.action.onClicked.addListener(() => { void browser.runtime.openOptionsPage(); });
-  syncRegistration();
+  void syncRegistration().catch(() => {});
 });

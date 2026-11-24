@@ -36,6 +36,14 @@ export function normalizeOrigin(input: string): string | null {
   }
 }
 
+/** Browser match patterns cannot include ports. Admission still uses the exact origin. */
+export function hostPermissionPattern(input: string): string | null {
+  const origin = normalizeOrigin(input);
+  if (!origin) return null;
+  const url = new URL(origin);
+  return `${url.protocol}//${url.hostname}/*`;
+}
+
 export function normalizeSettings(value: unknown): LocalSettings {
   if (!value || typeof value !== 'object') return { ...DEFAULT_SETTINGS };
   const obj = value as Record<string, unknown>;

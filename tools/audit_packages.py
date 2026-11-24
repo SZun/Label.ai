@@ -23,6 +23,10 @@ class ActiveResources(HTMLParser):
 def inspect_build(build):
     m = json.loads((build/"manifest.json").read_text())
     errors = []
+    if m.get("host_permissions"):
+        errors.append("host permissions must be optional at install time")
+    if m.get("content_scripts"):
+        errors.append("static content scripts would run before a site grant")
     if m.get("manifest_version") != 3:
         errors.append("expected manifest version 3")
     for perm in sorted(PROHIBITED & set(m.get("permissions",[])+m.get("optional_permissions",[]))):

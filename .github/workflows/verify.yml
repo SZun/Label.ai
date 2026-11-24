@@ -19,14 +19,46 @@ jobs:
           python-version: '3.12'
       - run: make bootstrap
       - run: make verify
-      - run: pip install -r tests/e2e/requirements.txt && python -m playwright install --with-deps chromium
-      - run: make test-e2e
       - run: make package
       - uses: actions/upload-artifact@v4
         with:
           name: label-ai-browser-extensions
           path: artifacts/packages/*.zip
           if-no-files-found: error
+  browser:
+    needs: extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, brave, edge, opera, vivaldi]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - run: unzip -q artifacts/packages/label-ai-chromium.zip -d artifacts/chromium
+      - run: pip install -r tests/e2e/requirements.txt && python -m playwright install --with-deps chromium
+      - run: python tools/prepare_provenance_fixtures.py
+      - name: Install and exercise the packaged extension
+        env:
+          BRAND: ${{ matrix.browser }}
+        run: |
+          if [ "$BRAND" != chromium ]; then
+            LABEL_TEST_BROWSER="$(python tests/e2e/prepare_browser.py "$BRAND" "$RUNNER_TEMP/test-browser")"
+            export LABEL_TEST_BROWSER
+          fi
+          python tests/e2e/browser_test.py --build artifacts/chromium --install-only
+          python tests/e2e/browser_test.py --build artifacts/chromium --pregrant-test-origin --report artifacts/browser-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-verification-${{ matrix.browser }}
+          path: artifacts/browser-report.json
   safari-wrapper:
     needs: extension
     runs-on: macos-latest
@@ -43,3 +75,10 @@ jobs:
           unzip -q artifacts/packages/label-ai-safari.zip -d artifacts/safari-web
           tools/package_safari.sh artifacts/safari-web artifacts/xcode
           python tools/build_apple_host.py artifacts/xcode
+      - uses: actions/upload-artifact@v4
+        with:
+          name: label-ai-safari-xcode
+          path: |
+            artifacts/xcode/**
+            !artifacts/xcode/build/**
+          if-no-files-found: error

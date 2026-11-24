@@ -87,6 +87,10 @@ export function createDetectorEngine(runner: InferenceRunner, inputPolicy: Local
           checkCanceled(input.signal);
           const logit = await run({ ...frame, ...(input.signal ? { signal: input.signal } : {}) });
           scoredFrames.push({ ...frame, logit });
+          // Native WASM may finish its Promise synchronously. Yield a task so
+          // cancel messages and deadline timers run before another costly frame.
+          await new Promise<void>(resolve => setTimeout(resolve, 0));
+          checkCanceled(input.signal);
         }
         const temporal = analyzeTemporalEvidence(scoredFrames, input.durationMs);
         const score = scoreVideo(temporal, policy.video.calibration);

@@ -20,7 +20,7 @@ export function provenanceResult(status: ProvenanceStatus, policyVersion: string
     status,
     shouldLabel: status === 'verified-generated',
     policyVersion,
-    detectorVersion: 'c2pa-web-0.17.2',
+    detectorVersion: 'c2pa-wasm-0.15.2',
     reasonCodes: [reason],
   };
 }

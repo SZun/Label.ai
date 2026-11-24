@@ -1,0 +1,22 @@
+{
+  "brave": {
+    "url": "https://brave-browser-apt-release.s3.brave.com/pool/main/b/brave-browser/brave-browser_1.100.59_amd64.deb",
+    "sha256": "eff29257c56974a79d74aa8c168d5062557da36c0c82c8c2412de70fdcb17861",
+    "executable": "opt/brave.com/brave/brave"
+  },
+  "edge": {
+    "url": "https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/microsoft-edge-stable_158.0.4370.33-1_amd64.deb",
+    "sha256": "9bce17d2a83e104bc6751022180c732987379d78a005221d677a81fb659068cb",
+    "executable": "opt/microsoft/msedge/msedge"
+  },
+  "opera": {
+    "url": "https://deb.opera.com/opera-stable/pool/non-free/o/opera-stable/opera-stable_140.0.6074.36_amd64.deb",
+    "sha256": "8f47472c46b2b518d895285e104701c04f5122e7d4e0bf6ca19d7cc53d362703",
+    "executable": "usr/lib/x86_64-linux-gnu/opera-stable/opera"
+  },
+  "vivaldi": {
+    "url": "https://repo.vivaldi.com/stable/deb/pool/main/vivaldi-stable_8.3.4191.47-1_amd64.deb",
+    "sha256": "728cceb066f518aba2722dedf58a7552850107f85db80c79ecca814e67d17506",
+    "executable": "opt/vivaldi/vivaldi-bin"
+  }
+}

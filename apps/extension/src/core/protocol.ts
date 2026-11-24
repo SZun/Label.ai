@@ -49,12 +49,12 @@ export interface AnalyzeRequest extends Binding {
   durationMs?: number;
   coverage?: number;
   original?: { base64: string; mime: string };
-  contentAddressedSource?: string;
 }
 
 export const MAX_SIDE = 1024;
 export const VIDEO_MAX_SIDE = 480;
 export const MAX_ORIGINAL_BYTES = 4 * 1024 * 1024;
+export const MAX_MESSAGE_CHARACTERS = 15 * 1024 * 1024;
 
 export function isAnalyzeRequest(value: unknown): value is AnalyzeRequest {
   if (!value || typeof value !== 'object') return false;
@@ -69,15 +69,20 @@ export function isAnalyzeRequest(value: unknown): value is AnalyzeRequest {
     return Number.isInteger(f.width) && (f.width ?? 0) > 0 && (f.width ?? 0) <= MAX_SIDE
       && Number.isInteger(f.height) && (f.height ?? 0) > 0 && (f.height ?? 0) <= MAX_SIDE
       && typeof f.timestampMs === 'number' && Number.isFinite(f.timestampMs) && f.timestampMs >= 0
-      && typeof f.rgba === 'string' && f.rgba.length <= MAX_SIDE * MAX_SIDE * 4 * 4 / 3 + 4;
+      && typeof f.rgba === 'string' && f.rgba.length <= Math.ceil((f.width! * f.height! * 4) / 3) * 4;
   };
-  if (item.kind === 'video') return Array.isArray(item.frames) && item.frames.length >= 3 && item.frames.length <= 12
-    && item.frames.every((frame) => validFrame(frame) && frame.width <= VIDEO_MAX_SIDE && frame.height <= VIDEO_MAX_SIDE)
-    && Number.isFinite(item.durationMs) && (item.durationMs ?? 0) > 0
-    && typeof item.coverage === 'number' && item.coverage >= 0 && item.coverage <= 1;
+  if (item.original && (typeof item.original.base64 !== 'string'
+    || item.original.base64.length > Math.ceil(MAX_ORIGINAL_BYTES / 3) * 4
+    || typeof item.original.mime !== 'string'
+    || !(item.kind === 'video' ? /^video\/mp4$/ : /^image\/(jpeg|png|webp|avif)$/).test(item.original.mime))) return false;
+  if (item.kind === 'video') {
+    if (!item.frames) return Boolean(item.original);
+    if (!Array.isArray(item.frames) || item.frames.length < 3 || item.frames.length > 12
+      || !item.frames.every((frame) => validFrame(frame) && frame.width <= VIDEO_MAX_SIDE && frame.height <= VIDEO_MAX_SIDE)
+      || !Number.isFinite(item.durationMs) || (item.durationMs ?? 0) <= 0
+      || typeof item.coverage !== 'number' || item.coverage < 0 || item.coverage > 1) return false;
+    return item.frames.reduce((bytes, frame) => bytes + frame.rgba.length, item.original?.base64.length ?? 0) < MAX_MESSAGE_CHARACTERS;
+  }
   if (!validFrame(item.frame)) return false;
-  if (item.contentAddressedSource && (typeof item.contentAddressedSource !== 'string' || item.contentAddressedSource.length > 2048)) return false;
-  return !item.original || (typeof item.original.base64 === 'string'
-    && item.original.base64.length <= Math.ceil(MAX_ORIGINAL_BYTES / 3) * 4
-    && /^image\/(jpeg|png|webp|avif)$/.test(item.original.mime));
+  return item.frame.rgba.length + (item.original?.base64.length ?? 0) < MAX_MESSAGE_CHARACTERS;
 }

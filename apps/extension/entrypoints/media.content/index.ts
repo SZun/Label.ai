@@ -6,6 +6,7 @@ import { isEligiblePage, DEFAULT_SETTINGS, normalizeSettings, type LocalSettings
 import { acceptsDecision, type Binding, type FramePayload, type LocalDecision } from '../../src/core/protocol';
 import { BoundedQueue } from '../../src/core/queue';
 import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capture';
+import { embeddedVideoOriginal } from '../../src/media/video-original';
 import { readSettings, SETTINGS_KEY } from '../../src/transport/settings';
 import '../../src/styles/label.scss';
 
@@ -19,6 +20,7 @@ interface MediaEntry {
   visible: boolean;
   animated: boolean;
   attempted: boolean;
+  originalAttempted: boolean;
   frames: FramePayload[];
   frameCallback?: number;
   captureAbort?: AbortController;
@@ -66,6 +68,7 @@ export default defineContentScript({
       entry.source = sourceFor(entry.element);
       entry.generation += 1;
       entry.attempted = false;
+      entry.originalAttempted = false;
       entry.decision = undefined;
       entry.animated = false;
       schedule();
@@ -108,9 +111,10 @@ export default defineContentScript({
       const binding = bound(entry);
       entry.binding = binding;
       const result: unknown = await browser.runtime.sendMessage({ type: 'label-ai:analyze', ...binding, ...payload });
-      if (entry.binding?.requestId !== binding.requestId || !active() || !entry.element.isConnected || sourceFor(entry.element) !== entry.source) return;
+      if (entry.binding?.requestId !== binding.requestId || !active() || !entry.element.isConnected || sourceFor(entry.element) !== entry.source) return false;
       if (acceptsDecision(binding, result)) entry.decision = result;
       render();
+      return Boolean(entry.decision);
     }
 
     function startVideo(entry: MediaEntry) {
@@ -148,7 +152,27 @@ export default defineContentScript({
         if (!active() || !entry.visible || entry.attempted || !entry.source) continue;
         const rect = entry.element.getBoundingClientRect();
         if (rect.width < 128 || rect.height < (entry.element instanceof HTMLVideoElement ? 90 : 128)) continue;
-        if (entry.element instanceof HTMLVideoElement) { startVideo(entry); continue; }
+        if (entry.element instanceof HTMLVideoElement) {
+          if (!entry.originalAttempted && entry.element.readyState >= 1) {
+            entry.originalAttempted = true;
+            const original = embeddedVideoOriginal(entry.element, entry.source);
+            if (original) {
+              const generation = entry.generation;
+              const accepted = queue.enqueue(entry.id, async () => {
+                try {
+                  if (active() && entry.visible && generation === entry.generation) await submit(entry, { kind: 'video', original });
+                } catch { /* Failed credentials remain unlabeled. */ }
+                finally {
+                  if (generation === entry.generation && !entry.decision) { entry.attempted = false; schedule(); }
+                }
+              });
+              if (accepted) { entry.attempted = true; continue; }
+              entry.originalAttempted = false;
+            }
+          }
+          startVideo(entry);
+          continue;
+        }
         if (entry.element instanceof HTMLImageElement && (!entry.element.complete || !entry.element.naturalWidth)) continue;
         const accepted = queue.enqueue(entry.id, async () => {
           if (!active() || !entry.visible) { entry.attempted = false; return; }
@@ -181,7 +205,7 @@ export default defineContentScript({
       if (entries.has(element) || entries.size >= 200 || element.closest('label-ai-overlay')) return;
       const source = sourceFor(element);
       if (!(element instanceof HTMLImageElement || element instanceof HTMLVideoElement) && !source.startsWith('data:image/')) return;
-      const entry: MediaEntry = { element, id: crypto.randomUUID(), source, generation: 0, visible: false, animated: false, attempted: false, frames: [] };
+      const entry: MediaEntry = { element, id: crypto.randomUUID(), source, generation: 0, visible: false, animated: false, attempted: false, originalAttempted: false, frames: [] };
       entries.set(element, entry);
       intersection.observe(element); resize.observe(element);
     }
@@ -235,7 +259,7 @@ export default defineContentScript({
     const settingsChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
       if (area !== 'local' || !changes[SETTINGS_KEY]) return;
       settings = normalizeSettings(changes[SETTINGS_KEY].newValue);
-      for (const entry of entries.values()) { cancel(entry); entry.decision = undefined; entry.attempted = false; }
+      for (const entry of entries.values()) { cancel(entry); entry.decision = undefined; entry.attempted = false; entry.originalAttempted = false; }
       schedule();
     };
     browser.storage.onChanged.addListener(settingsChanged);

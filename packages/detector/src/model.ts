@@ -9,3 +9,10 @@ export const MODEL = Object.freeze({
   input: 'pixel_values',
   output: 'logit',
 });
+
+export const WASM_RUNTIME = Object.freeze({
+  version: '1.31.1',
+  filename: 'ort-wasm-simd-threaded.wasm',
+  bytes: 14848852,
+  sha256: '4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d',
+});

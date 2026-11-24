@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import Button from '@smui/button';
   import { browser } from 'wxt/browser';
-  import { CONSENT_VERSION, DEFAULT_SETTINGS, normalizeOrigin, type LocalSettings } from '../core/policy';
+  import { CONSENT_VERSION, DEFAULT_SETTINGS, hostPermissionPattern, normalizeOrigin, type LocalSettings } from '../core/policy';
   import { readSettings, writeSettings } from '../transport/settings';
   let settings: LocalSettings = $state({ ...DEFAULT_SETTINGS });
   let site = $state('');
@@ -13,20 +13,22 @@
     const origin = normalizeOrigin(site.trim());
     if (!origin) { message = 'Enter a public HTTPS site address.'; return; }
     // Permission request remains directly inside the user gesture.
-    const granted = await browser.permissions.request({ origins: [`${origin}/*`] });
+    const granted = await browser.permissions.request({ origins: [hostPermissionPattern(origin)!] });
     if (!granted) { message = 'Site access was not granted. Nothing will be analyzed.'; return; }
     settings = { enabled: true, consentVersion: CONSENT_VERSION, approvedOrigins: [...new Set([...settings.approvedOrigins, origin])] };
     await writeSettings(settings);
+    await browser.runtime.sendMessage({ type: 'label-ai:sync' });
     message = 'Local analysis enabled. Reload existing pages on this site.';
   }
   async function pause() { settings = { ...settings, enabled: false }; await writeSettings(settings); message = 'Paused. Existing labels have been removed.'; }
   async function remove(origin: string) {
     settings = { ...settings, approvedOrigins: settings.approvedOrigins.filter((entry) => entry !== origin) };
     await writeSettings(settings);
-    await browser.permissions.remove({ origins: [`${origin}/*`] });
+    const pattern = hostPermissionPattern(origin)!;
+    if (!settings.approvedOrigins.some((entry) => hostPermissionPattern(entry) === pattern)) await browser.permissions.remove({ origins: [pattern] });
   }
   async function clear() {
-    const origins = settings.approvedOrigins.map((origin) => `${origin}/*`);
+    const origins = [...new Set(settings.approvedOrigins.map((origin) => hostPermissionPattern(origin)!))];
     settings = { ...DEFAULT_SETTINGS };
     await writeSettings(settings);
     await browser.runtime.sendMessage({ type: 'label-ai:clear' });

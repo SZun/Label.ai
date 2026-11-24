@@ -1,5 +1,5 @@
 import { createProvenanceVerifier } from '../../src/index.ts';
-import wasmUrl from '@contentauth/c2pa-web/resources/c2pa.wasm?url';
+import wasmUrl from '@contentauth/c2pa-wasm/c2pa.wasm?url';
 
 const verifier = createProvenanceVerifier({ wasmUrl, timeoutMs: 15_000 });
 Object.assign(window, {

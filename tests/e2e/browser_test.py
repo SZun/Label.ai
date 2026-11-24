@@ -118,7 +118,7 @@ def run(args):
             options_page=context.new_page()
             options_page.goto(f"chrome-extension://{ext}/{options_path}")
             if args.install_only:
-                assert options_page.locator("body").inner_text().strip()
+                options_page.get_by_role("heading",name="Site access").wait_for()
                 return {"installed":True,"version":version,"options":options_path}
             site=context.new_page()
             site.goto(origin)
@@ -133,15 +133,19 @@ def run(args):
             options_page.wait_for_function("""async () => (await chrome.scripting.getRegisteredContentScripts()).some(script => script.id === 'label-ai-media')""",timeout=12000)
             site.bring_to_front()
             site.reload()
-            return _exercise(site,context,origin,badge,publisher_requests,version,forbidden)
+            return _exercise(site,options_page,worker,context,origin,badge,publisher_requests,version,forbidden)
         finally:
             context.close()
 
 
-def _exercise(site,context,origin,badge,publisher_requests,version,forbidden):
+def _exercise(site,options_page,worker,context,origin,badge,publisher_requests,version,forbidden):
     badge.wait_for(state="visible",timeout=45000)
     assert badge.count()==1
     assert badge.evaluate("(e)=>getComputedStyle(e).pointerEvents")=="none"
+    site.evaluate("document.querySelector('#asset').src=document.querySelector('#control').src")
+    badge.wait_for(state="detached",timeout=10000)
+    site.evaluate("document.querySelector('#asset').src=globalThis.addressed")
+    badge.wait_for(state="visible",timeout=45000)
     site.evaluate("document.querySelector('#asset').src=document.querySelector('#control').src")
     badge.wait_for(state="detached",timeout=10000)
     context.set_offline(True)
@@ -150,12 +154,36 @@ def _exercise(site,context,origin,badge,publisher_requests,version,forbidden):
     badge.wait_for(state="visible",timeout=30000)
     assert badge.count()==1
     assert badge.evaluate("(e)=>getComputedStyle(e).animationName")=="none"
+    # This runs in the isolated extension content world on the active fixture page.
+    # A COMPLETED reply on this unsigned frame requires successful real ONNX inference.
+    reply = worker.evaluate("""async () => {
+      const [tab] = await chrome.tabs.query({active:true, lastFocusedWindow:true});
+      const [response] = await chrome.scripting.executeScript({target:{tabId:tab.id},func:async()=>{
+        const control=document.querySelector('#control');
+        const canvas=document.createElement('canvas'); canvas.width=160; canvas.height=160;
+        const ctx=canvas.getContext('2d'); ctx.drawImage(control,0,0,160,160);
+        const pixels=ctx.getImageData(0,0,160,160).data;
+        let data=''; for(let i=0;i<pixels.length;i+=4096)data+=String.fromCharCode(...pixels.subarray(i,i+4096));
+        return await chrome.runtime.sendMessage({type:'label-ai:analyze',kind:'image',generation:0,
+          instanceId:'smoke-control',requestId:crypto.randomUUID(),
+          frame:{width:160,height:160,timestampMs:0,rgba:btoa(data)}});
+      }});
+      return response.result;
+    }""")
+    assert reply and reply["status"]=="COMPLETED" and reply["shouldLabel"] is False, reply
     site.evaluate("document.querySelector('#asset').remove()")
     badge.wait_for(state="detached",timeout=10000)
+    context.set_offline(False)
+    options_page.bring_to_front()
+    options_page.get_by_role("button",name=f"Remove {origin}").click()
+    options_page.wait_for_function("async () => (await chrome.scripting.getRegisteredContentScripts()).length === 0")
+    site.bring_to_front()
+    site.reload()
+    assert badge.count()==0
     assert not forbidden, f"unexpected HTTP/WS traffic: {forbidden}"
     assert all(m=="GET" and "?" not in path for m,path in publisher_requests), publisher_requests
     return {"installed":True,"version":version,"positive":True,"removal":True,
-            "offline":True,"reduced_motion":True,"unexpected_requests":forbidden}
+            "offline":True,"offline_model_status":reply["status"],"addressed_positive":True,"revocation":True,"reduced_motion":True,"unexpected_requests":forbidden}
 
 
 if __name__=="__main__":

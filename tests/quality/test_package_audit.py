@@ -20,3 +20,16 @@ class PackagePolicyTests(unittest.TestCase):
             self.assertIn("tabCapture",findings)
             self.assertIn("connect-src",findings)
             self.assertIn("remote.example",findings)
+
+
+    def test_initial_install_cannot_request_mandatory_all_site_access(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            (base / "manifest.json").write_text(json.dumps({
+                "manifest_version": 3, "host_permissions": ["https://*/*"],
+                "content_scripts": [{"matches":["https://*/*"],"js":[]}],
+                "content_security_policy": {"extension_pages": "script-src 'self'; connect-src 'self'"},
+            }))
+            findings = " ".join(inspect_build(base))
+            self.assertIn("host permissions", findings)
+            self.assertIn("static content scripts", findings)

@@ -1,5 +1,5 @@
-@use '@smui/paper/mixins' as paper;
-@include paper.core-styles;
+// SMUI publishes its compiled Material stylesheet without a CSS export mapping.
+@use '../../node_modules/@smui/paper/bare.css';
 
 .label-anchor { position: fixed; pointer-events: none; z-index: 2147483646; }
 .smui-paper.slop-label {

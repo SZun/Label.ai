@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { packagedAssetUrl, validateModelBytes } from '../src/assets.ts';
+import { loadPackagedWasm, packagedAssetUrl, validateModelBytes } from '../src/assets.ts';
 
 test('PRIV-ASSET-01 detector can only fetch resources shipped with the extension', () => {
   assert.equal(packagedAssetUrl('chrome-extension://example/models/', 'detectra-v3.onnx'), 'chrome-extension://example/models/detectra-v3.onnx');
@@ -15,4 +15,19 @@ test('PRIV-ASSET-01 detector can only fetch resources shipped with the extension
 
 test('DET-ASSET-02 rejects missing/truncated/untrusted model weights', async () => {
   await assert.rejects(validateModelBytes(new Uint8Array(10)), /size|length|checksum/i);
+});
+
+test('PRIV-ASSET-03 explicitly loaded WASM can only come from the pinned packaged asset', async () => {
+  const original = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    requests.push(String(url));
+    return new Response(new Uint8Array([1]), { headers: { 'content-length': '1' } });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(loadPackagedWasm('https://external.example/'), /packaged|extension/i);
+    assert.equal(requests.length, 0);
+    await assert.rejects(loadPackagedWasm('chrome-extension://example/models/'), /size/i);
+    assert.deepEqual(requests, ['chrome-extension://example/models/ort-wasm-simd-threaded.wasm']);
+  } finally { globalThis.fetch = original; }
 });

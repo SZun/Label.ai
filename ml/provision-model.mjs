@@ -50,8 +50,13 @@ const runtimeRoot = dirname(dirname(require.resolve('onnxruntime-web/wasm')));
 const runtimeManifest = JSON.parse(await readFile(join(runtimeRoot, 'package.json'), 'utf8'));
 if (runtimeManifest.version !== manifest.onnxruntime_version) throw new Error('The WASM runtime version does not match the pinned manifest');
 const resources = ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs'];
+const runtimeBytes = await readFile(join(runtimeRoot, 'dist', manifest.wasm_runtime.filename));
+if (runtimeBytes.length !== manifest.wasm_runtime.bytes || createHash('sha256').update(runtimeBytes).digest('hex') !== manifest.wasm_runtime.sha256) {
+  throw new Error('The installed WASM runtime does not match the pinned checksum');
+}
 for (const resource of resources) await copyFile(join(runtimeRoot, 'dist', resource), join(target, resource));
 await copyFile(join(here, 'licenses', 'ONNXRUNTIME-LICENSE.txt'), join(target, 'ONNXRUNTIME-LICENSE.txt'));
+await copyFile(join(here, 'licenses', 'ONNXRUNTIME-ThirdPartyNotices.txt'), join(target, 'ONNXRUNTIME-ThirdPartyNotices.txt'));
 await copyFile(join(here, 'licenses', 'DETECTRA-MIT.txt'), join(target, 'DETECTRA-LICENSE.txt'));
 await copyFile(join(here, 'model-manifest.json'), join(target, 'model-manifest.json'));
 const assets = await Promise.all([manifest.filename, ...resources].map(async file => ({

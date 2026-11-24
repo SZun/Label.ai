@@ -19,7 +19,9 @@ describe('public cache-only originals', () => {
     expect(eligibleJpeg(Uint8Array.of(255,216,255,224,0,0),30,20)).toBe(false);
   });
   it.each(['private', 'no-store', 'public, private', 'max-age=3600'])('rejects cache directive %s', async (directive) => {
-    const fetch = vi.fn().mockResolvedValue(new Response(frame,{headers:header(directive)}));
+    const response = new Response(frame,{headers:header(directive)});
+    Object.defineProperty(response,'url',{value:source});
+    const fetch = vi.fn().mockResolvedValue(response);
     vi.stubGlobal('fetch',fetch);
     vi.stubGlobal('location',new URL(source));
     try {
@@ -28,4 +30,31 @@ describe('public cache-only originals', () => {
       expect(fetch).toHaveBeenCalledWith(source,expect.objectContaining({cache:'only-if-cached',mode:'same-origin',credentials:'omit',redirect:'error',referrerPolicy:'no-referrer'}));
     } finally { vi.unstubAllGlobals(); }
   });
+});
+
+it('only binds cached originals with equal intrinsic pixels and the current source', async () => {
+  const image = {currentSrc:source,naturalWidth:30,naturalHeight:20,complete:true,isConnected:true} as HTMLImageElement;
+  const texture = {width:30,height:20,close:vi.fn()};
+  const bytes = new Uint8ClampedArray(30*20*4);
+  const candidate = bytes.slice();
+  const ctx = { drawImage:vi.fn(),clearRect:vi.fn(),getImageData:vi.fn() };
+  const canvas = { getContext:()=>ctx };
+  const makeResponse = () => {
+    const res = new Response(frame,{headers:header('public, max-age=120')});
+    Object.defineProperty(res,'url',{value:source});
+    return res;
+  };
+  vi.stubGlobal('location',new URL(source));
+  vi.stubGlobal('fetch',vi.fn(async()=>makeResponse()));
+  vi.stubGlobal('createImageBitmap',vi.fn(async()=>texture));
+  const create = vi.spyOn(document,'createElement').mockReturnValue(canvas as unknown as HTMLCanvasElement);
+  try {
+    ctx.getImageData.mockReturnValueOnce({data:bytes}).mockReturnValueOnce({data:candidate});
+    expect((await readCachedOriginal(image,source))?.mime).toBe('image/jpeg');
+    candidate[17]=23;
+    ctx.getImageData.mockReturnValueOnce({data:bytes}).mockReturnValueOnce({data:candidate});
+    expect(await readCachedOriginal(image,source)).toBeUndefined();
+    expect(texture.close).toHaveBeenCalledTimes(2);
+    expect(await readCachedOriginal(image,source+'?changed')).toBeUndefined();
+  } finally { create.mockRestore();vi.unstubAllGlobals(); }
 });

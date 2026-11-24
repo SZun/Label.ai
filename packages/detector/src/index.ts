@@ -1,6 +1,7 @@
 import * as ort from 'onnxruntime-web/wasm';
-import { loadPackagedModel, packagedAssetUrl } from './assets.ts';
+import { loadPackagedModel, loadPackagedWasm } from './assets.ts';
 import { createDetectorEngine, type LocalResult } from './engine.ts';
+import { inspectBoundedPng } from './encoding.ts';
 import { MODEL } from './model.ts';
 import { DEFAULT_POLICY, type LocalPolicy } from './policy.ts';
 import { checkCanceled, INPUT_SIZE } from './preprocess.ts';
@@ -13,19 +14,19 @@ export type { LocalPolicy, PlattCalibration, TemporalCalibration } from './polic
 export type { LocalResult, VideoFramesInput } from './engine.ts';
 export type { RgbaInput } from './preprocess.ts';
 
-/** Call inside an extension-owned dedicated worker. Code, weights and WASM are
+/** Call inside an extension-owned background worker. Code, weights and WASM are
  * bundled with the extension; this API has no remote model download or provider fallback.
  */
 export async function createLocalDetector(options: { assetBaseUrl: string; policy?: LocalPolicy; executionProvider?: 'wasm' }) {
   const { assetBaseUrl, policy = DEFAULT_POLICY } = options;
   if (options.executionProvider && options.executionProvider !== 'wasm') throw new TypeError('Only the verified WASM execution provider is available');
   ort.env.wasm.numThreads = 1; // Works without cross-origin isolation / SharedArrayBuffer, including Safari.
-  ort.env.wasm.proxy = false; // We already own a worker; do not create a blob worker under MV3 CSP.
-  ort.env.wasm.wasmPaths = {
-    wasm: packagedAssetUrl(assetBaseUrl, 'ort-wasm-simd-threaded.wasm'),
-    mjs: packagedAssetUrl(assetBaseUrl, 'ort-wasm-simd-threaded.mjs'),
-  };
-  const bytes = await loadPackagedModel(assetBaseUrl);
+  ort.env.wasm.proxy = false; // Service workers cannot spawn workers; no blob worker under MV3 CSP.
+  // The pinned package's /wasm ESM export embeds its JS glue. Supplying an mjs
+  // path would override that bundle and trigger forbidden dynamic import() in MV3.
+  delete ort.env.wasm.wasmPaths;
+  const [bytes, wasm] = await Promise.all([loadPackagedModel(assetBaseUrl), loadPackagedWasm(assetBaseUrl)]);
+  ort.env.wasm.wasmBinary = wasm;
   const session = await ort.InferenceSession.create(bytes, {
     executionProviders: ['wasm'], graphOptimizationLevel: 'all', executionMode: 'sequential',
   });
@@ -56,13 +57,15 @@ export async function createLocalDetector(options: { assetBaseUrl: string; polic
       });
       try {
         checkCanceled(signal);
-        if (!['image/jpeg', 'image/png', 'image/webp'].includes(mime) || imageBytes.byteLength < 12 || imageBytes.byteLength > 8 * 1024 * 1024) {
+        if (mime !== 'image/png') {
           return unsupported('UNSUPPORTED', 'IMAGE_ENCODING_OR_SIZE_UNSUPPORTED');
         }
+        const dimensions = inspectBoundedPng(imageBytes);
         if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas !== 'function') return unsupported('UNSUPPORTED', 'LOCAL_IMAGE_DECODE_UNAVAILABLE');
         const bitmap = await createImageBitmap(new Blob([imageBytes.slice().buffer], { type: mime }));
         try {
           checkCanceled(signal);
+          if (bitmap.width !== dimensions.width || bitmap.height !== dimensions.height) return unsupported('UNSUPPORTED', 'IMAGE_DIMENSION_MISMATCH');
           const scale = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height));
           const width = Math.max(1, Math.round(bitmap.width * scale)), height = Math.max(1, Math.round(bitmap.height * scale));
           const canvas = new OffscreenCanvas(width, height);

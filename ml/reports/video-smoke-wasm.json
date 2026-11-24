@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "purpose": "DEVELOPER_SMOKE_ONLY_NOT_RELEASE_VALIDATION",
+  "generatedAt": "2026-11-24T21:31:34.834Z",
+  "runtime": "onnxruntime-web/wasm",
+  "runtimeVersion": "1.31.1",
+  "numThreads": 1,
+  "environment": {
+    "node": "v24.22.3",
+    "platform": "linux",
+    "architecture": "x64"
+  },
+  "modelId": "detectra-v3-vits16-384",
+  "modelSha256": "1414b9aafaa01a644ed706224973f09b53a1388282104409862df9893b1b962b",
+  "preprocessingVersion": "rgb-white-bilinear440-center384-imagenet-v1",
+  "temporalFeatureVersion": "luma32-consecutive-difference2-logit-distribution-v1",
+  "manifestSha256": "fee738bba93473bd376ae5a64efa2a094ec7271582c096da542f28bdf5976985",
+  "loadMs": 924.202088,
+  "inferenceCalls": 36,
+  "imageRouteApproved": false,
+  "videoRouteApproved": false,
+  "limitations": [
+    "Small, public fixtures are not a generator/site-disjoint release holdout.",
+    "No video training/calibration artifact is bundled. Temporal raw score is a robust frame-score diagnostic, not a validated probability.",
+    "Node WASM verifies inference; browser and Safari extension installation require separate evidence."
+  ],
+  "rows": [
+    {
+      "file": "kling.mp4",
+      "sha256": "14446dda8bbcfb8458337a7391c34237d4724482e43df3b82df0be4174fb0011",
+      "kind": "video",
+      "origin": "generated",
+      "elapsedMs": 17162.912161,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_TEMPORAL_FEATURES",
+        "MIXED_FRAME_EVIDENCE",
+        "VIDEO_ROUTE_UNVALIDATED",
+        "TEMPORAL_MODEL_NOT_CALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.09365371612854419,
+        "secondOrderResidual": 0.07655984885394673,
+        "scoreQuantile25": 0.655552619850998,
+        "eligible": false,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ],
+        "meanLogit": 2.5339341163635254,
+        "lowerQuartileLogit": 0.643537238240242,
+        "logitStd": 2.4670310560541906,
+        "logitTemporalDelta": 4.35988326072693,
+        "frameCount": 12,
+        "sampleSpanMs": 5000
+      },
+      "rawScore": 0.655552619850998
+    },
+    {
+      "file": "flower.webm",
+      "sha256": "c6f8a348953395598a9a73b9bab1676436410797bce9f398f4be1531d6e76dda",
+      "kind": "video",
+      "origin": "camera",
+      "elapsedMs": 17102.576917,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_TEMPORAL_FEATURES",
+        "VIDEO_ROUTE_UNVALIDATED",
+        "TEMPORAL_MODEL_NOT_CALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.02389398083400093,
+        "secondOrderResidual": 0.015543992150765008,
+        "scoreQuantile25": 0.0017974568213308462,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -5.9211505651474,
+        "lowerQuartileLogit": -6.319583415985107,
+        "logitStd": 0.623137327077636,
+        "logitTemporalDelta": 1.1918506787702616,
+        "frameCount": 12,
+        "sampleSpanMs": 4959.000000000001
+      },
+      "rawScore": 0.0017974568213308462
+    },
+    {
+      "file": "flower.mp4",
+      "sha256": "0cd83d944a6ca7822b4a8306cecc60a36e859b041f6702c6a1ad9ead78924451",
+      "kind": "video",
+      "origin": "camera",
+      "elapsedMs": 17424.727408,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_TEMPORAL_FEATURES",
+        "VIDEO_ROUTE_UNVALIDATED",
+        "TEMPORAL_MODEL_NOT_CALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.023116083678360155,
+        "secondOrderResidual": 0.014472015312230723,
+        "scoreQuantile25": 0.002507073784556407,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -5.682635307312012,
+        "lowerQuartileLogit": -5.986128807067871,
+        "logitStd": 0.6647943258877682,
+        "logitTemporalDelta": 1.3456120038980375,
+        "frameCount": 12,
+        "sampleSpanMs": 4905
+      },
+      "rawScore": 0.002507073784556407
+    }
+  ]
+}

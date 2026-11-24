@@ -1,6 +1,6 @@
 import { encodeBase64, MAX_ORIGINAL_BYTES } from './core/protocol';
 
-const MAX_COMPARE_PIXELS = 2_000_000;
+const MAX_COMPARE_PIXELS = 5_000_000;
 type Original = { base64: string; mime: string };
 
 export function cacheEligible(source: string, origin: string): boolean {
@@ -58,7 +58,6 @@ export async function readCachedOriginal(image: HTMLImageElement, source: string
       !cacheEligible(source, location.origin)) return;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 1500);
-  let bitmap: ImageBitmap | undefined;
   try {
     const response = await fetch(source, {
       cache: 'only-if-cached', mode: 'same-origin', credentials: 'omit',
@@ -71,23 +70,38 @@ export async function readCachedOriginal(image: HTMLImageElement, source: string
         Number(response.headers.get('content-length')) > MAX_ORIGINAL_BYTES) return;
     const bytes = await readBounded(response);
     if (!bytes || !current() || !eligibleJpeg(bytes, width, height)) return;
-    bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
-    if (!current() || controller.signal.aborted || bitmap.width !== width || bitmap.height !== height) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return;
-    ctx.drawImage(image, 0, 0, width, height);
-    const displayed = ctx.getImageData(0, 0, width, height).data;
-    ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(bitmap, 0, 0);
-    const cached = ctx.getImageData(0, 0, width, height).data;
-    if (!displayed.every((v, i) => v === cached[i]) || !current()) return;
+    if (!await matchesDisplayedJpeg(image, source, bytes, controller.signal)) return;
     return { base64: encodeBase64(bytes), mime: 'image/jpeg' };
   } catch { return; } finally {
     clearTimeout(timeout);
     controller.abort();
-    bitmap?.close();
   }
+}
+
+export async function matchesDisplayedJpeg(image: HTMLImageElement, source: string, bytes: Uint8Array,
+  signal?: AbortSignal): Promise<boolean> {
+  const { naturalWidth: width, naturalHeight: height } = image;
+  const current = () => image.isConnected && image.complete && image.currentSrc === source &&
+    image.naturalWidth === width && image.naturalHeight === height && !signal?.aborted;
+  if (!current() || width < 1 || height < 1 || bytes.length > MAX_ORIGINAL_BYTES ||
+      !eligibleJpeg(bytes,width,height)) return false;
+  let bitmap: ImageBitmap | undefined;
+  try {
+    bitmap = await createImageBitmap(new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' }));
+    if (!current() || signal?.aborted || bitmap.width !== width || bitmap.height !== height) return false;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = Math.min(height, 64);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return false;
+    for (let row = 0; row < height; row += canvas.height) {
+      const rows = Math.min(canvas.height, height - row);
+      ctx.drawImage(image, 0, row, width, rows, 0, 0, width, rows);
+      const displayed = ctx.getImageData(0, 0, width, rows).data;
+      ctx.drawImage(bitmap, 0, row, width, rows, 0, 0, width, rows);
+      const cached = ctx.getImageData(0, 0, width, rows).data;
+      if (!displayed.every((v, i) => v === cached[i])) return false;
+    }
+    return current();
+  } catch { return false; } finally { bitmap?.close(); }
 }

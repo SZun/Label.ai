@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, isEligiblePage, normalizeOrigin } from '../src/core/policy';
+import { DEFAULT_SETTINGS, hostPermissionPattern, isEligiblePage, normalizeOrigin } from '../src/core/policy';
 
 const approved = { enabled: true, consentVersion: 1, approvedOrigins: ['https://news.example'] };
 describe('ACQ-01 local access and privacy admission', () => {
@@ -21,5 +21,16 @@ describe('ACQ-01 local access and privacy admission', () => {
     expect(normalizeOrigin('https://user:secret@news.example')).toBeNull();
     expect(normalizeOrigin('http://example.com')).toBeNull();
     expect(normalizeOrigin('http://127.0.0.1:4173')).toBe('http://127.0.0.1:4173');
+  });
+  it('uses browser-valid port-free host patterns but keeps exact origin admission', () => {
+    expect(hostPermissionPattern('http://localhost:4173')).toBe('http://localhost/*');
+    expect(hostPermissionPattern('https://news.example:8443')).toBe('https://news.example/*');
+    expect(hostPermissionPattern('file:///private')).toBeNull();
+    const settings = { ...approved, approvedOrigins: ['https://news.example:8443'] };
+    expect(isEligiblePage('https://news.example:8443/story', settings)).toBe(true);
+    expect(isEligiblePage('https://news.example/story', settings)).toBe(false);
+  });
+  it('fails closed for malformed percent-encoded page paths', () => {
+    expect(isEligiblePage('https://news.example/%E0%A4%A', approved)).toBe(false);
   });
 });
