@@ -26,7 +26,7 @@ class TestSafariHarness(unittest.TestCase):
             "options_ui": {"page": "options.html"},
             "incognito": "not_allowed",
             "background": {"service_worker": "background.js"},
-            "optional_host_permissions": ["https://*/*", "http://127.0.0.1/*"],
+            "host_permissions": ["https://*/*", "http://*/*"],
         }
         self.manifest_bytes = json.dumps(self.manifest).encode()
         (self.build / "manifest.json").write_bytes(self.manifest_bytes)
@@ -51,46 +51,61 @@ class TestSafariHarness(unittest.TestCase):
         self.assertEqual((self.build / "manifest.json").read_bytes(), self.manifest_bytes)
         self.assertEqual(self.driver.call.call_count, 3)
 
-    def test_fixture_mode_installs_once_and_never_needs_uninstall_for_setup(self):
-        def install_fixture(driver, directory, modified=False):
-            self.assertNotEqual(self.build, directory)
-            self.assertTrue(modified)
-            copied = json.loads((directory / "manifest.json").read_text())
-            self.assertEqual(copied["host_permissions"], ["http://127.0.0.1/*"])
-            self.assertEqual(copied["incognito"], "not_allowed")
-            self.assertEqual((directory / "background.js").read_text(),
-                             (self.build / "background.js").read_text())
+    def test_automatic_acceptance_installs_exact_package_before_opening_options(self):
+        observed = []
+
+        def install_fixture(driver, directory):
+            self.assertEqual(directory, self.build)
+            self.assertEqual((directory / "manifest.json").read_bytes(), self.manifest_bytes)
+            observed.append("install")
             return "fixture-id"
+
+        def scan_fixture(driver, site, origin):
+            observed.append("scan")
+            return {"signed_badge": True, "automatic_scanning": True}
+
+        def open_options(driver, identifier, options_path):
+            observed.append("options")
+            return "options"
 
         with patch.multiple(safari, Driver=Mock(return_value=self.driver),
                             publisher=fixture_publisher,
                             install=Mock(side_effect=install_fixture),
-                            find_opened_options=Mock(return_value="options"),
-                            badge_count=Mock(), request_consent=Mock(),
-                            exercise=Mock(return_value={"signed_badge": True}),
+                            exercise_automatic_scan=Mock(side_effect=scan_fixture),
+                            open_original_options=Mock(side_effect=open_options),
+                            exercise_controls=Mock(return_value={"global_pause_resume": True}),
                             uninstall=Mock()):
-            result = safari.run_extension("session", Mock(), self.build,
-                                          pregrant_test_origin=True)
-            self.assertEqual(safari.install.call_count, 1)
+            result = safari.run_extension("session", Mock(), self.build)
+            safari.install.assert_called_once_with(self.driver, self.build)
             safari.uninstall.assert_called_once_with(self.driver, "fixture-id")
-            safari.exercise.assert_called_once()
-        self.assertTrue(result["signed_badge"])
-        self.assertFalse(result["unmodified_package_installed"])
-        self.assertFalse(result["native_optional_permission_grant"])
-        self.assertTrue(result["disposable_test_copy"])
+            self.assertEqual(observed, ["install", "scan", "options"])
+        self.assertTrue(result["automatic_scanning"])
+        self.assertTrue(result["unmodified_package_installed"])
+        self.assertTrue(result["global_pause_resume"])
         self.assertEqual((self.build / "manifest.json").read_bytes(), self.manifest_bytes)
 
-    def test_fixture_assertion_failure_remains_failure(self):
+    def test_automatic_badge_failure_remains_failure_without_options_fallback(self):
         with patch.multiple(safari, Driver=Mock(return_value=self.driver),
                             publisher=fixture_publisher,
                             install=Mock(return_value="fixture-id"),
-                            find_opened_options=Mock(return_value="options"),
-                            badge_count=Mock(), request_consent=Mock(),
-                            exercise=Mock(side_effect=AssertionError("badge failed")),
+                            exercise_automatic_scan=Mock(side_effect=AssertionError("badge failed")),
+                            open_original_options=Mock(),
                             diagnostics=Mock(return_value={}), uninstall=Mock()):
             with self.assertRaisesRegex(AssertionError, "badge failed"):
-                safari.run_extension("session", Mock(), self.build,
-                                     pregrant_test_origin=True)
+                safari.run_extension("session", Mock(), self.build)
+            safari.open_original_options.assert_not_called()
+            safari.uninstall.assert_called_once_with(self.driver, "fixture-id")
+
+    def test_native_options_discovery_failure_remains_failure_after_automatic_scan(self):
+        with patch.multiple(safari, Driver=Mock(return_value=self.driver),
+                            publisher=fixture_publisher,
+                            install=Mock(return_value="fixture-id"),
+                            exercise_automatic_scan=Mock(return_value={"signed_badge": True, "automatic_scanning": True}),
+                            open_original_options=Mock(side_effect=safari.SetupUnavailable("opaque ID")),
+                            diagnostics=Mock(return_value={}), uninstall=Mock()):
+            with self.assertRaisesRegex(safari.SetupUnavailable, "opaque ID"):
+                safari.run_extension("session", Mock(), self.build)
+            safari.uninstall.assert_called_once_with(self.driver, "fixture-id")
 
 
 if __name__ == "__main__":

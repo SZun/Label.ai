@@ -32,6 +32,14 @@ jobs:
           name: label-ai-browser-extensions
           path: artifacts/packages/*.zip
           if-no-files-found: error
+      - run: pnpm run build:chrome:test
+      - run: python3 tools/audit_packages.py apps/extension/.output/chrome-mv3-local-test
+      - run: python3 tools/zip_extension.py apps/extension/.output/chrome-mv3-local-test artifacts/local-test/label-ai-local-test.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: label-ai-local-test-extension
+          path: artifacts/local-test/label-ai-local-test.zip
+          if-no-files-found: error
       - run: pnpm --dir packages/provenance exec vite build --config tests/browser/vite.config.mjs --outDir ../../../../artifacts/safari-verifier --base ./
       - uses: actions/upload-artifact@v4
         with:
@@ -73,11 +81,38 @@ jobs:
             export LABEL_TEST_BROWSER
           fi
           timeout --signal=TERM --kill-after=5s 120s python -u tests/e2e/browser_test.py --build artifacts/chromium --install-only
-          timeout --signal=TERM --kill-after=5s 240s python -u tests/e2e/browser_test.py --build artifacts/chromium --pregrant-test-origin --report artifacts/browser-report.json
+          timeout --signal=TERM --kill-after=5s 240s python -u tests/e2e/browser_test.py --build artifacts/chromium --report artifacts/browser-report.json
       - uses: actions/upload-artifact@v4
         with:
           name: browser-verification-${{ matrix.browser }}
           path: artifacts/browser-report.json
+  local-test-gallery:
+    needs: extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-local-test-extension
+          path: artifacts/local-test
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - run: unzip -q artifacts/local-test/label-ai-local-test.zip -d artifacts/local-test/unpacked
+      - run: unzip -q artifacts/packages/label-ai-chromium.zip -d artifacts/local-test/production
+      - run: pip install -r tests/e2e/requirements.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: python tools/prepare_provenance_fixtures.py
+      - run: python tools/prepare_smoke_media.py
+      - name: Test unsigned generated and genuine images through the local test build
+        run: timeout --signal=TERM --kill-after=5s 180s python -u tests/e2e/local_test_gallery.py --build artifacts/local-test/unpacked
+      - name: Confirm the regular Chromium package keeps the production quality gate
+        run: timeout --signal=TERM --kill-after=5s 120s python -u tests/e2e/local_test_gallery.py --build artifacts/local-test/production --production
   safari-package-and-verifier:
     needs: extension
     runs-on: macos-latest
@@ -153,6 +188,6 @@ jobs:
           if [ "$PLATFORM" = ios-simulator-verifier ]; then
             args+=(--ios-simulator --simulator-udid "$LABEL_AI_SIMULATOR_UDID")
           else
-            args+=(--extension artifacts/safari-web --pregrant-test-origin)
+            args+=(--extension artifacts/safari-web)
           fi
           python3 -u tests/e2e/safari_verifier.py "${args[@]}"

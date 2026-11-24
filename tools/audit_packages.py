@@ -25,10 +25,19 @@ def inspect_build(build):
     errors = []
     if m.get("incognito") != "not_allowed":
         errors.append("incognito access must be explicitly disabled")
-    if m.get("host_permissions"):
-        errors.append("host permissions must be optional at install time")
+    expected_hosts = (
+        {"http://localhost/*", "http://127.0.0.1/*"}
+        if m.get("name") == "Label.ai (Local Test)" else {"http://*/*", "https://*/*"}
+    )
+    if set(m.get("host_permissions", [])) != expected_hosts:
+        errors.append("host permissions must exactly match the automatic scanning build scope")
+    if m.get("optional_host_permissions"):
+        errors.append("unexpected optional host permissions")
     if m.get("content_scripts"):
-        errors.append("static content scripts would run before a site grant")
+        errors.append("static content scripts would bypass dynamic registration")
+    for resource in m.get("web_accessible_resources", []):
+        if not isinstance(resource, dict) or set(resource.get("matches", [])) != expected_hosts:
+            errors.append("web accessible resources must match the automatic scanning build scope")
     if m.get("manifest_version") != 3:
         errors.append("expected manifest version 3")
     for perm in sorted(PROHIBITED & set(m.get("permissions",[])+m.get("optional_permissions",[]))):

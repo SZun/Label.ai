@@ -1,7 +1,17 @@
 import { browser } from 'wxt/browser';
 import { createLocalDetector } from '@label-ai/detector';
 import { PROVENANCE_TRUST_EXPIRES_AT } from '@label-ai/provenance';
-import { hostPermissionPattern, isEligiblePage, type LocalSettings } from '../src/core/policy';
+import {
+  hostPermissionPattern,
+  isEligiblePage,
+  SCAN_MATCHES,
+  type LocalSettings,
+} from '../src/core/policy';
+import {
+  LOCAL_TEST_BUILD,
+  LOCAL_TEST_POLICY_VERSION,
+  localTestDecision,
+} from '../src/core/local-test';
 import {
   isAnalyzeRequest,
   decodeBase64,
@@ -9,12 +19,13 @@ import {
   type LocalDecision,
 } from '../src/core/protocol';
 import { BoundedQueue } from '../src/core/queue';
-import { readSettings, writeSettings, SETTINGS_KEY } from '../src/transport/settings';
+import { migrateSettings, readSettings, SETTINGS_KEY } from '../src/transport/settings';
 import { localProvenance, clearProvenance } from '../src/transport/provenance';
 
 export default defineBackground(() => {
   const queue = new BoundedQueue(1, 8);
   let detector: ReturnType<typeof createLocalDetector> | undefined;
+  const injectingTabs = new Set<number>();
   const pending = new Map<
     string,
     {
@@ -44,17 +55,10 @@ export default defineBackground(() => {
 
   async function updateRegistration() {
     const settings = await readSettings();
-    const origins: string[] = [];
-    if (settings.enabled)
-      for (const origin of settings.approvedOrigins) {
-        const pattern = hostPermissionPattern(origin);
-        if (
-          pattern &&
-          !origins.includes(pattern) &&
-          (await browser.permissions.contains({ origins: [pattern] }))
-        )
-          origins.push(pattern);
-      }
+    // Browser native site controls enforce withheld host grants at injection
+    // time. Register the broad declared scope once, even if the user chooses
+    // to restrict this extension to a subset of those hosts in browser settings.
+    const origins = settings.enabled ? SCAN_MATCHES : [];
     const scripts = await browser.scripting.getRegisteredContentScripts();
     const existing = scripts.find((script) => script.id === 'label-ai-media');
     // MV3 workers wake on ordinary messages. Keep an equivalent persistent registration
@@ -72,7 +76,7 @@ export default defineBackground(() => {
     )
       return;
     if (existing) await browser.scripting.unregisterContentScripts({ ids: ['label-ai-media'] });
-    if (origins.length)
+    if (origins.length) {
       await browser.scripting.registerContentScripts([
         {
           id: 'label-ai-media',
@@ -83,6 +87,59 @@ export default defineBackground(() => {
           persistAcrossSessions: true,
         },
       ]);
+      // Registration takes effect on subsequent navigations. Give the current
+      // completed, eligible, granted tab a scanner immediately as well.
+      await injectActiveTab(settings);
+    }
+  }
+
+  async function injectActiveTab(settings: LocalSettings, expectedTabId?: number) {
+    if (!settings.enabled) return;
+    let ownedTabId: number | undefined;
+    try {
+      const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+      if (
+        tab?.id === undefined ||
+        (expectedTabId !== undefined && tab.id !== expectedTabId) ||
+        tab.status !== 'complete' ||
+        !tab.url ||
+        tab.incognito !== false ||
+        !isEligiblePage(tab.url, settings) ||
+        injectingTabs.has(tab.id)
+      )
+        return;
+      ownedTabId = tab.id;
+      injectingTabs.add(tab.id);
+      const pattern = hostPermissionPattern(tab.url);
+      if (
+        !pattern ||
+        !(await browser.permissions.contains({ origins: [pattern] })) ||
+        !(await browser.windows.get(tab.windowId)).focused
+      )
+        return;
+      try {
+        // Existing scripts resume through the storage listener. Only missing
+        // scanners, including tabs opened during a pause, need reinjection.
+        const reply = await browser.tabs.sendMessage(
+          tab.id,
+          { type: 'label-ai:scanner-present' },
+          { frameId: 0 },
+        );
+        if (reply?.present === true) return;
+      } catch {
+        // No receiving end is expected if the tab has never been injected.
+      }
+      if (!(await readSettings()).enabled) return;
+      await browser.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: true },
+        files: ['/content-scripts/media.js'],
+      });
+    } catch {
+      // Browser-controlled site restrictions can forbid injection. Native
+      // registration still covers subsequent permitted navigations.
+    } finally {
+      if (ownedTabId !== undefined) injectingTabs.delete(ownedTabId);
+    }
   }
   let registration = Promise.resolve();
   const syncRegistration = () => {
@@ -194,10 +251,12 @@ export default defineBackground(() => {
                 });
           const allowed =
             !abort.signal.aborted && (await validSender(sender, await readSettings()));
+          const experimental =
+            LOCAL_TEST_BUILD && localTestDecision(true, sender.url, input.kind, result);
           finish({
             ...noLabel(input, result.status),
-            shouldLabel: allowed && result.shouldLabel,
-            policyVersion: result.policyVersion,
+            shouldLabel: allowed && (result.shouldLabel || experimental),
+            policyVersion: experimental ? LOCAL_TEST_POLICY_VERSION : result.policyVersion,
             expiresAt: Date.now() + 60_000,
           });
         } catch {
@@ -237,6 +296,13 @@ export default defineBackground(() => {
 
   browser.runtime.onMessage.addListener((message, sender) => {
     if (isAnalyzeRequest(message)) return analyze(message, sender);
+    if (message?.type === 'label-ai:can-scan')
+      return readSettings()
+        .then((settings) => validSender(sender, settings))
+        .then(
+          (allowed) => ({ allowed }),
+          () => ({ allowed: false }),
+        );
     if (message?.type === 'label-ai:cancel' && sender.id === browser.runtime.id && sender.tab?.id) {
       const documentId = sender.documentId ?? `${sender.frameId ?? 0}:${sender.url}`;
       const key = scopedKey(sender.tab.id, documentId, message.requestId);
@@ -268,22 +334,12 @@ export default defineBackground(() => {
   });
   browser.permissions.onRemoved.addListener(() => {
     void clear();
-    void (async () => {
-      const settings = await readSettings();
-      const approvedOrigins: string[] = [];
-      for (const origin of settings.approvedOrigins)
-        if (await browser.permissions.contains({ origins: [hostPermissionPattern(origin)!] }))
-          approvedOrigins.push(origin);
-      if (
-        approvedOrigins.length !== settings.approvedOrigins.length &&
-        JSON.stringify(await readSettings()) === JSON.stringify(settings)
-      )
-        await writeSettings({ ...settings, approvedOrigins });
-      await syncRegistration();
-    })().catch(() => {});
   });
   browser.permissions.onAdded.addListener(() => {
-    void syncRegistration().catch(() => {});
+    void syncRegistration()
+      .then(readSettings)
+      .then((settings) => injectActiveTab(settings))
+      .catch(() => {});
   });
   browser.tabs.onActivated.addListener(({ tabId }) => {
     for (const [key, job] of pending)
@@ -292,6 +348,9 @@ export default defineBackground(() => {
         queue.cancel(key);
         job.finish(noLabel(job.input, 'CANCELED'));
       }
+    void readSettings()
+      .then((settings) => injectActiveTab(settings, tabId))
+      .catch(() => {});
   });
   browser.tabs.onRemoved.addListener((tabId) => {
     for (const [key, job] of pending)
@@ -309,7 +368,9 @@ export default defineBackground(() => {
       }
   });
   browser.runtime.onInstalled.addListener(() => {
-    void syncRegistration().catch(() => {});
+    void migrateSettings()
+      .then(syncRegistration)
+      .catch(() => {});
   });
   browser.runtime.onStartup.addListener(() => {
     void syncRegistration().catch(() => {});

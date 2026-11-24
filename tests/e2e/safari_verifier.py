@@ -36,7 +36,7 @@ def simulator_device(requested=None):
 
 
 def run(harness, extension=None, ios_simulator=False, simulator_udid=None, *,
-        install_only=False, pregrant_test_origin=False):
+        install_only=False):
     if ios_simulator:
         simulator_udid = simulator_device(simulator_udid)
         print(json.dumps({"safari_step":"simulator.launch_safari","udid":simulator_udid}),flush=True)
@@ -98,8 +98,7 @@ def run(harness, extension=None, ios_simulator=False, simulator_udid=None, *,
             if install_only:
                 result = run_install_smoke(session, webdriver, extension)
             else:
-                result = run_extension(session, webdriver, extension,
-                                       pregrant_test_origin=pregrant_test_origin)
+                result = run_extension(session, webdriver, extension)
             print(json.dumps({"native_safari_extension":result,"ios_simulator":ios_simulator}),flush=True)
     finally:
         try:
@@ -115,15 +114,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("harness",type=Path)
     parser.add_argument("--extension",type=Path,help="Path to the packaged Safari WebExtension")
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--install-only", action="store_true", help="Verify native installation of the exact package; does not exercise the overlay")
-    mode.add_argument("--pregrant-test-origin", action="store_true", help="Run strict overlay acceptance with a fresh, disposable loopback-only test copy")
+    parser.add_argument("--install-only", action="store_true", help="Verify native installation of the exact package; does not exercise the overlay")
     parser.add_argument("--ios-simulator",action="store_true",help="Run the same checks in native Safari on an available iOS Simulator")
     parser.add_argument("--simulator-udid",help="Exact booted iOS Simulator UDID; otherwise require exactly one booted iOS device")
     args=parser.parse_args()
     if args.simulator_udid and not args.ios_simulator:
         parser.error("--simulator-udid requires --ios-simulator")
-    if (args.install_only or args.pregrant_test_origin) and not args.extension:
+    if args.install_only and not args.extension:
         parser.error("The extension test mode requires --extension")
     run(args.harness,args.extension,args.ios_simulator,args.simulator_udid,
-        install_only=args.install_only,pregrant_test_origin=args.pregrant_test_origin)
+        install_only=args.install_only)

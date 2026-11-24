@@ -16,12 +16,8 @@ it('leaves a private document before mounting an overlay or observing its media'
 });
 
 it('checks every accessible frame ancestor before acquiring pixels and rejects an inaccessible parent', async () => {
-  const { eligibleDocumentChain } = await import('../src/core/policy');
-  const settings = {
-    enabled: true,
-    consentVersion: 1,
-    approvedOrigins: ['https://public.example'],
-  };
+  const { eligibleDocumentChain, DEFAULT_SETTINGS } = await import('../src/core/policy');
+  const settings = DEFAULT_SETTINGS;
   function frame(url: string, password = false, parent?: Window) {
     const result = {
       location: new URL(url),

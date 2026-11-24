@@ -1,6 +1,6 @@
 # Label.ai
 
-Label.ai is a WXT browser extension that scans visible media on sites you enable. When it can verify a signed declaration that the visual was AI-generated, it adds **AI Slop Detected 🤮** to the upper-left corner. There is one brief animation, with a static version for people who prefer reduced motion. The badge has no tooltip, score or click action.
+Label.ai is a WXT browser extension that automatically scans visible media on browser-permitted public websites. When it can verify a signed declaration that the visual was AI-generated, it adds **AI Slop Detected 🤮** to the upper-left corner. There is one brief animation, with a static version for people who prefer reduced motion. The badge has no tooltip, score or click action.
 
 This is a development preview for Chromium, Google Chrome, Edge, Brave, Opera, and Safari. Most social-network images and videos do not expose an intact, verifiable credential to an extension. Such media may stay unlabeled. The included local image and video analysis code is experimental. Its scores cannot currently create a public label. A missing label conveys no information about authenticity.
 
@@ -9,18 +9,35 @@ This is a development preview for Chromium, Google Chrome, Edge, Brave, Opera, a
 1. Install Node.js 24, pnpm 11.25.0 and Python 3.12. Clone this repository and check out the development branch or its merged successor.
 2. Run `make bootstrap` and `make build`. The first bootstrap downloads pinned development dependencies, model weights and test fixtures. Browser analysis runs locally with package resources.
 3. In a desktop Chromium browser with unpacked extension support, open its extensions manager, enable Developer mode, choose **Load unpacked** and select `apps/extension/.output/chrome-mv3`. The ZIP made by `make package` contains the same directory contents. Extract it before loading.
-4. Click the extension toolbar icon. Enter a public HTTPS site in **Site address**, choose **Enable on this site**, approve the browser prompt and reload the page. The privacy page also lets you pause, remove individual grants, and clear local settings.
-5. For a temporary macOS Safari install, use **Add Temporary Extension…** in Safari’s developer settings and select the unpacked `safari-mv3` directory. For an Apple containing app, run `make safari-xcode` on a Mac with Xcode to create the containing apps. Build the macOS app or the iOS app for a simulator/device in Xcode, then enable the extension in Safari settings and grant site access. The Safari ZIP contains WebExtension resources for packaging. See the compatibility and release documents before distribution.
+4. Grant browser-wide website access during installation. Label.ai automatically scans eligible webpages you visit. Refresh a tab that was already open when you installed the extension. The toolbar opens global pause, resume and data-clearing controls. No site addresses need to be entered.
+5. For a temporary macOS Safari install, use **Add Temporary Extension…** in Safari’s developer settings and select the unpacked `safari-mv3` directory. For an Apple containing app, run `make safari-xcode` on a Mac with Xcode to create the containing apps. Build the macOS app or the iOS app for a simulator/device in Xcode, then enable the extension in Safari settings and grant **All Websites** access where supported. The Safari ZIP contains WebExtension resources for packaging. See the compatibility and release documents before distribution.
+
+### Interactive local detector test
+
+The Local Test build automatically exercises exploratory forensic labels on browser-permitted HTTP loopback test pages. It uses the real on-device model's uncalibrated score and retains the normal source, visibility, permission and cancellation guards. The regular Chromium and Safari packages retain the production quality gate. False positives and missed positives are expected in Local Test.
+
+From the project root, with bootstrap already completed:
+
+```sh
+npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:chrome:test
+python3 tools/test_gallery.py --prepare
+```
+
+Use the first command to avoid old Corepack loader incompatibilities. The build is in `apps/extension/.output/chrome-mv3-local-test`. In Chrome's extensions manager, disable the regular Label.ai extension to avoid duplicate overlays, then choose **Load unpacked** and select that directory. Check that the installed name reads **Label.ai (Local Test)**.
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765) and the Local Test build will scan it automatically. If this gallery was already open, reload it. Keep the page in focus while scrolling through reference images. The gallery contains authentic samples, signed and unsigned generated images, and an optional local file picker. The file picker displays selected images and clips using browser object URLs without submitting them to the publisher or another service. Run with `--videos` to include the pinned video reference clips (combine with `--prepare` for the first run). Ground truth shown by the gallery only identifies the reference asset; the extension must independently score the displayed media.
+
+The model can fail to identify even a known generated file. A badge in this package is an experimental decision, and not a certified origin verdict. The production release model and documented benchmark results are in [ml/README.md](ml/README.md).
 
 ### Try a known positive
 
-After bootstrap, run `python3 tools/demo_page.py` and open `http://127.0.0.1:8765`. Enable that exact address in Label.ai and reload the page. The tabby cat carries a signed Adobe Firefly creation record and should receive the badge. The conventional gradient should stay unlabeled. The server binds to loopback and only serves sample media. Press Ctrl+C to close it.
+After bootstrap, run `python3 tools/demo_page.py` and open `http://127.0.0.1:8765`. Label.ai automatically scans the page when browser access is allowed. The tabby cat carries a signed Adobe Firefly creation record and should receive the badge. The conventional gradient should stay unlabeled. The server binds to loopback and only serves sample media. Press Ctrl+C to close it.
 
 ## What runs on the device
 
 | Part | Responsibility |
 | --- | --- |
-| `apps/extension` | Site grants, visible-page discovery, bounded media capture, background jobs, source binding, privacy controls, and the Svelte 5 / SMUI overlay. |
+| `apps/extension` | Automatic scanning, browser host access, visible-page discovery, bounded media capture, background jobs, source binding, privacy controls, and the Svelte 5 / SMUI overlay. |
 | `packages/provenance` | Offline C2PA verification against packaged trust anchors, signed content binding and whole-asset creation scope. |
 | `packages/detector`, `ml` | Local ONNX Runtime Web image inference, temporal video features, checksummed model provisioning, policy gates and developer measurements. |
 | `tools`, `tests` | Evaluation, package auditing, reproducible ZIPs, browser acceptance tests, Apple packaging and generated test fixtures. |
@@ -38,6 +55,6 @@ make test-e2e
 make package
 ```
 
-Run `make safari-xcode` and `python3 tools/build_apple_host.py artifacts/safari-xcode` on macOS. The standalone browser test accepts `--browser /path/to/executable` to exercise the desktop browsers listed in the support matrix. The macOS CI job also runs the real signature verifier in native Safari through Apple’s WebDriver. Test the unmodified ZIP in a real profile before sharing it. The headless loopback test uses a temporary copy with a pregranted fixture origin to exercise the permission and labeling flow.
+Run `make safari-xcode` and `python3 tools/build_apple_host.py artifacts/safari-xcode` on macOS. The standalone browser test accepts `--browser /path/to/executable` to exercise the desktop browsers listed in the support matrix. The macOS CI job also runs the real signature verifier in native Safari through Apple’s WebDriver. Test the unmodified ZIP in a real profile before sharing it. The headless Chromium tests install the exact package with browser-wide host permissions and exercise automatic scanning across two distinct fixture origins, global pause/resume, and labeling.
 
 [Specification](LABEL_AI_SPECIFICATION.md) · [Browser support](docs/BROWSER_SUPPORT.md) · [Safari acceptance](docs/SAFARI_ACCEPTANCE.md) · [Apple’s Safari testing guide](https://developer.apple.com/documentation/safariservices/running-your-safari-web-extension) · [Progress and verification](docs/PROGRESS.md) · [Completion audit](docs/COMPLETION_AUDIT.md) · [Release gates](docs/RELEASE_GATES.md) · [Requirements](docs/REQUIREMENTS_TRACEABILITY.md) · [Evaluation](docs/EVALUATION.md)

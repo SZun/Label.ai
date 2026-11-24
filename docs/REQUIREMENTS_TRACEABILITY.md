@@ -11,7 +11,7 @@ The IDs and short descriptions come from the preserved original proposal. Status
 | GOV-05 | Complete verification and truthful status | Partial | Progress record and CI report distinguish observed results from open gates. |
 | STACK-01 | Chrome MV3/WXT/Svelte 5/TS/SMUI | Partial | WXT Chromium and Safari targets, Svelte components and SMUI, pinned workspace and separate browser acceptance. |
 | STACK-02 | FastAPI + GraphQL client/server | Superseded | On-device messages connect the page and background. There is no GraphQL service or client. |
-| STACK-03 | PostgreSQL when durable persistence needed | Superseded | Consent lives in browser local storage. No PostgreSQL service is needed. |
+| STACK-03 | PostgreSQL when durable persistence needed | Superseded | Global scanning preference lives in browser local storage. No PostgreSQL service is needed. |
 | UX-01 | Exact single label with emoji | Partial | SlopLabel.svelte and label.test.ts check the exact text. Browser test checks one badge on the signed fixture. |
 | UX-02 | Material-style pill, upper-left overlay | Partial | OverlayRoot.svelte and label.scss implement the anchored pill. Zoom and physical device visual testing remain. |
 | UX-03 | Eye-catching one-time animation | Partial | Label CSS, per-source state and reduced-motion browser assertion. Scroll/re-entry needs live acceptance. |
@@ -25,7 +25,7 @@ The IDs and short descriptions come from the preserved original proposal. Status
 | DISC-05 | Visibility scheduling and dedup | Partial | Bounded queues, retries and visibility checks are tested. The 240-item browser fixture passed on the five Chromium targets. |
 | DISC-06 | Priority websites | Open | docs/BROWSER_SUPPORT.md declares the status of each named public site. |
 | DISC-07 | MV3 restart resilience | Partial | Stable registrations on worker startup and per-source bounded retry tests. The browser acceptance opens the same profile across restarts; worker termination during a positive job needs device-specific evidence. |
-| ACQ-01 | Consent and public-context policy | Partial | Per-origin opt-in, active tab, password/private-path checks and revocation. Private context cannot always be inferred. |
+| ACQ-01 | Consent and public-context policy | Partial | Installation host permission, automatic scanning, global pause/resume, active tab, password/private-path checks and browser permission revocation. Private context cannot always be inferred. |
 | ACQ-02 | Safe bounded image/video acquisition | Partial | Bounded rendered pixels, embedded/Blob originals, digest-checked publisher sources and cache-only JPEG/static PNG paths. |
 | ACQ-03 | Protected/unavailable media abstention | Partial | Protected or unreadable pixels and unsupported types fail closed. DRM/MSE device coverage remains. |
 | ACQ-04 | Representation and coverage fidelity | Partial | Provenance requires original bytes, frame evidence carries timestamps and bounded coverage. Full real-world trials pending. |
@@ -33,7 +33,7 @@ The IDs and short descriptions come from the preserved original proposal. Status
 | API-02 | Binary data plane and integrity | Superseded | No upload endpoint, upload capability, remote tickets or data plane. |
 | API-03 | Minimal client result | Implemented | LocalDecision returns a scoped boolean, status, expiry and version. The page UI shows only a badge. |
 | API-04 | Job lifecycle and recovery | Partial | Local queue, cancellation, generation and expiry. Hosted leases do not apply; worker restart needs acceptance. |
-| API-05 | Authentication and authorization | Superseded | Same-extension sender, active tab and exact approved origin replace server authentication. |
+| API-05 | Authentication and authorization | Superseded | Same-extension sender, active tab and actual browser host permission replace server authentication. |
 | API-06 | GraphQL resource controls | Superseded | Bounded local messages, payload limits and scheduling replace query-cost/rate controls. |
 | ML-01 | C2PA verification | Partial | Real offline C2PA WASM checks generated, edited, untrusted, tampered, expired and unsigned originals. Additional scope checks abstain on ambiguous content changes. Video positives need fixtures. |
 | ML-02 | Watermark adapter architecture | Open | An offline watermark verifier with an approved license/validated provider has not been integrated; cloud APIs are excluded. |
@@ -53,7 +53,7 @@ The IDs and short descriptions come from the preserved original proposal. Status
 | DATA-01 | Verified exact-content cache | Superseded | No persistent verdict reuse across media. Transient decisions bind to an individual source and expire. |
 | DATA-02 | Durable recovery if production enabled | Superseded | The browser performs local ephemeral work. There is no remote durable job store. |
 | DATA-03 | Data minimization and deletion | Partial | Settings-only durable data, transient buffers, clearing and cancellation; native crash/restart evidence pending. |
-| SEC-01 | Least privilege and consent | Partial | Manifest policy auditing, optional host permissions, local consent and pause/remove. Explicit private-state and frame-ancestry checks, permission failure handling and revocation. Native Safari permission prompt remains pending. |
+| SEC-01 | Least privilege and consent | Partial | Manifest policy auditing, required HTTP/HTTPS host permissions for automatic scanning, global pause/resume, and browser grant enforcement. Explicit private-state and frame-ancestry checks, permission failure handling and revocation. Native Safari permission prompt remains pending. |
 | SEC-02 | SSRF and network isolation | Partial | No server-side fetcher. Same-origin credential-free eligible source, hash checks and offline credential verification. |
 | SEC-03 | Malicious media and resource limits | Partial | Size limits, bounded queues and timeouts. Independent adversarial decoder/resource review remains. |
 | SEC-04 | Extension trust boundaries | Partial | Scoped sender, active tab checks, extension-page CSP/package audit and input validators. Browser review continues. |

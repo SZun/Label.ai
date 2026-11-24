@@ -2,21 +2,24 @@
   import { onMount } from 'svelte';
   import Button from '@smui/button';
   import { browser } from 'wxt/browser';
+  import { DEFAULT_SETTINGS, type LocalSettings } from '../core/policy';
   import {
-    CONSENT_VERSION,
-    DEFAULT_SETTINGS,
-    hostPermissionPattern,
-    normalizeOrigin,
-    type LocalSettings,
-  } from '../core/policy';
+    LOCAL_TEST_BUILD,
+    LOCAL_TEST_IMAGE_THRESHOLD,
+    LOCAL_TEST_VIDEO_THRESHOLD,
+  } from '../core/local-test';
   import { readSettings, writeSettings } from '../transport/settings';
-  let settings: LocalSettings = $state({ ...DEFAULT_SETTINGS });
-  let site = $state('');
-  let message = $state('');
+
+  let settings: LocalSettings = $state({ ...DEFAULT_SETTINGS, enabled: false });
+  let message = $state('Loading scanning status…');
   let busy = $state(true);
+  let loaded = $state(false);
+
   onMount(async () => {
     try {
       settings = await readSettings();
+      message = settings.enabled ? 'Automatic scanning is on.' : 'Scanning is paused.';
+      loaded = true;
     } catch {
       message = 'Local settings could not be loaded. Reopen this page to try again.';
     } finally {
@@ -24,131 +27,45 @@
     }
   });
 
-  async function enable() {
-    if (busy) return;
-    const origin = normalizeOrigin(site.trim());
-    if (!origin) {
-      message = 'Enter a public HTTPS site address.';
-      return;
-    }
+  async function setEnabled(enabled: boolean) {
+    if (busy || !loaded) return;
     busy = true;
-    message = '';
     try {
-      const permission = { origins: [hostPermissionPattern(origin)!] };
-      // Request directly in the user gesture. Safari may reject or deny a redundant
-      // request; an existing grant counts only when the browser confirms it.
-      const request = browser.permissions.request(permission).catch(() => false);
-      const existing = browser.permissions.contains(permission).catch(() => false);
-      const alreadyGranted = new Promise<boolean>((resolve) => {
-        void existing.then((granted) => {
-          if (granted) resolve(true);
-        });
-      });
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const expired = new Promise<boolean>((resolve) => {
-        timer = setTimeout(() => resolve(false), 30_000);
-      });
-      const granted = await Promise.race([
-        request.then(async (granted) => granted || (await existing)),
-        alreadyGranted,
-        expired,
-      ]);
-      clearTimeout(timer);
-      if (!granted) {
-        message =
-          'Site access was not granted. Check this website’s browser extension permission and try again.';
-        return;
-      }
-      const previous = await readSettings();
-      if (!previous.approvedOrigins.includes(origin) && previous.approvedOrigins.length >= 100) {
-        message = 'The site limit has been reached. Remove an approved site and try again.';
-        return;
-      }
-      const next = {
-        enabled: true,
-        consentVersion: CONSENT_VERSION,
-        approvedOrigins: [...new Set([...previous.approvedOrigins, origin])],
-      };
+      const next = { ...DEFAULT_SETTINGS, enabled };
       await writeSettings(next);
       settings = next;
       const registration = await browser.runtime.sendMessage({ type: 'label-ai:sync' });
       if (!registration?.registered) throw new Error('Registration failed');
-      message = 'Local analysis enabled. Reload existing pages on this site.';
+      message = enabled
+        ? 'Scanning resumed.'
+        : 'Scanning paused. Existing labels have been removed.';
     } catch {
-      message =
-        'Label.ai could not activate this site. Check the browser extension permission and try again.';
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function pause() {
-    if (busy) return;
-    busy = true;
-    try {
-      const next = { ...(await readSettings()), enabled: false };
-      await writeSettings(next);
-      settings = next;
-      message = 'Paused. Existing labels have been removed.';
-    } catch {
-      message = 'Pausing failed. Try again or disable Label.ai in your browser.';
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function remove(origin: string) {
-    if (busy) return;
-    busy = true;
-    try {
-      const previous = await readSettings();
-      const next = {
-        ...previous,
-        approvedOrigins: previous.approvedOrigins.filter((entry) => entry !== origin),
-      };
-      await writeSettings(next);
-      settings = next;
-      const pattern = hostPermissionPattern(origin)!;
-      if (!next.approvedOrigins.some((entry) => hostPermissionPattern(entry) === pattern))
-        if (!(await browser.permissions.remove({ origins: [pattern] }))) {
-          message =
-            'Local consent removed. To withdraw the remaining browser grant, use browser settings.';
-          return;
+      if (enabled) {
+        try {
+          await writeSettings({ ...DEFAULT_SETTINGS, enabled: false });
+          settings = { ...DEFAULT_SETTINGS, enabled: false };
+        } catch {
+          // The browser permission still controls whether any page may be scanned.
         }
-      message = 'Site access removed.';
-    } catch {
-      message =
-        'Removing site access could not finish. Check the browser extension settings and try again.';
+      }
+      message = enabled
+        ? 'Could not resume scanning. Check browser extension access and try again.'
+        : 'Could not finish pausing. Try again or disable Label.ai in your browser.';
     } finally {
       busy = false;
     }
   }
 
   async function clear() {
-    if (busy) return;
+    if (busy || !loaded) return;
     busy = true;
     try {
-      const previous = await readSettings();
-      const origins = [
-        ...new Set(previous.approvedOrigins.map((origin) => hostPermissionPattern(origin)!)),
-      ];
-      await writeSettings({ ...DEFAULT_SETTINGS });
-      settings = { ...DEFAULT_SETTINGS };
-      const [clearResult, permissionResult] = await Promise.allSettled([
-        browser.runtime.sendMessage({ type: 'label-ai:clear' }),
-        origins.length ? browser.permissions.remove({ origins }) : Promise.resolve(true),
-      ]);
-      if (
-        clearResult.status !== 'fulfilled' ||
-        !clearResult.value?.cleared ||
-        permissionResult.status !== 'fulfilled' ||
-        !permissionResult.value
-      ) {
-        message =
-          'Local consent cleared. Check browser permissions and reopen Label.ai to try clearing again.';
-        return;
-      }
-      message = 'Local settings and in-memory analysis results cleared.';
+      const next = { ...DEFAULT_SETTINGS, enabled: false };
+      await writeSettings(next);
+      settings = next;
+      const result = await browser.runtime.sendMessage({ type: 'label-ai:clear' });
+      if (!result?.cleared) throw new Error('Clear failed');
+      message = 'Local data cleared. Scanning remains paused.';
     } catch {
       message = 'Clearing could not finish. Check browser extension settings and try again.';
     } finally {
@@ -157,58 +74,64 @@
   }
 </script>
 
-<svelte:head><title>Label.ai privacy and site access</title></svelte:head>
+<svelte:head
+  ><title>{LOCAL_TEST_BUILD ? 'Label.ai (Local Test)' : 'Label.ai privacy and site access'}</title
+  ></svelte:head
+>
 <main>
-  <p class="brand">Label.ai</p>
+  <p class="brand">{LOCAL_TEST_BUILD ? 'Label.ai (Local Test)' : 'Label.ai'}</p>
   <h1>Your media stays on your device.</h1>
   <p>
     Label.ai analyzes visible images and video frames locally. It never uploads media, screenshots,
     hashes, browsing history or detection results. It has no cloud fallback or analytics.
   </p>
-  <p>
-    Enable access only on public sites you want analyzed. Private-message, account, payment and
-    password pages are excluded. Inaccessible media stays unlabeled.
-  </p>
+  {#if LOCAL_TEST_BUILD}
+    <aside class="test-notice" aria-label="Experimental test build">
+      <strong>Experimental local test build</strong>
+      <p>
+        This build automatically scans HTTP loopback pages granted by your browser. Image labels use
+        an exploratory raw model threshold of {LOCAL_TEST_IMAGE_THRESHOLD}; video labels require
+        eligible temporal evidence and a raw score of at least {LOCAL_TEST_VIDEO_THRESHOLD}. These
+        raw scores are uncalibrated. False positives and missed AI media are possible.
+      </p>
+      <p>
+        Use a regular browser window and disable the normal Label.ai extension to avoid duplicate
+        labels.
+      </p>
+    </aside>
+  {:else}
+    <p>
+      Label.ai automatically scans eligible websites as soon as your browser grants extension
+      access. Private-message, account, payment and password pages are excluded. Inaccessible media
+      stays unlabeled.
+    </p>
+  {/if}
   <p>
     Some publishers provide content-addressed images. Label.ai may download those images from the
     same site, without cookies, to verify their signed credentials on your device. It never sends
     them elsewhere.
   </p>
-  <p>
-    A label indicates an enabled detection policy found sufficient evidence. Missing labels do not
-    prove authenticity. Experimental forensic models remain disabled for positive labels until
-    independently validated.
-  </p>
-  <section aria-labelledby="site-heading">
-    <h2 id="site-heading">Site access</h2>
-    <label for="site">Site address</label>
-    <input
-      id="site"
-      type="url"
-      bind:value={site}
-      disabled={busy}
-      placeholder="https://example.com"
-      autocomplete="off"
-    />
-    <Button variant="raised" onclick={enable} disabled={busy}>Enable on this site</Button>
-    <p class="small">
-      Enabling confirms local media analysis on the public pages of this site. Your browser will
-      also ask for site access.
+  {#if !LOCAL_TEST_BUILD}
+    <p>
+      A label indicates an enabled detection policy found sufficient evidence. Missing labels do not
+      prove authenticity. Experimental forensic models remain disabled for positive labels until
+      release accuracy requirements are met.
     </p>
-    {#if settings.approvedOrigins.length}<ul>
-        {#each settings.approvedOrigins as origin}<li>
-            <span>{origin}</span><Button
-              onclick={() => remove(origin)}
-              disabled={busy}
-              aria-label={`Remove ${origin}`}>Remove</Button
-            >
-          </li>{/each}
-      </ul>{/if}
+  {/if}
+  <section aria-labelledby="site-heading">
+    <h2 id="site-heading">Automatic scanning</h2>
+    <p>Site access is managed by your browser. You can pause scanning everywhere at any time.</p>
     <div class="actions">
-      <Button onclick={pause} disabled={busy}>Pause local analysis</Button><Button
-        onclick={clear}
-        disabled={busy}>Clear local data</Button
-      >
+      {#if settings.enabled}
+        <Button variant="raised" onclick={() => setEnabled(false)} disabled={busy || !loaded}>
+          Pause scanning
+        </Button>
+      {:else}
+        <Button variant="raised" onclick={() => setEnabled(true)} disabled={busy || !loaded}>
+          Resume scanning
+        </Button>
+      {/if}
+      <Button onclick={clear} disabled={busy || !loaded}>Clear local data</Button>
     </div>
     <p role="status">{message}</p>
   </section>
@@ -241,39 +164,20 @@
   p {
     line-height: 1.6;
   }
+  .test-notice {
+    border: 1px solid #a85a00;
+    border-radius: 4px;
+    padding: 16px;
+    background: #fff3e0;
+    color: #542c00;
+  }
+  .test-notice p {
+    margin-bottom: 0;
+  }
   section {
     border-top: 1px solid #ddd;
     margin-top: 28px;
     padding-top: 12px;
-  }
-  label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-  input {
-    display: block;
-    box-sizing: border-box;
-    width: 100%;
-    border: 1px solid #555;
-    border-radius: 4px;
-    padding: 12px;
-    font: inherit;
-    margin-bottom: 12px;
-  }
-  .small {
-    font-size: 13px;
-    color: #555;
-  }
-  ul {
-    list-style: none;
-    padding: 0;
-  }
-  li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
   }
   .actions {
     display: flex;
@@ -295,8 +199,7 @@
     color: #fff;
     background: #b71c1c;
   }
-  :global(button:focus-visible),
-  input:focus-visible {
+  :global(button:focus-visible) {
     outline: 3px solid #1557a2;
     outline-offset: 3px;
   }

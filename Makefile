@@ -16,7 +16,7 @@ verify: test
 	python3 tools/audit_packages.py apps/extension/.output/chrome-mv3 apps/extension/.output/safari-mv3
 test-e2e:
 	python3 tests/e2e/browser_test.py --build apps/extension/.output/chrome-mv3 --install-only
-	python3 tests/e2e/browser_test.py --build apps/extension/.output/chrome-mv3 --pregrant-test-origin
+	python3 tests/e2e/browser_test.py --build apps/extension/.output/chrome-mv3
 package:
 	python3 tools/zip_extension.py apps/extension/.output/chrome-mv3 artifacts/packages/label-ai-chromium.zip
 	python3 tools/zip_extension.py apps/extension/.output/safari-mv3 artifacts/packages/label-ai-safari.zip

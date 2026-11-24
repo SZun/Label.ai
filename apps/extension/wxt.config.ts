@@ -7,11 +7,18 @@ import { ICON_PATHS, writeIcons } from './icon-assets';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const provenanceRequire = createRequire(join(root, '../../packages/provenance/package.json'));
+const localTestBuild = process.env.LABEL_AI_LOCAL_TEST === '1';
+const loopbackHosts = ['http://localhost/*', 'http://127.0.0.1/*'];
+const hosts = localTestBuild ? loopbackHosts : ['http://*/*', 'https://*/*'];
 
 export default defineConfig({
   modules: ['@wxt-dev/module-svelte'],
   manifestVersion: 3,
+  ...(localTestBuild
+    ? { targetBrowsers: ['chrome'], outDirTemplate: '{{browser}}-mv{{manifestVersion}}-local-test' }
+    : {}),
   vite: () => ({
+    define: { __LABEL_AI_LOCAL_TEST__: JSON.stringify(localTestBuild) },
     plugins: [
       {
         name: 'label-ai-packaged-wasm-reference',
@@ -30,16 +37,17 @@ export default defineConfig({
     ],
   }),
   manifest: {
-    name: 'Label.ai',
-    description:
-      'Private, on-device analysis of visible images and videos. Media never leaves your device for analysis.',
+    name: localTestBuild ? 'Label.ai (Local Test)' : 'Label.ai',
+    description: localTestBuild
+      ? 'Experimental, on-device forensic labels for localhost test pages only.'
+      : 'Private, on-device analysis of visible images and videos. Media never leaves your device for analysis.',
     version: '0.1.0',
     icons: ICON_PATHS,
     incognito: 'not_allowed',
     permissions: ['storage', 'scripting'],
-    optional_host_permissions: ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'],
+    host_permissions: [...hosts],
     action: {
-      default_title: 'Label.ai privacy and site access',
+      default_title: localTestBuild ? 'Label.ai (Local Test)' : 'Label.ai privacy and site access',
       default_icon: {
         16: ICON_PATHS['16']!,
         32: ICON_PATHS['32']!,
@@ -54,10 +62,15 @@ export default defineConfig({
   },
   hooks: {
     'build:manifestGenerated': (_wxt, manifest) => {
-      // WXT infers required hosts from runtime content-script matches. Access is optional here.
-      delete (manifest as { host_permissions?: string[] }).host_permissions;
+      // The browser's installation grant authorizes the exact declared scope.
+      // WXT derives additional matches from runtime scripts, so pin the native
+      // grant and generated stylesheet access to this build's intended hosts.
+      manifest.host_permissions = [...hosts];
+      for (const resource of manifest.web_accessible_resources ?? []) {
+        if (typeof resource !== 'string') resource.matches = [...hosts];
+      }
       if (manifest.content_scripts?.length)
-        throw new Error('Label.ai must register scripts only after site consent.');
+        throw new Error('Label.ai must register content scripts dynamically.');
     },
     'build:before': async () => {
       await writeIcons(join(root, 'public/icons'));

@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
 import sys
 from tempfile import TemporaryDirectory
 from playwright.sync_api import sync_playwright
@@ -36,41 +35,33 @@ def browser_session(pw, profile, launch, args):
 def run(args):
     build=args.build.resolve()
     manifest=json.loads((build/"manifest.json").read_text())
-    with publisher() as (origin,publisher_requests), TemporaryDirectory() as profile, sync_playwright() as pw:
-        if args.pregrant_test_origin:
-            # Headless Chromium cannot interact with the native site-grant bubble.
-            # Only this test copy adds the loopback publisher to required host grants.
-            copied = Path(profile)/"test-build"
-            shutil.copytree(build,copied)
-            test_manifest = dict(manifest)
-            pattern = "http://127.0.0.1/*"
-            test_manifest["host_permissions"] = list(dict.fromkeys(manifest.get("host_permissions",[])+[pattern]))
-            test_manifest["optional_host_permissions"] = [p for p in manifest.get("optional_host_permissions",[]) if p!=pattern]
-            (copied/"manifest.json").write_text(json.dumps(test_manifest))
-            build=copied
+    assert set(manifest.get("host_permissions", [])) == {"http://*/*", "https://*/*"}
+    assert not manifest.get("optional_host_permissions")
+    with publisher() as (origin,publisher_requests), publisher() as (second_origin,second_requests), TemporaryDirectory() as profile, sync_playwright() as pw:
         launch=["--disable-extensions-except="+str(build),"--load-extension="+str(build),
                 "--disable-background-networking","--disable-component-update","--disable-sync",
                 "--no-first-run","--no-default-browser-check","--disable-dev-shm-usage"]
         forbidden=[]
-        requests_seen = request_observer(origin, forbidden)
+        requests_seen = request_observer((origin, second_origin), forbidden)
         with browser_session(pw,profile,launch,args) as context:
             context.on("request", requests_seen)
             result = exercise_install(context,manifest,build,args,origin)
         if not args.install_only:
             with browser_session(pw,profile,launch,args) as context:
                 context.on("request", requests_seen)
-                result.update(exercise_restart(context, build, origin))
-            assert all(m=="GET" and "?" not in path for m,path in publisher_requests), publisher_requests
+                result.update(exercise_restart(context, build, origin, second_origin))
+            assert all(m=="GET" and "?" not in path for m,path in publisher_requests + second_requests)
         assert not forbidden, f"unexpected HTTP/WS traffic: {forbidden}"
         result["unexpected_requests"] = forbidden
         return result
 
 
-def request_observer(origin, forbidden):
+def request_observer(origins, forbidden):
     def requests_seen(request):
         if request.url.startswith(("http://","https://","ws://","wss://")):
-            path=request.url.removeprefix(origin)
-            expected=request.url.startswith(origin+"/") and (path=="/" or path.startswith("/assets/"))
+            origin=next((item for item in origins if request.url.startswith(item+"/")), None)
+            path=request.url.removeprefix(origin) if origin else ""
+            expected=origin is not None and (path=="/" or path.startswith("/assets/"))
             if not expected or request.method!="GET" or "?" in request.url:
                 forbidden.append([request.method,request.url.split("?")[0]])
     return requests_seen
@@ -82,38 +73,43 @@ def extension_id(build):
     return "".join(chars[int(h,16)] for h in hashlib.sha256(os.fsencode(build)).hexdigest()[:32])
 
 
-def exercise_install(context,manifest,build,args,origin):
+def wait_for_registration(context, build):
     ext = extension_id(build)
-    options_page=context.new_page()
-    options_page.goto(f"chrome-extension://{ext}/options.html")
-    options_page.get_by_role("heading",name="Site access").wait_for()
-    options_page.evaluate("chrome.runtime.sendMessage({type:'label-ai:sync'})")
     worker=next((w for w in context.service_workers if w.url.startswith(f"chrome-extension://{ext}/")),None)
     if worker is None:
         worker=context.wait_for_event("serviceworker",predicate=lambda w:w.url.startswith(f"chrome-extension://{ext}/"),timeout=12000)
+    registered=worker.evaluate("""async () => {
+      for(let attempt=0; attempt<60; attempt++) {
+        const scripts=await chrome.scripting.getRegisteredContentScripts();
+        if(scripts.some(script => script.id==='label-ai-media')) return true;
+        await new Promise(resolve=>setTimeout(resolve,200));
+      }
+      return false;
+    }""")
+    assert registered, "automatic scanning registration did not initialize"
+    return worker
+
+
+def exercise_install(context,manifest,build,args,origin):
+    ext = extension_id(build)
+    worker=wait_for_registration(context, build)
     version=context.browser.version if context.browser else None
-    # Record the packaged extension identity and actual engine for each independent run.
     print(f"Loaded {manifest['name']} {manifest['version']} ({ext}) on {version or args.browser}",flush=True)
-    options_path=manifest.get("options_ui",{}).get("page") or manifest.get("options_page") or manifest.get("action",{}).get("default_popup")
-    if not options_path:
-        raise AssertionError("missing site-access page")
+    options_path=manifest.get("options_ui",{}).get("page") or manifest.get("options_page")
+    assert options_path, "missing scanning controls"
     if args.install_only:
-        options_page.get_by_role("heading",name="Site access").wait_for()
+        options_page=context.new_page()
+        options_page.goto(f"chrome-extension://{ext}/{options_path}")
+        options_page.get_by_role("heading",name="Automatic scanning").wait_for()
         return {"installed":True,"version":version,"options":options_path}
+    # No options visit, per-site selection or fixture manifest modification.
     site=context.new_page()
+    site.bring_to_front()
     site.goto(origin)
     badge=site.get_by_text(TEXT,exact=True)
-    assert badge.count()==0, "unexpected badge before user grants access"
-
-    # Set permission through the options page's real user-gesture handler.
-    options_page.bring_to_front()
-    options_page.get_by_role("textbox").first.fill(origin)
-    options_page.get_by_role("button",name=args.enable_button).click()
-    options_page.get_by_text("Local analysis enabled.",exact=False).wait_for(timeout=12000)
-    options_page.wait_for_function("""async () => (await chrome.scripting.getRegisteredContentScripts()).some(script => script.id === 'label-ai-media')""",timeout=12000)
-    site.bring_to_front()
-    site.reload()
-    return exercise_page(site,worker,context,badge,version)
+    report=exercise_page(site,worker,context,badge,version)
+    report["automatic_first_site"]=True
+    return report
 
 
 def exercise_page(site,worker,context,badge,version):
@@ -220,19 +216,16 @@ def exercise_video(site, badge):
 
 
 
-def exercise_restart(context, build, origin):
-    """Reopen the actual persistent profile, verifying startup without another grant."""
-    options_page = context.new_page()
-    options_page.goto(f"chrome-extension://{extension_id(build)}/options.html")
-    options_page.get_by_role("button",name=f"Remove {origin}").wait_for(timeout=12000)
+def exercise_restart(context, build, origin, second_origin):
+    """Reopen the same profile and check automatic scanning across two distinct origins."""
+    wait_for_registration(context, build)
     site = context.new_page()
     site.bring_to_front()
     site.goto(origin)
     badge = site.get_by_text(TEXT, exact=True)
     badge.wait_for(state="visible", timeout=45000)
-    assert badge.count()==1, "expected a restored label without granting the site again"
+    assert badge.count()==1
 
-    # The label must return on viewport re-entry without replaying its entrance animation.
     site.evaluate("""() => {
       document.body.style.minHeight='2200px';
       window.scrollTo(0, 1800);
@@ -242,23 +235,34 @@ def exercise_restart(context, build, origin):
     badge.wait_for(state="visible", timeout=20000)
     assert badge.evaluate("(e)=>getComputedStyle(e).animationName")=="none"
 
-    options_page.bring_to_front()
-    options_page.get_by_role("button",name=f"Remove {origin}").click()
+    # Navigate to a second origin with no new permissions or website selection.
+    site.goto(second_origin)
+    badge.wait_for(state="visible", timeout=45000)
+    options_page = context.new_page()
+    options_page.goto(f"chrome-extension://{extension_id(build)}/options.html")
+    options_page.get_by_role("heading", name="Automatic scanning").wait_for()
+    options_page.get_by_role("button",name="Pause scanning").click()
     options_page.wait_for_function("async () => (await chrome.scripting.getRegisteredContentScripts()).length === 0")
     site.bring_to_front()
     badge.wait_for(state="detached",timeout=10000)
     site.reload()
     assert badge.count()==0
-    return {"persistent_browser_restart":True,"scroll_reentry_without_animation":True,"revocation":True}
+    options_page.bring_to_front()
+    options_page.get_by_role("button",name="Resume scanning").click()
+    options_page.wait_for_function("async () => (await chrome.scripting.getRegisteredContentScripts()).some(s=>s.id==='label-ai-media')")
+    site.bring_to_front()
+    # The tab was loaded while paused. Resuming and returning to it should
+    # inject the newly registered scanner into the existing document.
+    badge.wait_for(state="visible", timeout=45000)
+    return {"persistent_browser_restart":True,"scroll_reentry_without_animation":True,
+            "automatic_second_origin": True, "global_pause_and_resume":True}
 
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build",type=Path,required=True)
     parser.add_argument("--browser",default=os.getenv("LABEL_TEST_BROWSER"))
-    parser.add_argument("--pregrant-test-origin",action="store_true",help="Add loopback host grant to a disposable copy for headless E2E")
     parser.add_argument("--install-only",action="store_true")
-    parser.add_argument("--enable-button",default="Enable on this site")
     parser.add_argument("--report",type=Path)
     args=parser.parse_args()
     result=run(args)

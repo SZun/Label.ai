@@ -2,6 +2,7 @@ import { mount, unmount, flushSync } from 'svelte';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import Privacy from '../src/components/Privacy.svelte';
 import { readSettings, writeSettings } from '../src/transport/settings';
+import { CONSENT_VERSION } from '../src/core/policy';
 
 const api = vi.hoisted(() => ({
   request: vi.fn(),
@@ -20,67 +21,73 @@ vi.mock('../src/transport/settings', () => ({
 let app: ReturnType<typeof mount> | undefined;
 beforeEach(async () => {
   vi.resetAllMocks();
-  vi.mocked(readSettings).mockResolvedValue({
-    enabled: false,
-    consentVersion: 0,
-    approvedOrigins: [],
-  });
-  api.sendMessage.mockResolvedValue({ registered: true });
+  vi.mocked(readSettings).mockResolvedValue({ enabled: true, consentVersion: CONSENT_VERSION });
+  api.sendMessage.mockImplementation(async (message) =>
+    message.type === 'label-ai:clear' ? { cleared: true } : { registered: true },
+  );
   app = mount(Privacy, { target: document.body });
-  flushSync();
-  await vi.waitFor(() => {
-    const input = document.querySelector('#site') as HTMLInputElement;
-    expect(input.disabled).toBe(false);
-  });
-  const input = document.querySelector('#site') as HTMLInputElement;
-  input.value = 'https://news.example';
-  input.dispatchEvent(new Event('input', { bubbles: true }));
   flushSync();
 });
 afterEach(async () => {
   if (app) await unmount(app);
   document.body.innerHTML = '';
 });
-function enable() {
-  const button = Array.from(document.querySelectorAll('button')).find((button) =>
-    button.textContent?.includes('Enable on this site'),
+
+const button = (text: string) =>
+  Array.from(document.querySelectorAll('button')).find(
+    (element) => element.textContent?.trim() === text,
   );
-  button!.click();
-}
 const status = () => document.querySelector('[role="status"]')?.textContent;
 
-it('retains a browser grant when Safari rejects a redundant permission request', async () => {
-  api.request.mockRejectedValue(new Error('permission already granted'));
-  api.contains.mockResolvedValue(true);
-  enable();
-  await vi.waitFor(() => expect(status()).toContain('Local analysis enabled.'));
-  expect(writeSettings).toHaveBeenCalledWith({
-    enabled: true,
-    consentVersion: 1,
-    approvedOrigins: ['https://news.example'],
-  });
-  expect(api.request).toHaveBeenCalledOnce();
-  expect(api.contains).toHaveBeenCalledWith({ origins: ['https://news.example/*'] });
-});
-it('shows actionable permission denial and leaves local consent disabled', async () => {
-  api.request.mockResolvedValue(false);
-  api.contains.mockResolvedValue(false);
-  enable();
-  await vi.waitFor(() => expect(status()).toContain('Site access was not granted.'));
+it('shows automatic scanning without requiring a site address or an optional permission request', async () => {
+  await vi.waitFor(() => expect(button('Pause scanning')?.disabled).toBe(false));
+  expect(document.querySelector('#site-heading')?.textContent).toBe('Automatic scanning');
+  expect(status()).toContain('Automatic scanning is on.');
+  expect(document.querySelector('input')).toBeNull();
+  expect(api.request).not.toHaveBeenCalled();
   expect(writeSettings).not.toHaveBeenCalled();
 });
-it('reports registration failure without claiming analysis has started', async () => {
-  api.request.mockResolvedValue(true);
-  api.sendMessage.mockRejectedValue(new Error('registration unavailable'));
-  enable();
-  await vi.waitFor(() => expect(status()).toContain('could not activate'));
-  expect(status()).not.toContain('Local analysis enabled.');
+
+it('pauses and resumes globally without adding or removing host permission', async () => {
+  await vi.waitFor(() => expect(button('Pause scanning')?.disabled).toBe(false));
+  button('Pause scanning')!.click();
+  await vi.waitFor(() => expect(status()).toContain('Scanning paused.'));
+  expect(writeSettings).toHaveBeenLastCalledWith({
+    enabled: false,
+    consentVersion: CONSENT_VERSION,
+  });
+  expect(api.remove).not.toHaveBeenCalled();
+
+  button('Resume scanning')!.click();
+  await vi.waitFor(() => expect(status()).toContain('Scanning resumed.'));
+  expect(writeSettings).toHaveBeenLastCalledWith({
+    enabled: true,
+    consentVersion: CONSENT_VERSION,
+  });
+  expect(api.request).not.toHaveBeenCalled();
+  expect(api.sendMessage).toHaveBeenCalledWith({ type: 'label-ai:sync' });
 });
 
-it('does not wait indefinitely for a redundant native permission prompt when access is already confirmed', async () => {
-  api.request.mockReturnValue(new Promise(() => {}));
-  api.contains.mockResolvedValue(true);
-  enable();
-  await vi.waitFor(() => expect(status()).toContain('Local analysis enabled.'));
-  expect(writeSettings).toHaveBeenCalledOnce();
+it('clears analysis state and leaves scanning paused', async () => {
+  await vi.waitFor(() => expect(button('Clear local data')?.disabled).toBe(false));
+  button('Clear local data')!.click();
+  await vi.waitFor(() =>
+    expect(status()).toContain('Local data cleared. Scanning remains paused.'),
+  );
+  expect(writeSettings).toHaveBeenLastCalledWith({
+    enabled: false,
+    consentVersion: CONSENT_VERSION,
+  });
+  expect(api.sendMessage).toHaveBeenCalledWith({ type: 'label-ai:clear' });
+  expect(button('Resume scanning')).toBeTruthy();
+});
+
+it('shows registration failure without claiming scanning has resumed', async () => {
+  await vi.waitFor(() => expect(button('Pause scanning')?.disabled).toBe(false));
+  button('Pause scanning')!.click();
+  await vi.waitFor(() => expect(status()).toContain('Scanning paused.'));
+  api.sendMessage.mockRejectedValue(new Error('registration unavailable'));
+  button('Resume scanning')!.click();
+  await vi.waitFor(() => expect(status()).toContain('Could not resume scanning.'));
+  expect(status()).not.toContain('Scanning resumed.');
 });

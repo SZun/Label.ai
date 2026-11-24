@@ -4,7 +4,7 @@ This is the current implementation contract. The [original proposal](docs/histor
 
 ## The experience
 
-After the user enables access on a site, automatically inspect visible images and videos on the active page. Add exactly one noninteractive Material-style pill reading **AI Slop Detected 🤮** on a supported, confidently positive item. Position it at the upper left, clear of controls. Animate its entrance and brief red accent once per source, then settle to charcoal. Honor reduced motion, retain readable contrast, allow pointer events through and avoid layout shifts. Provide only the permission/privacy controls needed to enable or withdraw local analysis. No tooltips, score, dashboard or extra controls on the host page.
+Automatically inspect visible images and videos on the active webpage from installation, using the browser-wide HTTP/HTTPS access granted to the extension. Users do not need to enter website addresses or enable individual sites. Provide global pause and resume controls. Add exactly one noninteractive Material-style pill reading **AI Slop Detected 🤮** on a supported, confidently positive item. Position it at the upper left, clear of controls. Animate its entrance and brief red accent once per source, then settle to charcoal. Honor reduced motion, retain readable contrast, allow pointer events through and avoid layout shifts. Provide global scanning and privacy controls. The browser remains responsible for installation and website-access permissions. No tooltips, score, dashboard or extra controls on the host page.
 
 Treat fully or substantially generated visuals as eligible positives. Edits, CGI, a generated thumbnail, a short generated intro, uncertain composites, inaccessible inputs and errors must not cause a whole-asset label. Absence of a label conveys no verdict.
 
@@ -12,7 +12,7 @@ Treat fully or substantially generated visuals as eligible positives. Edits, CGI
 
 All decisions take place on the user's device. The extension has no upload endpoint. No browser-derived data or diagnostics may be sent for analysis. Bundle scripts, WASM, models, trust settings and policy. Do not use media-dependent network requests to discover manifests, validate watermarks or report errors. Ephemeral local buffers and optional bounded versioned local caches are permitted. Never store a browsing history. See the architecture decision for publisher downloads and source binding.
 
-Only analyze a visible, permitted page. Treat missing permission, incognito, private/sensitive contexts and uncertain acquisition conservatively. No browser debugger, tab recording, cookies or credential replay. The active media and its current source must match throughout the job, including after async inference. Cancel obsolete work and delete associated overlays immediately.
+Only analyze a visible, browser-permitted page. Manual per-site opt-in is superseded by the owner’s automatic-scanning requirement. The ordinary package requests HTTP and HTTPS host access on installation. The separate Local Test build is restricted to HTTP loopback pages and may exercise exploratory raw-score labels there. Treat missing permission, incognito, private/sensitive contexts and uncertain acquisition conservatively. No browser debugger, tab recording, cookies or credential replay. The active media and its current source must match throughout the job, including after async inference. Cancel obsolete work and delete associated overlays immediately.
 
 ## Architecture and compatibility
 

@@ -7,6 +7,7 @@
     "dev": "pnpm --filter @label-ai/extension dev",
     "build": "pnpm --filter @label-ai/extension build",
     "build:chrome": "pnpm --filter @label-ai/extension build:chrome",
+    "build:chrome:test": "pnpm --filter @label-ai/extension build:chrome:test",
     "build:safari": "pnpm --filter @label-ai/extension build:safari",
     "typecheck": "pnpm --filter @label-ai/extension typecheck",
     "test": "pnpm -r --if-present test",

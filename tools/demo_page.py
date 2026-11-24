@@ -76,7 +76,7 @@ if __name__ == "__main__":
     if not SIGNED.is_file():
         raise SystemExit("Run python3 tools/prepare_provenance_fixtures.py first.")
     with publisher(port) as (url, _requests):
-        print(f"Open {url} and enable that exact origin in Label.ai. Reload to scan the two examples.",flush=True)
+        print(f"Open {url} with Label.ai running. Scanning starts automatically; reload any page already open.",flush=True)
         try:
             Event().wait()
         except KeyboardInterrupt:

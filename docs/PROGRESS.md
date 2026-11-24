@@ -24,6 +24,10 @@ The [audit](COMPLETION_AUDIT.md) records scanner fixes, expanded source-bound ac
 
 All 82 local ONNX executions in the October 2026 frontier development comparison completed, including 19 generated image sources and 19 genuine photo sources (originals and paired Instagram variants), and three generated plus three genuine clips. The existing raw-score threshold 0.99 recognized zero generated inputs. At 0.5 raw score, 4/19 generated originals and 2/19 generated Instagram variants crossed the threshold; 0/19 genuine renditions crossed in each slice. The video raw frame-score distributions overlapped. These small, uncalibrated, dependent development observations have no independent release significance and affirm that the production statistical gate must remain closed. See [actual benchmark results](../ml/reports/frontier-dev-2026-10.json).
 
+## Automatic scanning and interactive testing
+
+The owner superseded manual per-site selection with browser-wide HTTP/HTTPS installation access and global pause/resume. The separate Chromium Local Test package uses a compile-time experimental policy on HTTP loopback only, so unsigned media can exercise actual forensic labels without activating uncertified scores on public sites. The gallery serves pinned generated and genuine examples and allows local files to be displayed in browser-owned Blob URLs. See the README for commands. Earlier per-site grant test results above describe older revisions.
+
 ## Acceptance still open
 
 Representative holdouts and licensed diversity, large-feed resource measurements, private versus public context ambiguity, real public-site performance, device-specific UI behavior and native Safari enable/grant/scan acceptance remain release work. Missing credentials and withheld statistical labels leave much of today's web content unlabeled. The package is a development preview.

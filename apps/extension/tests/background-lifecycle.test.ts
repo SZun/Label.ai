@@ -3,9 +3,20 @@ import type { LocalDecision } from '../src/core/protocol';
 
 const state = vi.hoisted(() => ({
   focused: true,
+  storedSettings: undefined as unknown,
+  hostAllowed: true,
+  activeTab: undefined as
+    | undefined
+    | { id: number; url: string; status: string; incognito: boolean; windowId: number },
+  register: vi.fn(),
+  unregister: vi.fn(),
+  inject: vi.fn(),
+  ping: vi.fn(),
   hooks: {} as Record<string, ((...args: any[]) => any)[]>,
   verify: vi.fn(),
   registered: vi.fn(),
+  detector: vi.fn(),
+  inference: vi.fn(),
 }));
 vi.mock('wxt/browser', () => {
   const event = (name: string) => ({
@@ -24,27 +35,28 @@ vi.mock('wxt/browser', () => {
       storage: {
         local: {
           get: vi.fn(async () => ({
-            localSettings: {
-              enabled: true,
-              consentVersion: 1,
-              approvedOrigins: ['https://news.example'],
-            },
+            localSettings: state.storedSettings,
           })),
-          set: vi.fn(),
+          set: vi.fn(async ({ localSettings }) => {
+            state.storedSettings = localSettings;
+          }),
         },
         onChanged: event('storage'),
       },
       permissions: {
-        contains: vi.fn(async () => true),
+        contains: vi.fn(async () => state.hostAllowed),
         onAdded: event('added'),
         onRemoved: event('revoked'),
       },
       scripting: {
         getRegisteredContentScripts: state.registered,
-        registerContentScripts: vi.fn(),
-        unregisterContentScripts: vi.fn(),
+        registerContentScripts: state.register,
+        unregisterContentScripts: state.unregister,
+        executeScript: state.inject,
       },
       tabs: {
+        query: vi.fn(async () => (state.activeTab ? [state.activeTab] : [])),
+        sendMessage: state.ping,
         get: vi.fn(async () => ({ active: true, incognito: false, windowId: 7 })),
         onActivated: event('activated'),
         onRemoved: event('removed'),
@@ -57,7 +69,7 @@ vi.mock('wxt/browser', () => {
     },
   };
 });
-vi.mock('@label-ai/detector', () => ({ createLocalDetector: vi.fn() }));
+vi.mock('@label-ai/detector', () => ({ createLocalDetector: state.detector }));
 vi.mock('@label-ai/provenance', () => ({ PROVENANCE_TRUST_EXPIRES_AT: '2027-12-31T00:00:00Z' }));
 vi.mock('../src/transport/provenance', () => ({
   localProvenance: state.verify,
@@ -85,16 +97,68 @@ async function send(requestId: string, tabId: number): Promise<LocalDecision> {
     },
   );
 }
-beforeEach(async () => {
-  vi.useFakeTimers();
-  state.focused = true;
+async function sendImage(url: string): Promise<LocalDecision> {
+  return state.hooks.message[0](
+    {
+      type: 'label-ai:analyze',
+      kind: 'image',
+      instanceId: 'test-image',
+      generation: 0,
+      requestId: 'test-image-request',
+      frame: { width: 1, height: 1, timestampMs: 0, rgba: 'AAAA/w==' },
+    },
+    {
+      id: 'test',
+      url,
+      documentId: 'test-document',
+      tab: { id: 1, windowId: 7, incognito: false },
+    },
+  );
+}
+async function startWorker() {
   state.hooks = {};
-  state.verify.mockReset();
-  state.registered.mockReset().mockResolvedValue([]);
-  vi.stubGlobal('defineBackground', (main: () => void) => main);
+  vi.resetModules();
   const { default: start } = await import('../entrypoints/background');
   (start as unknown as () => void)();
   await flush();
+}
+beforeEach(async () => {
+  vi.useFakeTimers();
+  state.focused = true;
+  state.storedSettings = undefined;
+  state.hostAllowed = true;
+  state.activeTab = undefined;
+  state.register.mockReset().mockResolvedValue(undefined);
+  state.unregister.mockReset().mockResolvedValue(undefined);
+  state.inject.mockReset().mockResolvedValue([]);
+  state.ping.mockReset().mockRejectedValue(new Error('No content scanner'));
+  state.verify.mockReset();
+  state.registered.mockReset().mockResolvedValue([]);
+  state.inference.mockReset();
+  state.detector.mockReset().mockResolvedValue({ analyzeRgba: state.inference, dispose: vi.fn() });
+  vi.stubGlobal('defineBackground', (main: () => void) => main);
+  await startWorker();
+});
+
+it('only the explicitly enabled local test build can turn an unvalidated raw score into a loopback label', async () => {
+  const loopback = 'http://127.0.0.1:8765';
+  state.inference.mockResolvedValue({
+    status: 'COMPLETED',
+    shouldLabel: false,
+    policyVersion: 'local-v1-unvalidated',
+    rawScore: 0.95,
+  });
+  expect((await sendImage(loopback)).shouldLabel).toBe(false);
+  vi.stubGlobal('__LABEL_AI_LOCAL_TEST__', true);
+  await startWorker();
+  const positive = await sendImage(loopback);
+  expect(positive.shouldLabel).toBe(true);
+  expect(positive.policyVersion).toBe('local-test-raw-v1');
+  expect((await sendImage('https://news.example')).shouldLabel).toBe(false);
+  expect((await sendImage('http://127.0.0.1:8766')).shouldLabel).toBe(true);
+  state.focused = false;
+  expect((await sendImage(loopback)).shouldLabel).toBe(false);
+  expect(state.inference).toHaveBeenCalledTimes(3);
 });
 afterEach(() => {
   vi.clearAllTimers();
@@ -182,7 +246,7 @@ it('preserves an equivalent persistent content registration when a worker restar
     {
       id: 'label-ai-media',
       js: ['content-scripts/media.js'],
-      matches: ['https://news.example/*'],
+      matches: ['http://*/*', 'https://*/*'],
       allFrames: true,
       runAt: 'document_idle',
       persistAcrossSessions: true,
@@ -192,4 +256,133 @@ it('preserves an equivalent persistent content registration when a worker restar
   await flush();
   expect(unregister).not.toHaveBeenCalled();
   expect(register).not.toHaveBeenCalled();
+});
+
+it('registers all eligible sites at startup without opening options, and injects the active tab', async () => {
+  state.register.mockClear();
+  state.inject.mockClear();
+  state.activeTab = {
+    id: 1,
+    url: 'https://elsewhere.example/story',
+    status: 'complete',
+    incognito: false,
+    windowId: 7,
+  };
+  await startWorker();
+  expect(state.register).toHaveBeenCalledWith([
+    expect.objectContaining({ id: 'label-ai-media', matches: ['http://*/*', 'https://*/*'] }),
+  ]);
+  expect(state.inject).toHaveBeenCalledWith({
+    target: { tabId: 1, allFrames: true },
+    files: ['/content-scripts/media.js'],
+  });
+});
+
+it('native withheld access fails closed for both capture admission and inference', async () => {
+  state.hostAllowed = false;
+  state.verify.mockResolvedValue({ shouldLabel: true, policyVersion: 'verified' });
+  state.activeTab = {
+    id: 1,
+    url: 'https://elsewhere.example/story',
+    status: 'complete',
+    incognito: false,
+    windowId: 7,
+  };
+  state.inject.mockClear();
+  await startWorker();
+  expect(state.inject).not.toHaveBeenCalled();
+  expect(
+    await state.hooks.message[0](
+      { type: 'label-ai:can-scan' },
+      {
+        id: 'test',
+        url: 'https://elsewhere.example/story',
+        tab: { id: 1, windowId: 7, incognito: false },
+      },
+    ),
+  ).toEqual({ allowed: false });
+  expect((await send('no-site-access', 1)).shouldLabel).toBe(false);
+  expect(state.verify).not.toHaveBeenCalled();
+});
+
+it('a migrated global pause persists, prevents registration, and permits global resume', async () => {
+  state.storedSettings = {
+    enabled: false,
+    consentVersion: 1,
+    approvedOrigins: ['https://news.example'],
+  };
+  state.register.mockClear();
+  state.hooks.install[0]();
+  await flush();
+  expect(state.storedSettings).toEqual({ enabled: false, consentVersion: 2 });
+  expect(state.register).not.toHaveBeenCalled();
+  expect(
+    await state.hooks.message[0](
+      { type: 'label-ai:can-scan' },
+      {
+        id: 'test',
+        url: 'https://elsewhere.example/story',
+        tab: { id: 1, windowId: 7, incognito: false },
+      },
+    ),
+  ).toEqual({ allowed: false });
+  state.storedSettings = { enabled: true, consentVersion: 2 };
+  state.hooks.storage[0]({ localSettings: { newValue: state.storedSettings } }, 'local');
+  await flush();
+  expect(state.register).toHaveBeenCalledWith([
+    expect.objectContaining({ matches: ['http://*/*', 'https://*/*'] }),
+  ]);
+  expect(
+    await state.hooks.message[0](
+      { type: 'label-ai:can-scan' },
+      {
+        id: 'test',
+        url: 'https://elsewhere.example/story',
+        tab: { id: 1, windowId: 7, incognito: false },
+      },
+    ),
+  ).toEqual({ allowed: true });
+});
+
+it('injects on activation when the active site was opened during pause or while its grant was withheld', async () => {
+  state.activeTab = {
+    id: 1,
+    url: 'https://elsewhere.example/story',
+    status: 'complete',
+    incognito: false,
+    windowId: 7,
+  };
+  state.inject.mockClear();
+  state.hooks.activated[0]({ tabId: 1, windowId: 7 });
+  await flush();
+  expect(state.ping).toHaveBeenCalledWith(1, { type: 'label-ai:scanner-present' }, { frameId: 0 });
+  expect(state.inject).toHaveBeenCalledOnce();
+  state.ping.mockResolvedValue({ present: true });
+  state.hooks.activated[0]({ tabId: 1, windowId: 7 });
+  await flush();
+  expect(state.inject).toHaveBeenCalledOnce();
+});
+
+it('injects the active page after restored native permission, without duplicate scanners', async () => {
+  state.activeTab = {
+    id: 1,
+    url: 'https://elsewhere.example/story',
+    status: 'complete',
+    incognito: false,
+    windowId: 7,
+  };
+  state.registered.mockResolvedValue([
+    {
+      id: 'label-ai-media',
+      js: ['content-scripts/media.js'],
+      matches: ['http://*/*', 'https://*/*'],
+      allFrames: true,
+      runAt: 'document_idle',
+      persistAcrossSessions: true,
+    },
+  ]);
+  state.inject.mockClear();
+  state.hooks.added[0]();
+  await flush();
+  expect(state.inject).toHaveBeenCalledOnce();
 });

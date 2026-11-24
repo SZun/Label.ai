@@ -2,7 +2,7 @@
 
 | Gate | Evidence needed for release |
 | --- | --- |
-| Packaged Chromium workflow | Install the exact release artifact and grant an origin, verify a known positive and multiple abstentions, swap the source, revoke access, switch the test profile offline, observe outgoing requests, restart the worker, and verify keyboard/pointer/playback behavior. Record brand, OS, build and artifact digest. |
+| Packaged Chromium workflow | Install the exact release artifact with browser HTTP/HTTPS access, verify automatic scanning across multiple origins and known positives/abstentions, swap the source, pause scanning globally, resume, revoke browser access, switch the test profile offline, observe outgoing requests, restart the worker, and verify keyboard/pointer/playback behavior. Record brand, OS, build and artifact digest. |
 | Safari macOS and iOS/iPadOS | Package with Xcode, sign as appropriate for the device, enable site access in native Safari, repeat badge/privacy/revocation tests, inspect memory on phone and verify suspension/restore. A successful WXT build or simulator compile alone cannot satisfy this gate. |
 | Image forensics | Use a frozen, group-disjoint calibration and evaluation corpus including artist-made images, CGI, generated media, edits, composites and unseen generators. Require 99% projected precision, FPR no greater than 0.1%, and at least 50% recall per the evaluation protocol. |
 | Video forensics | Freeze a trained temporal policy. Evaluate independent full clips including real camera footage, hybrid clips, short generated inserts, compression, looping streams and unseen generators. Count one trial per clip. Apply the release thresholds to videos independently. |
@@ -12,4 +12,4 @@
 
 ## Rollback
 
-Pause through the options page or withdraw a site grant for immediate local control. To withdraw a model or policy in a distributed build, prepare a new extension version with that route disabled, preserve its fixture regressions, clear obsolete in-memory decisions and repeat package acceptance. Trust snapshots have a finite life. Do not re-enable expired roots by extending a date without review. Development ZIPs and unsigned Xcode projects do not confer store approval.
+Pause globally through the options page or withdraw browser website access for immediate local control. To withdraw a model or policy in a distributed build, prepare a new extension version with that route disabled, preserve its fixture regressions, clear obsolete in-memory decisions and repeat package acceptance. Trust snapshots have a finite life. Do not re-enable expired roots by extending a date without review. Development ZIPs and unsigned Xcode projects do not confer store approval.

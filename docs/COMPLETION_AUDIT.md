@@ -2,7 +2,7 @@
 
 ## Scope and current product
 
-Label.ai runs locally as a WXT, Svelte 5 and SMUI extension. The supported desktop test matrix is Chromium, Google Chrome for Testing, Microsoft Edge, Brave and Opera. Safari has a separate WXT package and Apple host applications. Vivaldi is outside the project scope. Only approved visible pages are eligible, and the page UI is the animated **AI Slop Detected 🤮** label. Media, URL and detector data are never uploaded to an analysis service.
+Label.ai runs locally as a WXT, Svelte 5 and SMUI extension. The supported desktop test matrix is Chromium, Google Chrome for Testing, Microsoft Edge, Brave and Opera. Safari has a separate WXT package and Apple host applications. Vivaldi is outside the project scope. At the audited revision, only approved visible pages were eligible; manual site selection was subsequently superseded by the owner’s automatic HTTP/HTTPS scanning requirement. In either case, and the page UI is the animated **AI Slop Detected 🤮** label. Media, URL and detector data are never uploaded to an analysis service.
 
 The first development preview had working on-device inference and signed-image detection. The main production gap was that statistical evidence had not been established on independent, representative media. This audit also identified specific runtime and acceptance defects.
 

@@ -10,23 +10,28 @@ credential fixtures and acknowledge installation of the exact Safari package.
 It also compiles both Apple containing apps. The separate
 `safari-interactive-acceptance` jobs are available through GitHub Actions’
 manual **Run workflow** action with **safari_interactive** checked. They run
-the strict desktop installed-overlay test against a fresh disposable
-loopback-granted copy and the credential verifier in native Simulator Safari.
-An optional-permission prompt and real iPhone/iPad extension enablement still
-need testing in a normal browser session. The disposable copy is a testing
-artifact and does not test Safari's optional permission prompt.
+the strict desktop installed-overlay test using the exact shipping package
+and the credential verifier in native Simulator Safari. The installed-overlay
+test first opens the publisher immediately after installation and asserts the
+signed badge before opening the extension's options. It then checks local ONNX
+execution and global pause, resume and clear behavior. Safari's native website
+access and focus must be available. Native options-origin discovery remains a
+possible hosted-runner blocker; no host permission or scanner is injected to
+bypass it. Real iPhone/iPad extension enablement remains a device acceptance step.
 
 ## Recorded hosted-runner result
 
 The desktop jobs on November 24, 2026, acknowledged installation of the
 unmodified package, returned the six expected credential decisions and compiled
-both containing apps. In the latest detailed run, Safari also loaded the
-disposable copy and its genuine options page; the page reported
-`incognito: false`. The automated consent handler did not report success
+both containing apps. The previous per-site-permission design was also tested
+using a disposable copy. Safari loaded its genuine options page, which reported
+`incognito: false`, but the automated consent handler did not report success
 within its 12-second deadline, and the options document lacked focus. The
-overlay workflow therefore did not reach its badge checks. The cause of the
-consent failure has not yet been established. Earlier iOS Simulator jobs timed
-out at SafariDriver's remote session connection before any fixture ran.
+overlay workflow therefore did not reach its badge checks. Earlier iOS
+Simulator jobs timed out at SafariDriver's remote session connection before
+any fixture ran. These results predate the automatic-scanning design. Native
+installed-overlay and device acceptance for the new design still need to be
+recorded.
 
 See [run 45501017688](https://github.com/SZun/Label.ai/actions/runs/45501017688)
 and [run 45500162290](https://github.com/SZun/Label.ai/actions/runs/45500162290).
@@ -46,15 +51,18 @@ Use a fresh regular Safari profile. In Safari's Advanced settings, enable
 features for web developers, then use **Add Temporary Extension…** in the
 Developer settings to select `apps/extension/.output/safari-mv3` (the exact
 unpacked shipping resources). Authenticate the standard unsigned-extension
-prompt and enable Label.ai in the Extensions settings.
+prompt and enable Label.ai in the Extensions settings. Allow its required
+website access through Safari's standard extension controls. The extension has
+no website selector. Safari may still restrict individual sites according to
+its own settings.
 
-1. Keep the demo publisher running. Visit `http://127.0.0.1:8765`.
-   Confirm neither sample has a label before site access is granted.
-2. Open Label.ai using its toolbar action or extension settings. Enter
-   `http://127.0.0.1:8765` in **Site address**, choose **Enable on this site**
-   and approve Safari's site-access prompt. Confirm the options page lists
-   that exact origin.
-3. Return to the regular publisher tab and reload. Wait up to 45 seconds.
+1. Keep the demo publisher running. Visit `http://127.0.0.1:8765` in a regular
+   Safari window. With native website access denied, the extension must not
+   label either sample.
+2. Grant the extension website access through Safari's own extension controls.
+   Open or reload the publisher. A newly installed extension automatically
+   scans eligible visible media without selecting a site through Label.ai.
+3. Keep the publisher tab visible and focused. Wait up to 45 seconds.
    Expect a single **AI Slop Detected 🤮** badge on the Firefly cat and no
    badge on the conventional gradient. The badge should be noninteractive,
    animate once, and leave scrolling and image interaction usable.
@@ -89,11 +97,14 @@ prompt and enable Label.ai in the Extensions settings.
    acquisition. No analysis upload or external model/analytics request is
    expected.
 7. Open a private browsing window. Visit the fixture. No badge should appear.
-8. In the regular profile return to the extension options, remove the
-   publisher origin and return to its tab. The badge must disappear. Reload
-   and confirm neither sample is labeled. Re-enable the site, verify it again,
-   then **Pause local analysis** and confirm label removal; **Clear local data**
-   resets site grants and local settings.
+8. In the regular profile return to Label.ai's options. Confirm **Automatic
+   scanning is on.** Choose **Pause scanning**, return to the publisher and
+   confirm label removal. Reload and confirm neither sample is labeled. Choose
+   **Resume scanning** and return to the publisher; confirm the signed badge
+   returns when the page loads. Choose **Clear local data** and verify scanning
+   remains paused. Browser website-access permission remains managed by Safari.
+9. Resume scanning, then revoke the publisher's website access in Safari's
+   own extension settings. Reload and confirm neither sample is labeled.
 
 Record the exact package digest (`shasum -a 256 artifacts/packages/label-ai-safari.zip`),
 Safari/OS version, device model, each observed result, and any failing step.
@@ -114,15 +125,16 @@ Open the generated `.xcodeproj`, choose the iOS application scheme (rather
 than the extension scheme), select an iPhone/iPad Simulator or connected
 development device, and run the app once. Safari extension testing on a
 physical device requires an appropriate Apple developer signing configuration.
-Use the Safari Extensions settings to enable Label.ai, then open a normal
-tab and grant website access through the same extension options.
+Use the Safari Extensions settings to enable Label.ai and grant its native
+website access. Open a normal tab; scanning begins automatically where Safari
+permits the extension.
 
 For Simulator, repeat the walkthrough with the loopback fixture publisher on
 the Mac. For physical hardware, the Mac's loopback address is not the device's
 loopback address. Serve the same public test fixture on an authorized
-development HTTPS origin the device can access with a trusted certificate;
-use that exact HTTPS origin for consent. The sample page and asset can be
-copied into a static test fixture directory while the demo server is running:
+development HTTPS origin the device can access with a trusted certificate.
+Allow website access through Safari's controls if necessary. Copy the sample
+page and assets into a static test fixture directory while the demo server runs:
 
 ```sh
 mkdir -p artifacts/safari-device-fixture/assets

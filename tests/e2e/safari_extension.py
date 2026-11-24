@@ -1,16 +1,14 @@
 """Installed Safari WebExtension checks using Apple's WebDriver Classic endpoints.
 
-The exact package install check and the installed-overlay acceptance run are
-independent sessions. The latter may explicitly select a disposable, loopback-only
-test manifest/bootstrap. Product modules and detector policy are never modified.
+Both the install check and strict installed-overlay acceptance use the exact
+shipping resources. Native browser permission and focus must be available;
+the harness never pregrants hosts or injects a replacement scanner.
 """
 import hashlib
 import json
 from pathlib import Path
 import re
-import shutil
 import sys
-from tempfile import TemporaryDirectory
 from time import monotonic, sleep
 from urllib.parse import quote, urlsplit
 
@@ -120,15 +118,15 @@ def diagnostics(driver):
     """)
 
 
-def install(driver, build, modified=False):
-    step("install.begin", modified_test_copy=modified)
+def install(driver, build):
+    step("install.begin")
     response = driver.call("/webextension", "POST", {"type": "path", "path": str(build.resolve())})
     # Safari 27 returns the WebDriver extension result object. The opaque id is
     # for uninstall; it is not necessarily the safari-web-extension URL host.
     identifier = response.get("extension") if isinstance(response, dict) else response
     if not isinstance(identifier, str) or not identifier or len(identifier) > 300:
         raise AssertionError(f"Unexpected WebExtension install identifier: {identifier!r}")
-    step("install.complete", identifier=identifier, modified_test_copy=modified)
+    step("install.complete", identifier=identifier)
     return identifier
 
 
@@ -149,107 +147,29 @@ def uninstall(driver, identifier):
 
 
 def options_ready(driver):
-    return driver.script("return document.querySelector('#site-heading')?.textContent==='Site access' && Boolean((globalThis.browser||globalThis.chrome)?.runtime?.id);")
+    return driver.script("return document.querySelector('#site-heading')?.textContent==='Automatic scanning' && Boolean((globalThis.browser||globalThis.chrome)?.runtime?.id);")
 
 
 def open_original_options(driver, identifier, options_path):
+    # Prefer an actual option tab if Safari exposed one in this session. The
+    # vendor install ID can be opaque and must not be treated as an origin.
+    for handle in driver.call("/window/handles"):
+        driver.switch(handle)
+        parsed = urlsplit(driver.call("/url"))
+        if (parsed.scheme in ("safari-web-extension", "webkit-extension")
+                and parsed.path == "/" + options_path.lstrip("/") and options_ready(driver)):
+            return handle
     if not re.fullmatch(r"[A-Za-z0-9._-]+", identifier):
-        raise SetupUnavailable("Install identifier does not directly identify a Safari extension origin")
+        raise SetupUnavailable(
+            "SafariDriver returned an opaque installation identifier and no genuine options tab. "
+            "Complete the native global pause/resume walkthrough in an interactive Safari window."
+        )
     try:
         driver.navigate(f"safari-web-extension://{identifier}/{options_path}")
         driver.wait("unmodified extension options page", lambda: options_ready(driver), 8)
     except (AssertionError, RuntimeError) as error:
         raise SetupUnavailable(str(error)) from error
     return driver.call("/window")
-
-
-def disposable_copy(build, destination, manifest):
-    """Only test setup changes: one fixture host and opening the genuine options UI."""
-    shutil.copytree(build, destination)
-    copied = json.loads(json.dumps(manifest))
-    pattern = "http://127.0.0.1/*"
-    copied["host_permissions"] = list(dict.fromkeys(copied.get("host_permissions", []) + [pattern]))
-    copied["optional_host_permissions"] = [p for p in copied.get("optional_host_permissions", []) if p != pattern]
-    background = copied.get("background", {})
-    worker = background.get("service_worker")
-    if not worker or not (destination / worker).is_file():
-        raise AssertionError("Expected the shipping MV3 service worker")
-    prefix = "import " + json.dumps("./" + worker) + ";\n" if background.get("type") == "module" else "importScripts(" + json.dumps(worker) + ");\n"
-    bootstrap = "label-ai-webdriver-bootstrap.js"
-    (destination / bootstrap).write_text(prefix + """
-const labelAiWebDriverApi=globalThis.browser||globalThis.chrome;
-labelAiWebDriverApi.runtime.onInstalled.addListener(()=>{
-  void labelAiWebDriverApi.tabs.create({url:labelAiWebDriverApi.runtime.getURL('/options.html')});
-});
-""")
-    copied["background"]["service_worker"] = bootstrap
-    discovery = "label-ai-webdriver-discovery.js"
-    (destination / discovery).write_text("""
-const labelAiWebDriverApi=globalThis.browser||globalThis.chrome;
-document.documentElement.dataset.labelAiOptionsUrl=labelAiWebDriverApi.runtime.getURL('/options.html');
-""")
-    copied["content_scripts"] = copied.get("content_scripts", []) + [{
-        "matches": [pattern], "js": [discovery], "run_at": "document_idle", "all_frames": False,
-    }]
-    (destination / "manifest.json").write_text(json.dumps(copied))
-    assert copied.get("incognito") == manifest.get("incognito"), "private-browsing policy changed"
-    assert (destination / worker).read_bytes() == (build / worker).read_bytes(), "product worker changed"
-    return destination
-
-
-def find_opened_options(driver, origin):
-    def find():
-        for handle in driver.call("/window/handles"):
-            driver.switch(handle)
-            url = driver.call("/url")
-            parsed = urlsplit(url)
-            if parsed.scheme in ("safari-web-extension", "webkit-extension") and parsed.path.endswith("/options.html"):
-                if options_ready(driver):
-                    return handle
-        return None
-    try:
-        return driver.wait("test install opened the genuine options page", find, 5)
-    except AssertionError:
-        # A tabs.create tab may not belong to SafariDriver's managed window.
-        # A loopback-only test script publishes only runtime.getURL; navigate
-        # the real options page in a managed WebDriver tab instead.
-        step("test_copy_options.discovery", disclosure="Loopback-only test content script exposes only the genuine options URL; it performs no analysis and changes no product guard.")
-        handle = driver.call("/window/new", "POST", {"type": "tab"})["handle"]
-        driver.switch(handle)
-        driver.navigate(origin + "/")
-        url = driver.wait("loopback test options URL discovery", lambda: driver.script("return document.documentElement.dataset.labelAiOptionsUrl||null;"), 12)
-        parsed = urlsplit(url)
-        assert parsed.scheme in ("safari-web-extension", "webkit-extension") and parsed.path == "/options.html" and not parsed.query and not parsed.fragment, "Unexpected discovered options URL"
-        driver.navigate(url)
-        driver.wait("genuine options in managed automation tab", lambda: options_ready(driver), 10)
-        return handle
-
-
-def request_consent(driver, options, origin):
-    driver.switch(options)
-    private = driver.script("return (globalThis.browser||globalThis.chrome).extension?.inIncognitoContext===true;")
-    step("options.context", incognito=private, focused=driver.script("return document.hasFocus();"))
-    assert not private, "SafariDriver extension context is private; production guard must remain active"
-    element = driver.element("#site")
-    driver.call("/element/" + quote(element, safe="") + "/clear", "POST", {})
-    driver.call("/element/" + quote(element, safe="") + "/value", "POST", {"text": origin})
-    assert driver.script("return document.querySelector('#site').value") == origin, "SafariDriver did not enter the fixture origin"
-    driver.button("Enable on this site")
-    def consent():
-        message = driver.script("return document.querySelector('[role=status]')?.textContent||''")
-        if "not granted" in message:
-            raise SetupUnavailable("Native site permission was not granted")
-        return "Local analysis enabled." in message
-    try:
-        driver.wait("real options consent handler", consent, 12)
-    except (AssertionError, RuntimeError) as error:
-        raise SetupUnavailable(str(error)) from error
-    driver.wait("registered production content script", lambda: driver.async_script("const api=globalThis.browser||globalThis.chrome; return (await api.scripting.getRegisteredContentScripts()).some(s=>s.id==='label-ai-media');"), 12)
-    state = driver.async_script("const api=globalThis.browser||globalThis.chrome; return {permissions:await api.permissions.getAll(),settings:(await api.storage.local.get('localSettings')).localSettings,incognito:api.extension?.inIncognitoContext,tabs:(await api.tabs.query({})).filter(t=>t.url?.startsWith(args[0]+'/')).map(t=>({id:t.id,incognito:t.incognito,active:t.active}))};", origin)
-    assert state["settings"]["enabled"] and origin in state["settings"]["approvedOrigins"], state
-    assert state.get("incognito") is not True, "SafariDriver extension context is private; production guard must remain active"
-    step("consent.complete", state=state)
-    assert not any(tab.get("incognito") for tab in state["tabs"]), "SafariDriver fixture tab is private; production guard must remain active"
 
 
 def start_model_check(driver, options, origin):
@@ -287,13 +207,16 @@ def start_model_check(driver, options, origin):
     step("packaged_onnx.begin", sender=result)
 
 
-def exercise(driver, options, site, origin, requests, modified):
+def exercise_automatic_scan(driver, site, origin):
+    # Visit an ordinary visible page immediately after installation. Native Safari
+    # website access must already be granted; no extension UI actions precede
+    # the first badge assertion.
     driver.switch(site)
-    driver.call("/refresh", "POST", {})
+    driver.navigate(origin + "/")
     driver.click("body")
     step("publisher.ready", state=diagnostics(driver))
     badge_count(driver, 1, 45)
-    step("signed_badge.complete")
+    step("automatic_signed_badge.complete")
     driver.script("document.querySelector('#asset').src=document.querySelector('#control').src;")
     badge_count(driver, 0, 10)
     stays_unlabeled(driver)
@@ -305,6 +228,52 @@ def exercise(driver, options, site, origin, requests, modified):
     badge_count(driver, 0, 10)
     driver.script("document.querySelector('#asset').src=globalThis.signedSource;")
     badge_count(driver, 1, 40)
+    driver.script("document.querySelector('#asset').remove();")
+    badge_count(driver, 0, 10)
+    step("detached_media.complete")
+    driver.script("const image=document.createElement('img');image.id='asset';image.src=globalThis.signedSource;document.body.prepend(image);")
+    badge_count(driver, 1, 40)
+    return {"automatic_scanning": True, "signed_badge": True, "stale_removal": True,
+            "unsigned_negative": True, "content_addressed_positive": True, "detached_media": True}
+
+
+def read_controls(driver, origin):
+    return driver.async_script("""
+      const api=globalThis.browser||globalThis.chrome, url=new URL(args[0]);
+      const pattern=url.protocol+'//'+url.hostname+'/*';
+      const registered=(await api.scripting.getRegisteredContentScripts()).find(script=>script.id==='label-ai-media');
+      return {settings:(await api.storage.local.get('localSettings')).localSettings||null,
+              hostPermission:await api.permissions.contains({origins:[pattern]}),
+              registrationMatches:registered?.matches||[],
+              incognito:api.extension?.inIncognitoContext};
+    """, origin)
+
+
+def assert_settings(state, enabled):
+    assert state["settings"] == {"enabled": enabled, "consentVersion": 2}, state
+    assert state["hostPermission"] is True, state
+    assert state.get("incognito") is False, state
+    assert set(state["registrationMatches"]) == ({"http://*/*", "https://*/*"} if enabled else set()), state
+
+
+def wait_status(driver, expected):
+    driver.wait(expected, lambda: driver.script(
+        "return document.querySelector('[role=status]')?.textContent===arguments[0];", expected), 12)
+
+
+def exercise_controls(driver, options, site, origin):
+    driver.switch(options)
+    driver.wait("global scanning enabled by default", lambda: driver.script(
+        "return document.body.textContent.includes('Automatic scanning is on.');"), 12)
+    state = read_controls(driver, origin)
+    if state["settings"] is not None:
+        assert_settings(state, True)
+    else:
+        # A current install can derive enabled=true from defaults before any
+        # storage write. The real automatic badge and options UI prove the state.
+        assert state["hostPermission"] is True and state.get("incognito") is False, state
+        assert set(state["registrationMatches"]) == {"http://*/*", "https://*/*"}, state
+    step("automatic_settings.complete", state=state)
     start_model_check(driver, options, origin)
     driver.switch(site)
     driver.click("body")
@@ -312,31 +281,38 @@ def exercise(driver, options, site, origin, requests, modified):
     reply = json.loads(encoded)
     assert reply and reply.get("status") == "COMPLETED" and reply.get("shouldLabel") is False, reply
     step("packaged_onnx.complete", result=reply)
-    driver.script("document.querySelector('#asset').remove();")
-    badge_count(driver, 0, 10)
-    step("detached_media.complete")
-    driver.script("const image=document.createElement('img');image.id='asset';image.src=globalThis.signedSource;document.body.prepend(image);")
-    badge_count(driver, 1, 40)
+
     driver.switch(options)
-    driver.click('button[aria-label="Remove ' + origin + '"]')
-    driver.wait("revocation unregistered production scripts", lambda: driver.async_script("const api=globalThis.browser||globalThis.chrome; return (await api.scripting.getRegisteredContentScripts()).every(s=>s.id!=='label-ai-media');"), 12)
-    revoked = driver.async_script("const api=globalThis.browser||globalThis.chrome;return {settings:(await api.storage.local.get('localSettings')).localSettings,hostPermission:await api.permissions.contains({origins:['http://127.0.0.1/*']})};")
-    assert origin not in revoked["settings"]["approvedOrigins"], revoked
-    if not modified:
-        assert revoked["hostPermission"] is False, revoked
+    driver.button("Pause scanning")
+    wait_status(driver, "Scanning paused. Existing labels have been removed.")
+    assert_settings(read_controls(driver, origin), False)
     driver.switch(site)
     badge_count(driver, 0, 10)
     driver.call("/refresh", "POST", {})
     stays_unlabeled(driver)
-    step("revocation.complete", browser_host_permission_removed=not revoked["hostPermission"], local_consent_removed=True)
-    unexpected = [(method, path) for method, path in requests if method != "GET" or "?" in path or not (path == "/" or path.startswith("/assets/"))]
-    assert not unexpected, unexpected
-    return {"signed_badge": True, "stale_removal": True, "unsigned_negative": True,
-            "content_addressed_positive": True, "detached_media": True,
-            "packaged_onnx_status": reply["status"], "local_consent_revocation": True,
-            "browser_host_permission_removed": not revoked["hostPermission"],
-            "publisher_unexpected_requests": unexpected,
-            "network_observation_scope": "loopback publisher requests; not browser-wide network capture"}
+    step("global_pause.complete")
+
+    driver.switch(options)
+    driver.button("Resume scanning")
+    wait_status(driver, "Scanning resumed.")
+    assert_settings(read_controls(driver, origin), True)
+    driver.switch(site)
+    driver.call("/refresh", "POST", {})
+    driver.click("body")
+    badge_count(driver, 1, 45)
+    step("global_resume.complete")
+
+    driver.switch(options)
+    driver.button("Clear local data")
+    wait_status(driver, "Local data cleared. Scanning remains paused.")
+    assert_settings(read_controls(driver, origin), False)
+    driver.switch(site)
+    badge_count(driver, 0, 10)
+    driver.call("/refresh", "POST", {})
+    stays_unlabeled(driver)
+    step("global_clear.complete")
+    return {"packaged_onnx_status": reply["status"], "global_pause_resume": True,
+            "global_clear": True, "native_host_permission_retained": True}
 
 
 def cleanup(driver, identifier):
@@ -355,7 +331,10 @@ def run_install_smoke(session, request, build):
     build = build.resolve()
     manifest_path = build / "manifest.json"
     manifest_bytes = manifest_path.read_bytes()
-    assert json.loads(manifest_bytes)["name"] == "Label.ai"
+    manifest = json.loads(manifest_bytes)
+    assert manifest["name"] == "Label.ai"
+    assert set(manifest.get("host_permissions", [])) == {"http://*/*", "https://*/*"}, manifest
+    assert not manifest.get("optional_host_permissions"), manifest
     driver = Driver(session, request)
     identifier = install(driver, build)
     try:
@@ -368,40 +347,41 @@ def run_install_smoke(session, request, build):
             "cleanup_completed": cleaned, "overlay_acceptance_exercised": False}
 
 
-def run_extension(session, request, build, *, pregrant_test_origin=False):
-    """Strict overlay acceptance. Choose the test copy explicitly, in a fresh session."""
+def run_extension(session, request, build):
+    """Strict post-install scanning and global controls using the exact package."""
     build = build.resolve()
     manifest_bytes = (build / "manifest.json").read_bytes()
     manifest = json.loads(manifest_bytes)
     assert manifest["name"] == "Label.ai"
+    assert set(manifest.get("host_permissions", [])) == {"http://*/*", "https://*/*"}, manifest
+    assert not manifest.get("optional_host_permissions"), manifest
     options_path = manifest.get("options_ui", {}).get("page") or manifest.get("options_page")
     assert options_path, "shipping options page is missing"
     driver = Driver(session, request)
     driver.call("/timeouts", "POST", {"script": 35000, "pageLoad": 20000, "implicit": 0})
     identifier = None
-    with publisher() as (origin, requests), TemporaryDirectory(prefix="label-ai-safari-test-") as temporary:
+    with publisher() as (origin, requests):
         try:
-            if pregrant_test_origin:
-                step("test_setup", disclosure="Disposable copy adds only loopback host grant, onInstalled options bootstrap, and loopback-only options URL discovery; production scripts, detector checks and private-browsing guards stay intact.")
-                copied = disposable_copy(build, Path(temporary) / "extension", manifest)
-                identifier = install(driver, copied, modified=True)
-                options = find_opened_options(driver, origin)
-                step("test_copy_options.complete")
-            else:
-                identifier = install(driver, build)
-                step("untouched_package.installed", manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest())
-                options = open_original_options(driver, identifier, options_path)
-                step("untouched_options.complete")
+            identifier = install(driver, build)
+            step("untouched_package.installed", manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest())
             site = driver.call("/window/new", "POST", {"type": "tab"})["handle"]
-            driver.switch(site)
-            driver.navigate(origin + "/")
-            badge_count(driver, 0, 5)
-            request_consent(driver, options, origin)
-            result = exercise(driver, options, site, origin, requests, pregrant_test_origin)
-            result.update({"unmodified_package_installed": not pregrant_test_origin,
-                           "unmodified_options": not pregrant_test_origin,
-                           "disposable_test_copy": pregrant_test_origin,
-                           "native_optional_permission_grant": not pregrant_test_origin})
+            result = exercise_automatic_scan(driver, site, origin)
+            step("automatic_scan.complete", result=result)
+            options = open_original_options(driver, identifier, options_path)
+            step("untouched_options.complete")
+            # Navigation used to discover options can replace a managed tab.
+            if options == site:
+                site = driver.call("/window/new", "POST", {"type": "tab"})["handle"]
+                driver.switch(site)
+                driver.navigate(origin + "/")
+                driver.click("body")
+                badge_count(driver, 1, 45)
+            result.update(exercise_controls(driver, options, site, origin))
+            unexpected = [(method, path) for method, path in requests if method != "GET" or "?" in path or not (path == "/" or path.startswith("/assets/"))]
+            assert not unexpected, unexpected
+            result.update({"unmodified_package_installed": True,
+                           "publisher_unexpected_requests": unexpected,
+                           "network_observation_scope": "loopback publisher requests; not browser-wide network capture"})
             step("all_checks.complete", result=result)
             return result
         except Exception:

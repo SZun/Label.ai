@@ -16,6 +16,7 @@ import {
 } from '../../src/core/protocol';
 import { BoundedQueue } from '../../src/core/queue';
 import { CaptureSlots } from '../../src/core/capture-slots';
+import { ScanningPermission } from '../../src/core/scanning-permission';
 import { RetryBudget, retryableReply } from '../../src/core/retry';
 import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capture';
 import { acquireVideoOriginal } from '../../src/media/video-original';
@@ -42,13 +43,28 @@ interface MediaEntry {
 }
 
 export default defineContentScript({
-  matches: ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'],
+  matches: ['http://*/*', 'https://*/*'],
   registration: 'runtime',
   cssInjectionMode: 'ui',
   runAt: 'document_idle',
   async main(ctx) {
     if (browser.extension?.inIncognitoContext !== false) return;
-    let settings: LocalSettings = { ...DEFAULT_SETTINGS };
+    const scannerPresent = (message: unknown) => {
+      if (
+        typeof message === 'object' &&
+        message !== null &&
+        'type' in message &&
+        message.type === 'label-ai:scanner-present'
+      )
+        return Promise.resolve({ present: true });
+    };
+    browser.runtime.onMessage.addListener(scannerPresent);
+    ctx.onInvalidated(() => browser.runtime.onMessage.removeListener(scannerPresent));
+
+    let settings: LocalSettings = { ...DEFAULT_SETTINGS, enabled: false };
+    const permission = new ScanningPermission(() =>
+      browser.runtime.sendMessage({ type: 'label-ai:can-scan' }),
+    );
     let ended = false;
     const entries = new Map<Element, MediaEntry>();
     const roots = new WeakSet<Node>();
@@ -67,12 +83,28 @@ export default defineContentScript({
         if (app) void unmount(app);
       },
     });
+    if (ctx.isInvalid) {
+      ui.remove();
+      return;
+    }
     ui.mount();
     ui.shadowHost.style.cssText =
       'position:fixed;inset:0;width:0;height:0;pointer-events:none;z-index:2147483646;';
 
-    const active = () =>
+    const eligible = () =>
       !ended && !document.hidden && document.hasFocus() && eligibleDocumentChain(window, settings);
+    const active = () => eligible() && permission.allowed;
+
+    function refreshPermission() {
+      if (!eligible()) {
+        permission.invalidate();
+        return;
+      }
+      void permission.refresh().then(() => {
+        if (!active()) suspend();
+        schedule();
+      });
+    }
 
     function cancel(entry: MediaEntry) {
       queue.cancel(entry.id);
@@ -604,11 +636,17 @@ export default defineContentScript({
         { capture: true },
       );
     ctx.addEventListener(document, 'visibilitychange', () => {
-      if (!active()) suspend();
+      permission.invalidate();
+      suspend();
+      refreshPermission();
       schedule();
     });
-    ctx.addEventListener(window, 'focus', schedule);
+    ctx.addEventListener(window, 'focus', () => {
+      refreshPermission();
+      schedule();
+    });
     ctx.addEventListener(window, 'blur', () => {
+      permission.invalidate();
       suspend();
       schedule();
     });
@@ -616,13 +654,21 @@ export default defineContentScript({
     ctx.addEventListener(window, 'resize', schedule, { passive: true });
     for (const event of ['popstate', 'hashchange'])
       ctx.addEventListener(window, event, () => {
-        if (!active()) suspend();
+        permission.invalidate();
+        suspend();
+        refreshPermission();
         schedule();
       });
-    ctx.setInterval(schedule, 1000); // Expiry and SPA URL admission only; no whole-document rescans.
+    ctx.setInterval(() => {
+      refreshPermission();
+      schedule();
+    }, 1000); // Renew the browser grant and check expiry; no whole-document rescans.
+    let settingsChangedDuringLoad = false;
     const settingsChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
       if (area !== 'local' || !changes[SETTINGS_KEY]) return;
+      settingsChangedDuringLoad = true;
       settings = normalizeSettings(changes[SETTINGS_KEY].newValue);
+      permission.invalidate();
       for (const entry of entries.values()) {
         cancel(entry);
         entry.decision = undefined;
@@ -630,13 +676,13 @@ export default defineContentScript({
         entry.attempted = false;
         entry.originalAttempted = false;
       }
+      refreshPermission();
       schedule();
     };
     browser.storage.onChanged.addListener(settingsChanged);
-    settings = await readSettings();
-    scan(document.body);
     ctx.onInvalidated(() => {
       ended = true;
+      permission.invalidate();
       queue.clear();
       for (const entry of entries.values()) cancel(entry);
       entries.clear();
@@ -647,5 +693,14 @@ export default defineContentScript({
       browser.storage.onChanged.removeListener(settingsChanged);
       ui.remove();
     });
+    try {
+      const stored = await readSettings();
+      if (!settingsChangedDuringLoad) settings = stored;
+    } catch {
+      // If settings cannot be read, do not grant capture until a change arrives.
+    }
+    if (ctx.isInvalid) return;
+    refreshPermission();
+    scan(document.body);
   },
 });

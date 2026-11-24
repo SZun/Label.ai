@@ -7,6 +7,7 @@
     "dev": "wxt",
     "build": "wxt build -b chrome",
     "build:chrome": "wxt build -b chrome",
+    "build:chrome:test": "node build-local-test.mjs",
     "build:safari": "wxt build -b safari",
     "zip": "wxt zip -b chrome",
     "zip:safari": "wxt zip -b safari",
