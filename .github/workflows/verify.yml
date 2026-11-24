@@ -49,7 +49,13 @@ jobs:
           name: label-ai-browser-extensions
           path: artifacts/packages
       - run: unzip -q artifacts/packages/label-ai-chromium.zip -d artifacts/chromium
-      - run: pip install -r tests/e2e/requirements.txt && python -m playwright install --with-deps chromium
+      - run: pip install -r tests/e2e/requirements.txt
+      - if: matrix.browser == 'chromium'
+        run: python -m playwright install --with-deps chromium
+      - if: matrix.browser != 'chromium'
+        run: python -m playwright install-deps chromium
+      - if: matrix.browser == 'vivaldi'
+        run: pip install -r tests/e2e/vivaldi-requirements.txt
       - run: python tools/prepare_provenance_fixtures.py
       - name: Install desktop schemas needed by Opera
         if: matrix.browser == 'opera'
@@ -64,7 +70,7 @@ jobs:
           fi
           runner=(python -u tests/e2e/browser_test.py)
           if [ "$BRAND" = vivaldi ]; then
-            runner=(xvfb-run -a python -u tests/e2e/browser_test.py --desktop-cdp)
+            runner=(xvfb-run -a python -u tests/e2e/vivaldi_test.py --browser "$LABEL_TEST_BROWSER")
           fi
           timeout --signal=TERM --kill-after=5s 120s "${runner[@]}" --build artifacts/chromium --install-only
           timeout --signal=TERM --kill-after=5s 180s "${runner[@]}" --build artifacts/chromium --pregrant-test-origin --report artifacts/browser-report.json

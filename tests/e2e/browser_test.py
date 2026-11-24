@@ -7,8 +7,6 @@ A second scan runs after switching this temporary browser context offline.
 import argparse
 from contextlib import contextmanager
 import hashlib
-import subprocess
-from time import monotonic, sleep
 import json
 import os
 from pathlib import Path
@@ -26,40 +24,13 @@ TEXT = "AI Slop Detected 🤮"
 
 @contextmanager
 def browser_session(pw, profile, launch, args):
-    if not args.desktop_cdp:
-        options = {"executable_path":args.browser} if args.browser else {"channel":"chromium"}
-        context = pw.chromium.launch_persistent_context(profile,headless=True,args=launch,
-            ignore_default_args=["--disable-extensions"],viewport={"width":1000,"height":720},**options)
-        try:
-            yield context
-        finally:
-            context.close()
-        return
-    # Vivaldi uses a component extension for its own browser UI. Run the full
-    # branded desktop under Xvfb and attach by its loopback DevTools endpoint.
-    if not args.browser:
-        raise ValueError("A native browser executable is required for desktop CDP")
-    flags = [arg for arg in launch if not arg.startswith("--disable-extensions-except=")]
-    cmd = [args.browser, f"--user-data-dir={profile}", "--remote-debugging-address=127.0.0.1",
-           "--remote-debugging-port=0", "--no-sandbox", *flags, "about:blank"]
-    with subprocess.Popen(cmd) as process:
-        browser = None
-        try:
-            port_file = Path(profile)/"DevToolsActivePort"
-            deadline = monotonic()+30
-            while not port_file.exists() and monotonic()<deadline and process.poll() is None:
-                sleep(.2)
-            port = int(port_file.read_text().splitlines()[0])
-            browser = pw.chromium.connect_over_cdp(f"http://127.0.0.1:{port}",timeout=25000)
-            yield browser.contexts[0]
-        finally:
-            if browser:
-                browser.close()
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
+    options = {"executable_path":args.browser} if args.browser else {"channel":"chromium"}
+    context = pw.chromium.launch_persistent_context(profile,headless=True,args=launch,
+        ignore_default_args=["--disable-extensions"],viewport={"width":1000,"height":720},**options)
+    try:
+        yield context
+    finally:
+        context.close()
 
 
 def run(args):
@@ -181,7 +152,6 @@ if __name__=="__main__":
     parser.add_argument("--build",type=Path,required=True)
     parser.add_argument("--browser",default=os.getenv("LABEL_TEST_BROWSER"))
     parser.add_argument("--pregrant-test-origin",action="store_true",help="Add loopback host grant to a disposable copy for headless E2E")
-    parser.add_argument("--desktop-cdp",action="store_true",help="Attach to an isolated native desktop Chromium-family browser")
     parser.add_argument("--install-only",action="store_true")
     parser.add_argument("--enable-button",default="Enable on this site")
     parser.add_argument("--report",type=Path)

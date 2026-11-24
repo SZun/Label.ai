@@ -12,7 +12,11 @@ This branch started from f390a4c, which contained the plan and specification but
 
 ## Packaged browser observations
 
-On revision 6a189c1, the Linux Chromium 151.0.7922.34, Microsoft Edge 158.0.4370.33 and Brave 1.100.59 / Chromium 158.0.8127.92 jobs each installed the unmodified extension. In a separate disposable profile with a loopback host grant, all three passed visible badge, signed publisher JPEG, withdrawn/stale badge, offline local ONNX execution, reduced-motion and revocation checks. No unexpected requests appeared in the monitored browser/publisher traffic. On the macOS runner, Xcode successfully compiled both the unsigned macOS app and the iOS simulator app. The native grant dialog and physical device behavior still require acceptance. [Run and job logs](https://github.com/SZun/Label.ai/actions/runs/45493431709)
+On revision fd7b9d0, the Linux Chromium 151.0.7922.34, Google Chrome for Testing 158.0.8127.88, Microsoft Edge 158.0.4370.33, Brave 1.100.59 and Opera 140.0.6074.36 jobs each installed the unmodified extension. In a separate disposable profile with a loopback host grant, all five passed visible badge, signed publisher JPEG, withdrawn/stale badge, offline local ONNX execution, reduced-motion and revocation checks. No unexpected requests appeared in the monitored browser/publisher traffic. On the macOS runner, Xcode successfully compiled both the unsigned macOS app and the iOS simulator app. Native desktop Safari 27.2 returned all six expected credential decisions using Apple’s WebDriver and the actual packaged verifier. The native Safari grant dialog, installed overlay and physical iPhone/iPad behavior still require acceptance. [Run and job logs](https://github.com/SZun/Label.ai/actions/runs/45495518360)
+
+## Completion estimate
+
+The preview covers roughly two thirds of the original production goal. This engineering estimate weights general image/video detection and real-device behavior more heavily than scaffolding or passing unit tests. It is separate from accuracy. A signed, verifiable original can trigger a label today. Most media without usable credentials remains unlabeled because the public forensic routes lack independent release evidence.
 
 ## Acceptance still open
 

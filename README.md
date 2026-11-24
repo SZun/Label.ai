@@ -38,6 +38,6 @@ make test-e2e
 make package
 ```
 
-Run `make safari-xcode` and `python3 tools/build_apple_host.py artifacts/safari-xcode` on macOS. The standalone browser test accepts `--browser /path/to/executable` to exercise alternative Chromium-family engines. Test the unmodified ZIP in a real profile before sharing it. The headless loopback test uses a temporary copy with a pregranted fixture origin to exercise the permission and labeling flow.
+Run `make safari-xcode` and `python3 tools/build_apple_host.py artifacts/safari-xcode` on macOS. The standalone browser test accepts `--browser /path/to/executable` to exercise alternative Chromium-family engines. Vivaldi uses its own native DevTools harness in `tests/e2e/vivaldi_test.py`. The macOS CI job also runs the real signature verifier in native Safari through Apple’s WebDriver. Test the unmodified ZIP in a real profile before sharing it. The headless loopback test uses a temporary copy with a pregranted fixture origin to exercise the permission and labeling flow.
 
 [Specification](LABEL_AI_SPECIFICATION.md) · [Browser support](docs/BROWSER_SUPPORT.md) · [Apple’s Safari testing guide](https://developer.apple.com/documentation/safariservices/running-your-safari-web-extension) · [Progress and verification](docs/PROGRESS.md) · [Release gates](docs/RELEASE_GATES.md) · [Requirements](docs/REQUIREMENTS_TRACEABILITY.md) · [Evaluation](docs/EVALUATION.md)
