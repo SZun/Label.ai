@@ -134,6 +134,26 @@ def sample_card(asset):
             '<small class="analysis-status">Not yet scanned.</small></figcaption></figure>')
 
 
+def columns_page(asset):
+    samples = ''.join(
+        f'<div><img id="{position}" src="{asset.path}" width="{width}" height="{width}" '
+        f'alt="Stable Diffusion reference image"><p>{position.capitalize()} · {width} px</p></div>'
+        for position, width in [('left', 230), ('center', 160), ('right', 128)]
+    )
+    return f'''<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Label.ai column placement check</title>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="/gallery.css">
+</head><body><main>
+<h1>Column placement check</h1>
+<p>Each column displays a separate copy of the same generated image from DiffusionDB.
+Keep the images visible while Label.ai scans them. Each copy should receive its own badge.</p>
+<div class="column-samples">{samples}</div>
+<p><a href="/">Return to the test gallery</a></p>
+</main></body></html>'''.encode()
+
+
 def page(samples, port):
     cards = ''.join(map(sample_card, samples))
     return f'''<!doctype html>
@@ -152,7 +172,8 @@ def page(samples, port):
 <p>The captions document the fixture origins. Label.ai adds its animated overlay when it independently labels the media. The on-device detector also analyzes unsigned media. Statistical detection can miss AI-generated content or produce false positives. <a href="#local-title">Try your own files.</a></p>
 <p id="scanner-status" role="status">Waiting for the extension. Check that scanning is active, then refresh.</p>
 <p id="build-help">Use the latest regular build from <code>apps/extension/.output/chrome-mv3</code>. In <code>chrome://extensions</code>, reload the updated extension, disable older or duplicate installs, and grant website access.</p></header>
-<section aria-labelledby="samples-title"><h2 id="samples-title">Known-origin samples</h2><div class="grid">{cards}</div></section>
+<section aria-labelledby="samples-title"><h2 id="samples-title">Known-origin samples</h2>
+<p><a href="/columns">Compare label placement in three columns</a></p><div class="grid">{cards}</div></section>
 <section aria-labelledby="local-title"><h2 id="local-title">Try your own files</h2>
 <p>Select an image or video, or drag files onto the picker. Your browser displays each file from a local object URL. The server never receives your files. Play short videos normally and keep the page visible until analysis finishes.</p>
 <label for="local-files">Select local images or videos</label>
@@ -171,6 +192,11 @@ h2 { font-size: 1.12rem; margin: 16px 0 10px; }
 p { font-size: .92rem; margin: 5px 0 8px; }
 code { font-size: .9em; overflow-wrap: anywhere; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 252px), 1fr)); gap: 14px; }
+.column-samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-block: 24px; }
+.column-samples > :nth-child(2) { justify-self: center; }
+.column-samples > :last-child { justify-self: end; }
+.column-samples img { display: block; max-width: 100%; height: auto; }
+@media (max-width: 759px) { .column-samples { grid-template-columns: 1fr; } }
 figure { overflow: hidden; margin: 0; border: 1px solid #d9e0ea; background: white; border-radius: 10px; }
 figure img, figure video { display: block; width: 100%; height: 230px; object-fit: contain; background: #e9edf2; }
 figcaption { padding: 12px; font-size: .91rem; overflow-wrap: anywhere; }
@@ -220,7 +246,7 @@ function updateScannerStatus() {
   }
 }
 const observer = new MutationObserver(updateScannerStatus);
-observer.observe(document.body, {
+observer.observe(document.documentElement, {
   childList: true,
   subtree: true,
   attributes: true,
@@ -315,6 +341,8 @@ def gallery(port=0, root=ROOT, include_videos=False):
     """Return a loopback-only, GET-only publisher of an explicit asset allowlist."""
     samples = build_assets(root, include_videos)
     resources = {sample.path: (sample.mime, sample.content) for sample in samples}
+    generated = next(sample for sample in samples if sample.element_id == 'generated-1')
+    resources['/columns'] = ('text/html; charset=utf-8', columns_page(generated))
     resources['/gallery.css'] = ('text/css; charset=utf-8', STYLE)
     resources['/gallery.js'] = ('text/javascript; charset=utf-8', SCRIPT)
     requests = []
@@ -395,7 +423,7 @@ def main():
     try:
         ensure_fixtures(prepare=args.prepare, include_videos=args.videos)
         with gallery(args.port, include_videos=args.videos) as (origin, _requests):
-            print(f'Open {origin} with Label.ai (Local Test) running. Keep this terminal running.', flush=True)
+            print(f'Open {origin} with the regular Label.ai extension enabled. Test column placement at {origin}/columns. Keep this terminal running.', flush=True)
             try:
                 Event().wait()
             except KeyboardInterrupt:

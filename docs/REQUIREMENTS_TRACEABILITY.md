@@ -13,7 +13,7 @@ The IDs and short descriptions come from the preserved original proposal. Status
 | STACK-02 | FastAPI + GraphQL client/server | Superseded | On-device messages connect the page and background. There is no GraphQL service or client. |
 | STACK-03 | PostgreSQL when durable persistence needed | Superseded | Global scanning preference lives in browser local storage. No PostgreSQL service is needed. |
 | UX-01 | Exact single label with emoji | Partial | SlopLabel.svelte and label.test.ts check the exact text. Browser test checks one badge on the signed fixture. |
-| UX-02 | Material-style pill, upper-left overlay | Partial | OverlayRoot.svelte and label.scss implement the anchored pill. Zoom and physical device visual testing remain. |
+| UX-02 | Material-style pill, upper-left overlay | Partial | OverlayRoot.svelte and label.scss anchor each pill to its visible media bounds. The packaged three-column regression checks concurrent badges on 230, 160 and 128 px images and repositioning on resize with a transformed body. Zoom and physical-device visual testing remain. |
 | UX-03 | Eye-catching one-time animation | Partial | Label CSS, per-source state and reduced-motion browser assertion. Scroll/re-entry needs live acceptance. |
 | UX-04 | No other normal browsing UI | Implemented | Noninteractive SMUI Paper is the sole in-page UI. Controls live on the extension options page. |
 | UX-05 | Noninterference and accessibility | Partial | Isolated styling, pointer-events, reduced-motion rule and test. Full native accessibility and controls review pending. |

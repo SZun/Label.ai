@@ -33,6 +33,34 @@ def wait_for_label(page, selector, expected, timeout=45_000):
     )
 
 
+def check_three_columns(page, origin):
+    """The same pixels must produce three separately anchored, fully fitting badges."""
+    page.goto(origin + "/columns")
+    for width in (1000, 1200):
+        if width == 1200:
+            # Fixed descendants inside a transformed body use body coordinates.
+            # The extension positions its overlay against the viewport.
+            page.evaluate("document.body.style.transform = 'translateX(24px)'")
+        page.set_viewport_size({"width": width, "height": 720})
+        page.wait_for_function("""() => {
+          const images = [...document.images];
+          const badges = [...document.querySelectorAll('label-ai-overlay')]
+            .flatMap(host => [...host.shadowRoot.querySelectorAll('.slop-label')]);
+          if (images.length !== 3 || badges.length !== 3) return false;
+          return images.every((image, column) => {
+            const rect = image.getBoundingClientRect();
+            const center = (rect.left + rect.right) / 2;
+            return Math.floor(3 * center / innerWidth) === column && badges.some(badge => {
+              const b = badge.getBoundingClientRect();
+              return b.width > 0 && b.height > 0 &&
+                Math.abs(b.left - rect.left) <= 12 && Math.abs(b.top - rect.top) <= 12 &&
+                b.right <= rect.right + 1 && b.bottom <= rect.bottom + 1 &&
+                getComputedStyle(badge).pointerEvents === 'none';
+            });
+          });
+        }""", timeout=45_000)
+
+
 def actual_decision(worker, selector):
     """Run the real extension inference message on the selected rendered image."""
     return worker.evaluate(
@@ -82,7 +110,7 @@ def run(build, production=False):
                 if request.url.startswith(("http://", "https://", "ws://", "wss://")):
                     path = request.url.removeprefix(origin)
                     expected = request.url.startswith(origin + "/") and (
-                        path in {"/", "/gallery.js", "/gallery.css"} or path.startswith("/assets/")
+                        path in {"/", "/columns", "/gallery.js", "/gallery.css"} or path.startswith("/assets/")
                     )
                     if not expected or request.method not in {"GET", "HEAD"} or "?" in request.url:
                         forbidden.append([request.method, request.url.split("?")[0]])
@@ -118,9 +146,10 @@ def run(build, production=False):
             assert site.locator("#local-media-1").get_attribute("src").startswith("blob:")
             site.locator("#clear-local").click()
             assert site.locator("#local-media-1").count() == 0
+            check_three_columns(site, origin)
             assert not forbidden, forbidden
             assert all(method in {"GET", "HEAD"} for method, _ in requests), requests
-        return {"signed_positive": True, "unsigned_generated_labeled": 4,
+        return {"simultaneously_labeled_columns": ["left", "middle", "right"], "signed_positive": True, "unsigned_generated_labeled": 4,
                 "genuine_completed_without_label": 4, "local_file_positive": True, "offline_local_inference": True,
                 "unexpected_requests": forbidden}
 

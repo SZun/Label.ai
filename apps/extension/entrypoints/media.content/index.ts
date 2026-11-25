@@ -15,6 +15,7 @@ import {
   type FramePayload,
   type LocalDecision,
 } from '../../src/core/protocol';
+import { badgeBounds } from '../../src/core/label-bounds';
 import { BoundedQueue } from '../../src/core/queue';
 import { CaptureSlots } from '../../src/core/capture-slots';
 import { ScanningPermission } from '../../src/core/scanning-permission';
@@ -84,7 +85,9 @@ export default defineContentScript({
     const ui = await createShadowRootUi(ctx, {
       name: 'label-ai-overlay',
       position: 'inline',
-      anchor: document.body,
+      // Badge coordinates come from getBoundingClientRect, even on pages
+      // that transform the body into a containing block for fixed children.
+      anchor: document.documentElement,
       onMount: (container) => mount(OverlayRoot, { target: container }),
       onRemove: (app) => {
         if (app) void unmount(app);
@@ -205,36 +208,13 @@ export default defineContentScript({
         return null;
       if (entry.decision.expiresAt <= Date.now() || sourceFor(entry.element) !== entry.source)
         return null;
-      const rect = entry.element.getBoundingClientRect();
-      let left = Math.max(0, rect.left),
-        top = Math.max(0, rect.top),
-        right = Math.min(innerWidth, rect.right),
-        bottom = Math.min(innerHeight, rect.bottom);
-      for (
-        let ancestor = entry.element.parentElement;
-        ancestor;
-        ancestor = ancestor.parentElement
-      ) {
-        const style = getComputedStyle(ancestor);
-        if (
-          /(hidden|clip|scroll|auto)/.test(
-            `${style.overflow} ${style.overflowX} ${style.overflowY}`,
-          )
-        ) {
-          const clip = ancestor.getBoundingClientRect();
-          left = Math.max(left, clip.left);
-          right = Math.min(right, clip.right);
-          top = Math.max(top, clip.top);
-          bottom = Math.min(bottom, clip.bottom);
-        }
-      }
-      if (right - left < 182 || bottom - top < 44 || !shown(entry.element)) return null;
+      const bounds = badgeBounds(entry.element);
+      if (!bounds || !shown(entry.element)) return null;
       if (document.fullscreenElement && !document.fullscreenElement.contains(ui.shadowHost))
         return null;
       const placement = {
         key: `${entry.id}:${entry.generation}`,
-        x: left + 8,
-        y: top + 8,
+        ...bounds,
         animate: !entry.animated,
       };
       entry.animated = true;

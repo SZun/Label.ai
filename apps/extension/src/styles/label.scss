@@ -11,6 +11,7 @@
   align-items: center;
   gap: 4px;
   width: max-content;
+  max-width: 100%;
   box-sizing: border-box;
   margin: 0;
   padding: 7px 11px;
@@ -27,6 +28,12 @@
   user-select: none;
   box-shadow: 0 2px 6px rgb(0 0 0 / 25%);
   transform-origin: top left;
+}
+.label-anchor.compact .slop-label {
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 14px;
+  white-space: normal;
 }
 .slop-label.label--new {
   animation: label-arrival 720ms cubic-bezier(0.2, 0.75, 0.25, 1) 1 both;

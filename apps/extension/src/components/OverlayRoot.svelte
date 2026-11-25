@@ -3,6 +3,8 @@
     key: string;
     x: number;
     y: number;
+    width: number;
+    compact: boolean;
     animate: boolean;
   }
 </script>
@@ -16,7 +18,11 @@
 </script>
 
 {#each labels as label (label.key)}
-  <div class="label-anchor" style={`left:${label.x}px;top:${label.y}px`}>
+  <div
+    class="label-anchor"
+    class:compact={label.compact}
+    style={`left:${label.x}px;top:${label.y}px;width:${label.width}px`}
+  >
     <SlopLabel animate={label.animate} />
   </div>
 {/each}

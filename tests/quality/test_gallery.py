@@ -1,6 +1,7 @@
 import hashlib
 import http.client
 import json
+from html.parser import HTMLParser
 import tempfile
 import unittest
 from pathlib import Path
@@ -60,6 +61,27 @@ class GalleryTests(unittest.TestCase):
             self.assertIn("form-action 'none'", headers['Content-Security-Policy'])
             status, headers, body = self.request(origin, 'GET', '/assets/' + self.signed_digest + '.jpg')
             self.assertEqual((status, headers['Content-Type'], body), (200, 'image/jpeg', self.signed))
+
+    def test_columns_page_serves_three_separate_copies_without_gallery_hooks(self):
+        images = []
+
+        class Images(HTMLParser):
+            def handle_starttag(self, tag, attrs):
+                if tag == 'img':
+                    images.append(dict(attrs))
+
+        with gallery(root=self.root) as (origin, _):
+            status, headers, body = self.request(origin, 'GET', '/columns')
+            self.assertEqual(status, 200)
+            self.assertIn('text/html', headers['Content-Type'])
+            Images().feed(body.decode())
+            self.assertEqual([image['id'] for image in images], ['left', 'center', 'right'])
+            self.assertEqual([image['width'] for image in images], ['230', '160', '128'])
+            self.assertEqual({image['src'] for image in images}, {'/assets/' + self.generated_digest + '.png'})
+            self.assertNotIn(b'<script', body)
+            self.assertNotIn(b'label-ai-test-gallery', body)
+            self.assertIn(b'href="/gallery.css"', body)
+            self.assertIn(b'href="/columns"', self.request(origin, 'GET', '/')[2])
 
     def test_asset_allowlist_and_upload_denial(self):
         with gallery(root=self.root) as (origin, requests):
