@@ -49,8 +49,6 @@ export async function readPublicMedia(
     signal.aborted ||
     !current() ||
     !response.ok ||
-    (limits.requireWholeFile &&
-      (response.status !== 200 || response.headers.has('content-range'))) ||
     response.type !== responseType ||
     response.redirected ||
     response.url !== source ||
@@ -60,11 +58,33 @@ export async function readPublicMedia(
     (length !== null && (!/^\d+$/.test(length) || Number(length) > limits.maxBytes))
   )
     return;
-  const bytes = await readBounded(response, signal, limits.maxBytes);
+  let expectedLength: number | undefined;
+  if (limits.requireWholeFile) {
+    const range = response.headers.get('content-range');
+    if (response.status === 206) {
+      // An ordinary single GET can yield a 206. Accept only an exposed range
+      // that covers the entire bounded representation, never assemble ranges.
+      const match = /^bytes 0-(\d+)\/(\d+)$/i.exec(range ?? '');
+      if (!match) return;
+      expectedLength = Number(match[2]);
+      if (
+        !expectedLength ||
+        expectedLength > limits.maxBytes ||
+        Number(match[1]) !== expectedLength - 1 ||
+        (length !== null && Number(length) !== expectedLength)
+      )
+        return;
+    } else {
+      if (response.status !== 200 || range !== null) return;
+      expectedLength = length === null ? undefined : Number(length);
+    }
+  }
+  const bytes = await readBounded(response, signal, expectedLength ?? limits.maxBytes);
   if (
     !bytes ||
+    signal.aborted ||
     !current() ||
-    (limits.requireWholeFile && length !== null && Number(length) !== bytes.byteLength)
+    (expectedLength !== undefined && expectedLength !== bytes.byteLength)
   )
     return;
   return { bytes, mime };

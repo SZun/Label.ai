@@ -4,12 +4,14 @@ from pathlib import Path
 import re
 import subprocess
 from tempfile import TemporaryDirectory
+from urllib.parse import urlsplit
 
 from playwright.sync_api import Error as BrowserError, sync_playwright
 
 from browser_test import browser_session, wait_for_registration
 from generated_video import PAGE, ROOT, SHOWCASE, fixture, observe_decisions, wait_for_video_badge
-from meta_public_video import META_PERMALINKS, prepare_meta_player, verify_meta_player
+from meta_public_video import META_PERMALINKS, check_visible_motion, prepare_meta_player, verify_meta_player
+from social_batch import check_platforms
 from x_public_video import X_POST_URL, assert_x_post, prepare_x_playback
 from tools.prepare_video_smoke import FILES, MDN
 
@@ -152,7 +154,10 @@ def stream_test(context, worker, folder, canvas_player=False):
           card.append(decoder); decoder.append(v);
           const screen = document.createElement('canvas');
           screen.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
-          card.append(screen);
+          const output = document.createElement('div');
+          output.style.cssText = 'position:absolute;inset:0';
+          screen.style.pointerEvents = 'none';
+          output.append(screen); card.append(output);
           const gestures = document.createElement('div');
           gestures.style.cssText = 'position:absolute;inset:0;opacity:0';
           card.append(gestures);
@@ -287,7 +292,13 @@ def tiktok_surface(target):
         });
       return {playing:!v.paused && !v.ended, visibleVideo:visible(v),
         canvasCount:canvases.length,matchingCanvases:canvases.filter(e=>visible(e)&&overlaps(e))
-          .map(c=>[c.width,c.height,getComputedStyle(c).pointerEvents]).slice(0,6),layers};
+          .map(c=>{
+            const b=c.getBoundingClientRect(); let ancestor=v, depth=0;
+            while(ancestor && !ancestor.contains(c)){ancestor=ancestor.parentElement;depth++;}
+            return {bitmap:[c.width,c.height],offset:[b.x-r.x,b.y-r.y,b.width-r.width,b.height-r.height].map(Math.round),
+              pointer:getComputedStyle(c).pointerEvents,sharedParentDepth:depth,
+              hidden:v.closest('article') !== c.closest('article')};
+          }).slice(0,6),layers};
     }""")
 
 
@@ -295,7 +306,6 @@ def play_tiktok(page, target):
     target.scroll_into_view_if_needed(timeout=12_000)
     # A public permalink may autoplay without exposing a separate play button.
     # Attest to actual visible motion before deciding whether a click is needed.
-    from meta_public_video import check_visible_motion
     surface = tiktok_surface(target)
     print("TikTok initial playback surface:", surface, flush=True)
     if surface["playing"] and (surface["visibleVideo"] or len(surface["matchingCanvases"]) == 1):
@@ -312,12 +322,16 @@ def play_tiktok(page, target):
     check_visible_motion(page, target)
 
 
-def live_test(context, worker, platform, manual_start=False):
+def live_test(context, worker, platform, manual_start=False, sign_in_first=False):
     url = PERMALINKS[platform]
     page = context.new_page()
     page.bring_to_front()
+    if sign_in_first:
+        origin = urlsplit(url)
+        page.goto(f"{origin.scheme}://{origin.netloc}/", wait_until="domcontentloaded", timeout=60_000)
+        input(f"Sign in to {platform} in the test window. Press Enter here once signed in: ")
     response = page.goto(url, wait_until="domcontentloaded", timeout=60_000)
-    print(f"{platform} guest permalink HTTP {response.status if response else 'unknown'}", flush=True)
+    print(f"{platform} permalink HTTP {response.status if response else 'unknown'}", flush=True)
     if manual_start:
         input("Start this public video in the test browser, then press Enter here: ")
     selector = 'video[data-label-test-playback="1"]'
@@ -364,7 +378,11 @@ def live_test(context, worker, platform, manual_start=False):
     print(f"{platform}: verified visible moving frames on the target video", flush=True)
     popup = watch_status(context, worker)
     page.bring_to_front()
-    wait_on_player(page, selector, popup, worker)
+    try:
+        wait_on_player(page, selector, popup, worker)
+    finally:
+        if platform == "tiktok" and target.count() == 1:
+            print("TikTok final playback surface:", tiktok_surface(target), flush=True)
     if platform in META_PERMALINKS:
         verify_meta_player(page, platform, target)
     elif platform == "x":
@@ -375,7 +393,7 @@ def live_test(context, worker, platform, manual_start=False):
                            "v.currentSrc === args[1].src && v.srcObject === args[1].stream", [bound, source]), (
         "The post replaced its player or media before the badge was verified"
     )
-    print(f"{platform}: production badge verified on the playing guest video at {url}", flush=True)
+    print(f"{platform}: production badge verified on the playing video at {url}", flush=True)
 
 
 if __name__ == "__main__":
@@ -383,10 +401,14 @@ if __name__ == "__main__":
     parser.add_argument("--build", required=True, type=Path)
     parser.add_argument("--browser")
     parser.add_argument("--canvas-player", action="store_true")
-    parser.add_argument("--live", choices=PERMALINKS)
+    parser.add_argument("--live", choices=[*PERMALINKS, "all"], help="Named public post or all five required platforms")
     parser.add_argument("--headed", action="store_true", help="Show the temporary Chrome test profile")
     parser.add_argument("--manual-start", action="store_true", help="Wait for you to start the public post")
+    parser.add_argument("--sign-in-first", action="store_true",
+                        help="Pause on each platform so you can sign in normally before testing its post")
     args = parser.parse_args()
+    if args.sign_in_first and not (args.headed and args.live):
+        parser.error("--sign-in-first requires --headed and --live")
     if args.manual_start and not (args.headed and args.live):
         parser.error("--manual-start requires --headed and --live")
     build = args.build.resolve()
@@ -396,7 +418,20 @@ if __name__ == "__main__":
         with browser_session(pw, profile, launch, args) as context:
             worker = wait_for_registration(context, build)
             start_trace(worker)
-            if args.live:
-                live_test(context, worker, args.live, args.manual_start)
+            if args.live == "all":
+                def check(platform):
+                    previous = set(context.pages)
+                    try:
+                        live_test(context, worker, platform, args.manual_start, args.sign_in_first)
+                    except BrowserError as exc:
+                        raise RuntimeError("Could not verify the public player in this browser") from exc
+                    finally:
+                        for page in context.pages:
+                            if page not in previous:
+                                page.close()
+                if not all(check_platforms(check).values()):
+                    raise SystemExit(1)
+            elif args.live:
+                live_test(context, worker, args.live, args.manual_start, args.sign_in_first)
             else:
                 stream_test(context, worker, Path(folder), args.canvas_player)

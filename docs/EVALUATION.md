@@ -43,9 +43,11 @@ The YouTube guest session required sign-in before playback. On TikTok an early p
 
 The Social video playback workflow installs the production extension in Chrome for Testing and opens one independently identified public generated video each on YouTube, TikTok, Facebook, Instagram and X. The five-platform job requires five successful live checks. A site that blocks playback, a post that changes during the check, and a detector that leaves the player unlabelled each prevent a pass. The separate stream, canvas, local video and public MP4 checks exercise the same build.
 
-To reproduce a single check with a visible Chrome for Testing window, build the extension, install the Playwright dependency from `tests/e2e/requirements.txt`, and run the following from the repository root. Set `CHROME_FOR_TESTING` to the browser executable. Choose `youtube`, `tiktok`, `facebook`, `instagram` or `x`. The temporary profile starts fresh and is deleted when the check exits.
+To run all five checks with a visible Chrome for Testing window, build the extension, install the Playwright dependency from `tests/e2e/requirements.txt`, and run the following from the repository root. Set `CHROME_FOR_TESTING` to the browser executable. Use `all` for a per-platform summary and a failing exit code if any check fails. For a single post, choose `youtube`, `tiktok`, `facebook`, `instagram` or `x`. The temporary profile starts fresh and is deleted when the check exits.
 
 ```sh
-python3 tests/e2e/social_video.py --live instagram --headed --manual-start \
+python3 tests/e2e/social_video.py --live all --headed --sign-in-first --manual-start \
   --browser "$CHROME_FOR_TESTING" --build apps/extension/.output/chrome-mv3
 ```
+
+With `--sign-in-first`, enter credentials only in the platform’s own browser window. Press Enter in the terminal after sign-in. The runner then opens the exact public post and checks its moving player and video badge. Your usual Chrome profile is separate. Omit the sign-in flag for a guest run. The extension itself starts automatically when browser access and page eligibility allow it.
