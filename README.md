@@ -29,6 +29,8 @@ Open the [VideoCrafter2 project page](https://ailab-cvc.github.io/videocrafter2/
 
 On a social feed, keep the video you want to check playing in the foreground. Click the extension icon to see whether the main page has a visible player, whether the scanner is waiting for frames, whether analysis is running, or whether the detector completed without enough evidence. Some social players decode video in a transparent element and paint it on a visible canvas. When the extension can identify a single matching canvas in that player, it samples the displayed canvas and ties the badge to that surface. The same scanner handles ordinary sites and social sites. A readable player can still carry generated footage the model misses.
 
+Public posts can be scanned while signed out. If a social site requires an account to play the post, sign in on that site and play it normally. Label.ai uses the same on-device scan in both cases. The five-platform browser check covers YouTube, TikTok, Facebook, Instagram and X and supports signing in yourself in a temporary Chrome profile. [Run the live checks](docs/EVALUATION.md#five-platform-playback-acceptance)
+
 ### Try a public image
 
 With the regular extension active, open the public [Keras textual inversion tutorial](https://keras.io/examples/generative/fine_tune_via_textual_inversion/#taking-the-fine-tuned-model-for-a-spin). Scroll to the first row of generated samples in **Taking the Fine Tuned Model for a Spin**. Keep that row in view while the model runs. Each row of three pictures in this tutorial is a single PNG and receives one badge for that whole image.

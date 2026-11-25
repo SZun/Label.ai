@@ -47,7 +47,17 @@ To run all five checks with a visible Chrome for Testing window, build the exten
 
 ```sh
 python3 tests/e2e/social_video.py --live all --headed --sign-in-first --manual-start \
-  --browser "$CHROME_FOR_TESTING" --build apps/extension/.output/chrome-mv3
+  --browser "$CHROME_FOR_TESTING" --build apps/extension/.output/chrome-mv3 --report social-results.json
 ```
 
-With `--sign-in-first`, enter credentials only in the platform’s own browser window. Press Enter in the terminal after sign-in. The runner then opens the exact public post and checks its moving player and video badge. Your usual Chrome profile is separate. Omit the sign-in flag for a guest run. The extension itself starts automatically when browser access and page eligibility allow it.
+With `--sign-in-first`, enter credentials only in the platform’s own browser window. Press Enter in the terminal after sign-in. The runner then opens the exact public post and checks its moving player and video badge. Your usual Chrome profile is separate. Omit the sign-in flag for a guest run. The extension itself starts automatically when browser access and page eligibility allow it. The optional local report records the build fingerprint, session mode, time, and five outcomes. It contains no screenshots, account details, or browsing history. A successful signed-in batch supplies separate five-platform acceptance evidence when the hosted guest run encounters access restrictions.
+
+#### Signed-in testing and public browsing
+
+Label.ai has no account system. Visitors can receive a badge on accessible public posts while signed out. When a platform requires sign-in before playing a post, the viewer signs in to that platform through the normal browser UI. The extension keeps using the same local scanner. It never asks for a password or copies session cookies. Private messages, active password forms and protected video are outside the scanner’s supported scope.
+
+The hosted guest run exercises five public permalinks. A local signed-in run exercises those same posts in a separate temporary Chrome profile. Both require visible moving footage and the extension's video badge on the same player. An account prompt, unrelated thumbnail badge or successful local fixture leaves that platform unverified.
+
+In installed Chrome, the production scanner submitted ten frames from the first four seconds of a 45-second player. It displayed a badge on the generated scene at 18.2 seconds. After the source changed to camera footage, the scanner completed at 17.2 seconds and left the player unlabelled. These are playback and timing controls from two source clips. [Browser check](https://github.com/SZun/Label.ai/actions/runs/45541711522/job/138961720502)
+
+An offline experiment cropped the center square from each decoded video frame before resizing it to at most 440 pixels. It kept the packaged model and existing motion, scene-cut and score checks. At the 12-frame benchmark cadence, the crop flagged 3 of 48 previously missed generated sources and none of 44 previously unflagged camera sources (45 camera windows). Only those three newly flagged generated clips were retested at the social player's ten-frame cadence, where two still gained a badge. At that cadence, the crop also flagged one of 72 distinct camera sources. On the identical four seconds of a recorded interview, the current detector abstained with a lower-quartile score of 0.074 and the crop labeled it at 0.791. This new false positive kept the crop out of the extension. [Camera control](https://commons.wikimedia.org/wiki/File:Giga_Connectivity_Forum_2024_%22Entretien_Tapis_Rouge%22-_H.E._Aurelie_Adam_Soule_Zoumarou,_Benin.webm)

@@ -46,7 +46,7 @@ def assert_x_post(page, selector):
     video = page.locator(selector)
     if video.count() != 1 or not video.evaluate(BOUND, BINDING):
         raise AssertionError("The visible X player no longer belongs to the expected post")
-    if not video.evaluate("v => Boolean(v.currentSrc) && v.currentSrc === v.dataset.labelTestXSource"):
+    if not video.evaluate("v => Boolean(v.currentSrc) && v.currentSrc === v[Symbol.for('label-ai-test-x-source')]"):
         raise AssertionError("X changed the media source while awaiting the badge")
 
 
@@ -86,7 +86,7 @@ def prepare_x_playback(page):
             metadata.mediaTime >= first.mediaTime + 0.1 && !video.paused && video.videoWidth > 0) {
           clearTimeout(timeout);
           video.dataset.labelTestXPlayback = '1';
-          video.dataset.labelTestXSource = video.currentSrc;
+          video[Symbol.for('label-ai-test-x-source')] = video.currentSrc;
           resolve(true);
         } else {
           callback = video.requestVideoFrameCallback(frame);

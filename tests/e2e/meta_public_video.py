@@ -1,4 +1,6 @@
 """Verify public Facebook and Instagram reels with the site's ordinary playback UI."""
+from contextlib import contextmanager
+
 
 # CyberPeace matched these frames and documented the AI-content disclosure on
 # this specific Powarstar Sumit Pathak reel:
@@ -186,24 +188,97 @@ VERIFY_PLAYER = """post => {
 }"""
 
 
+@contextmanager
+def optional_diagnostics():
+    """Diagnostic reads are best effort; never echo arbitrary browser error text."""
+    try:
+        yield
+    except Exception:
+        print("Some browser diagnostics were unavailable", flush=True)
+
+
+MOTION_SURFACE = """v => {
+  const visible = e => e.checkVisibility({opacityProperty:true,visibilityProperty:true});
+  if (visible(v)) return v;
+  const post = v.closest('article,[role=article]');
+  if (!post || !v.videoWidth || !v.videoHeight) return null;
+  const r = v.getBoundingClientRect();
+  const aligned = [...post.querySelectorAll('canvas')].filter(c => {
+    const b = c.getBoundingClientRect();
+    return visible(c) && c.height && Math.abs(c.width/c.height/(v.videoWidth/v.videoHeight)-1)<=0.05 &&
+      ['left','right','top','bottom'].every(key => Math.abs(b[key]-r[key])<=2);
+  });
+  return aligned.length === 1 ? aligned[0] : null;
+}"""
+MOTION_SAMPLE = """(v, initial) => {
+  const screen = initial.surface;
+  if (!screen || !v.isConnected || !screen.isConnected || !v.videoWidth || !(v.currentSrc || v.srcObject) ||
+      v.currentSrc !== initial.src || v.srcObject !== initial.stream || location.href !== initial.page ||
+      v.paused || v.ended || v.seeking || v.readyState < 2 || (""" + MOTION_SURFACE + """)(v) !== screen) return null;
+  const visible = e => e.checkVisibility({opacityProperty:true,visibilityProperty:true});
+  if ([...document.querySelectorAll('input[type=password]')].some(visible)) return null;
+  const r = screen.getBoundingClientRect();
+  const left = Math.max(0,r.left), top = Math.max(0,r.top);
+  const width = Math.min(innerWidth,r.right)-left, height = Math.min(innerHeight,r.bottom)-top;
+  if (width < 160 || height < 90) return null;
+  const accessible = (x,y) => {
+    const hit = document.elementFromPoint(x,y);
+    if (!hit || hit === document.body || hit === document.documentElement ||
+        hit.closest('input,textarea,form,iframe,button,a[href],[role=button]') ||
+        hit.closest('[role=dialog],dialog') !== screen.closest('[role=dialog],dialog')) return false;
+    if (hit === screen) return true;
+    // A same-size player wrapper can receive pointer events over its media.
+    for (let box=screen.parentElement; box && box!==document.body; box=box.parentElement) {
+      const b=box.getBoundingClientRect();
+      if (['left','right','top','bottom'].every(key=>Math.abs(b[key]-r[key])<=2) && box.contains(hit)) {
+        const style=getComputedStyle(hit);
+        if (hit===box || (!hit.matches('img,canvas,video,svg') && style.backgroundImage==='none' &&
+            style.backgroundColor==='rgba(0, 0, 0, 0)')) return true;
+      }
+      if (box.matches('article,[role=article]')) break;
+    }
+    return false;
+  };
+  const clips = [];
+  for (const [fx,fy] of [[0.35,0.4],[0.65,0.6]]) {
+    const x=Math.floor(left+width*fx), y=Math.floor(top+height*fy);
+    if (![[0,0],[-15,-15],[15,15],[-15,15],[15,-15]].every(([dx,dy])=>accessible(x+dx,y+dy))) continue;
+    clips.push({x:x+scrollX-16,y:y+scrollY-16,width:32,height:32});
+  }
+  const quality=v.getVideoPlaybackQuality();
+  return clips.length ? {clips, frames:quality.totalVideoFrames-quality.droppedVideoFrames, time:v.currentTime} : null;
+}"""
+
+
 def check_visible_motion(page, player):
-    # Decoder callbacks can advance underneath a cover. Sample the interior
-    # actually seen by the viewer, away from the controls and label. The test
-    # keeps these pixels in memory and writes no screenshots.
-    clips = player.evaluate("""v => {
-      const r = v.getBoundingClientRect();
-      const left = Math.max(0, r.left), top = Math.max(0, r.top);
-      const width = Math.min(innerWidth, r.right) - left, height = Math.min(innerHeight, r.bottom) - top;
-      return [[0.35,0.4],[0.65,0.6]].map(([fx,fy]) => ({
-        x:scrollX+left+Math.floor(width*fx)-16, y:scrollY+top+Math.floor(height*fy)-16, width:32, height:32
-      }));
-    }""")
-    baseline = [page.screenshot(clip=clip) for clip in clips]
-    for _ in range(6):
-        page.wait_for_timeout(300)
-        if any(page.screenshot(clip=clip) != previous for clip, previous in zip(clips, baseline)):
-            return
-    raise AssertionError("The public reel presented decoder frames but its visible surface did not move")
+    """Require repeated visible motion on a stable surface and advancing presentation."""
+    bound = player.element_handle(timeout=2000)
+    if bound is None:
+        raise AssertionError("Target video was removed")
+    initial = bound.evaluate_handle("v => ({surface:(" + MOTION_SURFACE +
+                                    ")(v), src:v.currentSrc, stream:v.srcObject, page:location.href})")
+    try:
+        previous = None
+        previous_pixels = []
+        consecutive = 0
+        for index in range(7):
+            if index:
+                page.wait_for_timeout(300)
+            sample = bound.evaluate(MOTION_SAMPLE, initial)
+            if not sample:
+                raise AssertionError("The public player has no bound unobstructed playback surface")
+            pixels = [page.screenshot(clip=clip, timeout=2000) for clip in sample["clips"]]
+            advancing = (previous and previous["clips"] == sample["clips"] and
+                         sample["frames"] > previous["frames"] and sample["time"] > previous["time"])
+            consecutive = consecutive + 1 if advancing and pixels != previous_pixels else 0
+            if consecutive >= 2:
+                return
+            previous, previous_pixels = sample, pixels
+        raise AssertionError("The visible player did not change across two advancing presentation intervals")
+    finally:
+        with optional_diagnostics():
+            initial.dispose()
+            bound.dispose()
 
 
 def prepare_meta_player(page, platform):
@@ -212,8 +287,9 @@ def prepare_meta_player(page, platform):
     try:
         return _play_meta_post(page, platform, post)
     except Exception:
-        if not page.is_closed():
-            print(f"{platform}: public viewer state {page.evaluate(DIAGNOSTICS, post)}", flush=True)
+        with optional_diagnostics():
+            if not page.is_closed():
+                print(f"{platform}: public viewer state {page.evaluate(DIAGNOSTICS, post)}", flush=True)
         raise
 
 

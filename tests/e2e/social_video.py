@@ -4,14 +4,14 @@ from pathlib import Path
 import re
 import subprocess
 from tempfile import TemporaryDirectory
-from urllib.parse import urlsplit
 
-from playwright.sync_api import Error as BrowserError, sync_playwright
+from playwright.sync_api import Error as BrowserError, TimeoutError as BrowserTimeout, sync_playwright
 
 from browser_test import browser_session, wait_for_registration
 from generated_video import PAGE, ROOT, SHOWCASE, fixture, observe_decisions, wait_for_video_badge
-from meta_public_video import META_PERMALINKS, check_visible_motion, prepare_meta_player, verify_meta_player
-from social_batch import check_platforms
+from meta_public_video import META_PERMALINKS, check_visible_motion, optional_diagnostics, prepare_meta_player, verify_meta_player
+from social_batch import check_platforms, open_public_post, write_report
+from tiktok_viewer import inspect_viewer, wait_on_tiktok
 from x_public_video import X_POST_URL, assert_x_post, prepare_x_playback
 from tools.prepare_video_smoke import FILES, MDN
 
@@ -89,13 +89,21 @@ def start_trace(worker):
     }""")
 
 
-def wait_on_player(page, selector, popup, worker):
+def wait_on_player(page, selector, popup, worker, platform=None):
     try:
-        wait_for_video_badge(page, selector)
+        if platform == "tiktok":
+            wait_on_tiktok(page, selector, TIKTOK, wait_for_video_badge, BrowserTimeout)
+        else:
+            wait_for_video_badge(page, selector)
     finally:
-        print("Recent video requests:", worker.evaluate("globalThis.socialTrace ?? []"), flush=True)
-        print("Last toolbar status:", popup.locator('[role=status]').inner_text(timeout=5000), flush=True)
-        print("Player at check:", page.locator(selector).evaluate("""v => ({
+        with optional_diagnostics():
+            report_player_state(page, selector, popup, worker)
+
+
+def report_player_state(page, selector, popup, worker):
+    print("Recent video requests:", worker.evaluate("globalThis.socialTrace ?? []"), flush=True)
+    print("Last toolbar status:", popup.locator('[role=status]').inner_text(timeout=2000), flush=True)
+    print("Player at check:", page.locator(selector).evaluate("""v => ({
           duration: Number.isFinite(v.duration) ? v.duration : 'stream',
           sourceType: v.srcObject?.constructor?.name || v.currentSrc.split(':')[0],
           pixels: (() => {try { if (!v.checkVisibility({opacityProperty:true,visibilityProperty:true}))
@@ -113,7 +121,7 @@ def wait_on_player(page, selector, popup, worker):
           decision: document.documentElement.dataset.videoTestDecision,
           badgeCount: Array.from(document.querySelectorAll('label-ai-overlay'))
             .reduce((n,e)=>n+(e.shadowRoot?.querySelectorAll('.slop-label').length??0),0)
-        })"""), flush=True)
+        })""", timeout=2000), flush=True)
 
 
 def stream_test(context, worker, folder, canvas_player=False):
@@ -314,6 +322,9 @@ def play_tiktok(page, target):
             return
         except AssertionError:
             pass
+    state = inspect_viewer(page, target, TIKTOK, True)
+    if state == "account":
+        raise RuntimeError("TikTok requires sign-in before public playback")
     click_tiktok_player(page, target)
     surface = tiktok_surface(target)
     print("TikTok playback surface after click:", surface, flush=True)
@@ -326,11 +337,7 @@ def live_test(context, worker, platform, manual_start=False, sign_in_first=False
     url = PERMALINKS[platform]
     page = context.new_page()
     page.bring_to_front()
-    if sign_in_first:
-        origin = urlsplit(url)
-        page.goto(f"{origin.scheme}://{origin.netloc}/", wait_until="domcontentloaded", timeout=60_000)
-        input(f"Sign in to {platform} in the test window. Press Enter here once signed in: ")
-    response = page.goto(url, wait_until="domcontentloaded", timeout=60_000)
+    response = open_public_post(page, platform, url, sign_in_first)
     print(f"{platform} permalink HTTP {response.status if response else 'unknown'}", flush=True)
     if manual_start:
         input("Start this public video in the test browser, then press Enter here: ")
@@ -379,10 +386,11 @@ def live_test(context, worker, platform, manual_start=False, sign_in_first=False
     popup = watch_status(context, worker)
     page.bring_to_front()
     try:
-        wait_on_player(page, selector, popup, worker)
+        wait_on_player(page, selector, popup, worker, platform)
     finally:
-        if platform == "tiktok" and target.count() == 1:
-            print("TikTok final playback surface:", tiktok_surface(target), flush=True)
+        with optional_diagnostics():
+            if platform == "tiktok" and target.count() == 1:
+                print("TikTok final playback surface:", tiktok_surface(target), flush=True)
     if platform in META_PERMALINKS:
         verify_meta_player(page, platform, target)
     elif platform == "x":
@@ -406,7 +414,10 @@ if __name__ == "__main__":
     parser.add_argument("--manual-start", action="store_true", help="Wait for you to start the public post")
     parser.add_argument("--sign-in-first", action="store_true",
                         help="Pause on each platform so you can sign in normally before testing its post")
+    parser.add_argument("--report", type=Path, help="Write the local five-platform results to a JSON file")
     args = parser.parse_args()
+    if args.report and args.live != "all":
+        parser.error("--report requires --live all")
     if args.sign_in_first and not (args.headed and args.live):
         parser.error("--sign-in-first requires --headed and --live")
     if args.manual_start and not (args.headed and args.live):
@@ -429,7 +440,10 @@ if __name__ == "__main__":
                         for page in context.pages:
                             if page not in previous:
                                 page.close()
-                if not all(check_platforms(check).values()):
+                results = check_platforms(check)
+                if args.report:
+                    write_report(args.report, build, results, args.sign_in_first)
+                if not all(results.values()):
                     raise SystemExit(1)
             elif args.live:
                 live_test(context, worker, args.live, args.manual_start, args.sign_in_first)

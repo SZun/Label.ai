@@ -31,7 +31,7 @@ def fixture(path, source, digest):
     return data
 
 
-def wait_for_video_badge(site, target):
+def wait_for_video_badge(site, target, timeout=100_000):
     site.wait_for_function("""selector => {
       const video = document.querySelector(selector);
       if (!video || !video.videoWidth) return false;
@@ -42,7 +42,7 @@ def wait_for_video_badge(site, target):
           return b.width > 0 && Math.abs(b.left - Math.max(0,r.left) - 8) < 3 &&
                   Math.abs(b.top - Math.max(0,r.top) - 8) < 3;
         }));
-    }""", arg=target, timeout=100_000)
+    }""", arg=target, timeout=timeout)
 
 
 def check_fullscreen_badge(site):
