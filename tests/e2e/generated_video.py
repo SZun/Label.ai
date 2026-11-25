@@ -44,6 +44,34 @@ def wait_for_video_badge(site, target):
     }""", arg=target, timeout=100_000)
 
 
+def check_fullscreen_badge(site):
+    # A user can fullscreen the entire player UI or use the native video control.
+    # Hit-testing ensures the badge actually paints in front of the fullscreen
+    # element. A nonzero rectangle alone also passes behind its opaque backdrop.
+    assert site.locator('label-ai-overlay').evaluate(
+        "el => getComputedStyle(el).position === 'fixed' && getComputedStyle(el).pointerEvents === 'none'"
+    )
+    for selector in ("#player", "#film"):
+        site.locator(selector).evaluate("el => el.requestFullscreen()")
+        site.wait_for_function("s => document.fullscreenElement === document.querySelector(s)", arg=selector)
+        wait_for_video_badge(site, "#film")
+        site.wait_for_function("""() => {
+          const host = document.querySelector('label-ai-overlay');
+          const badge = host?.shadowRoot?.querySelector('.slop-label');
+          if (!badge) return false;
+          const {left,top,width,height} = badge.getBoundingClientRect();
+          badge.style.setProperty('pointer-events','auto','important');
+          try {
+            return document.elementFromPoint(left + width / 2, top + height / 2) === host;
+          } finally {
+            badge.style.removeProperty('pointer-events');
+          }
+        }""", timeout=10_000)
+        site.evaluate("document.exitFullscreen()")
+        wait_for_video_badge(site, "#film")
+        assert site.locator('html > label-ai-overlay').count() == 1
+
+
 def observe_decisions(worker):
     worker.evaluate("""async () => {
       const [tab] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
@@ -76,7 +104,7 @@ def feed(context, worker):
                 index = req.url[-1]
                 url = (PAGE if index == "2" else CDN) + "/clip" + index + ".mp4"
                 html = ('<!doctype html><meta charset="utf-8"><link rel="icon" href="data:,"><title>Watch</title>'
-                        f'<video id="film" width="384" height="320" controls playsinline muted preload="auto" src="{url}"></video>')
+                        f'<section id="player"><video id="film" width="384" height="320" controls playsinline muted preload="auto" src="{url}"></video></section>')
                 return route.fulfill(content_type="text/html", body=html)
             if req.url in (CDN + "/clip1.mp4", PAGE + "/clip2.mp4", CDN + "/clip3.mp4"):
                 headers = {"Access-Control-Allow-Origin": PAGE} if req.url.endswith("clip1.mp4") else {}
@@ -104,6 +132,7 @@ def feed(context, worker):
             site.locator("video").evaluate("(v) => {v.loop=true;return v.play()}")
         if n == 1:
             wait_for_video_badge(site, "#film")
+            check_fullscreen_badge(site)
             assert CDN + "/clip1.mp4" in reads
             print("Labeled actual Luma Ray generated footage in an ordinary cross-origin HTTPS player", flush=True)
         elif n == 2:

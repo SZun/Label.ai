@@ -21,7 +21,7 @@ it('checks every accessible frame ancestor before acquiring pixels and rejects a
   function frame(url: string, password = false, parent?: Window) {
     const result = {
       location: new URL(url),
-      document: { querySelector: () => (password ? {} : null) },
+      document: { querySelectorAll: () => (password ? [{ closest: () => null }] : []) },
     } as unknown as Window;
     Object.defineProperty(result, 'parent', { value: parent ?? result });
     return result;
@@ -47,4 +47,29 @@ it('checks every accessible frame ancestor before acquiring pixels and rejects a
   expect(
     eligibleDocumentChain(frame('https://public.example/embed', false, inaccessible), settings),
   ).toBe(false);
+});
+
+it('allows a public player with a closed login dialog and stops when the form opens', async () => {
+  const { eligibleDocumentChain, DEFAULT_SETTINGS } = await import('../src/core/policy');
+  const frame = {
+    location: new URL('https://public.example/watch'),
+    document,
+  } as unknown as Window;
+  Object.defineProperty(frame, 'parent', { value: frame });
+  document.body.innerHTML = '<video></video><dialog><form><input type="password"></form></dialog>';
+  try {
+    const dialog = document.querySelector('dialog')!;
+    expect(eligibleDocumentChain(frame, DEFAULT_SETTINGS)).toBe(true);
+    dialog.open = true;
+    expect(eligibleDocumentChain(frame, DEFAULT_SETTINGS)).toBe(false);
+    dialog.remove();
+    document.body.innerHTML = '<div hidden><input type="password"></div><input type="password">';
+    expect(eligibleDocumentChain(frame, DEFAULT_SETTINGS)).toBe(false);
+    document.body.lastElementChild!.remove();
+    expect(eligibleDocumentChain(frame, DEFAULT_SETTINGS)).toBe(true);
+    document.body.firstElementChild!.removeAttribute('hidden');
+    expect(eligibleDocumentChain(frame, DEFAULT_SETTINGS)).toBe(false);
+  } finally {
+    document.body.replaceChildren();
+  }
 });

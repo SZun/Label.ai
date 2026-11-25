@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { browsingModelLabel } from '../src/core/model-label';
+import { browsingModelLabel, playbackWindowLabel } from '../src/core/model-label';
 
 it('uses the ordinary image score boundary', () => {
   expect(browsingModelLabel('image', { status: 'COMPLETED', rawScore: 0.1 })).toBe(true);
@@ -52,5 +52,25 @@ it('labels a moving clip with time-distributed evidence despite a weak frame, pr
         temporal: { ...temporal, reasonCodes: [...temporal.reasonCodes, reason] },
       }),
     ).toBe(false);
+  }
+});
+
+it('requires strong, moving, distributed evidence for the current playback window', () => {
+  const temporal = {
+    eligible: true,
+    sustainedFrameEvidence: true,
+    motionEnergy: 0.02,
+    sceneCuts: 0,
+  };
+  const result = { status: 'COMPLETED' as const, rawScore: 0.8, temporal };
+  expect(playbackWindowLabel(result)).toBe(true);
+  expect(playbackWindowLabel({ ...result, rawScore: 0.2 })).toBe(false);
+  for (const change of [
+    { eligible: false },
+    { motionEnergy: 0 },
+    { sceneCuts: 1 },
+    { sustainedFrameEvidence: false },
+  ]) {
+    expect(playbackWindowLabel({ ...result, temporal: { ...temporal, ...change } })).toBe(false);
   }
 });

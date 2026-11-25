@@ -1,6 +1,7 @@
 import { boundedDimensions, embeddedOriginal, contentAddressedSource } from '../core/media';
 import {
   decodeBase64,
+  newScanId,
   encodeBase64,
   MAX_ORIGINAL_BYTES,
   MAX_SIDE,
@@ -14,9 +15,27 @@ import { readBlobOriginal } from './blob-original';
 import { backgroundCrop, backgroundImageSource } from './background-image';
 import { readCorsBitmap, readPublicBitmap } from './cors-image';
 
+// A worker can attach its MediaSource directly without ever assigning a URL.
+const playbackObjects = new WeakMap<object, string>();
+function videoSource(video: HTMLVideoElement): string {
+  const source = video.srcObject;
+  if (!source) return video.currentSrc || video.src;
+  if (
+    !(typeof MediaSource !== 'undefined' && source instanceof MediaSource) &&
+    !(typeof MediaSourceHandle !== 'undefined' && source instanceof MediaSourceHandle)
+  )
+    return '';
+  let id = playbackObjects.get(source);
+  if (!id) {
+    id = 'media-source:' + newScanId();
+    playbackObjects.set(source, id);
+  }
+  return id;
+}
+
 export function sourceFor(element: Element): string {
   if (element instanceof HTMLImageElement) return element.currentSrc || element.src;
-  if (element instanceof HTMLVideoElement) return element.currentSrc || element.src;
+  if (element instanceof HTMLVideoElement) return videoSource(element);
   return backgroundImageSource(element);
 }
 
@@ -163,4 +182,18 @@ export function captureVideoFrame(
 ): FramePayload {
   if (video.readyState < 2 || video.mediaKeys) throw new Error('Video pixels are unavailable');
   return pixels(video, video.videoWidth, video.videoHeight, maxSide, timestampMs);
+}
+
+// A tiny color grid lets the scanner retire a segment verdict on a cut while
+// inference is running. Keep this canvas private to one observed window.
+export function createVideoSceneReader(video: HTMLVideoElement) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 8;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  return () => {
+    if (!context || video.mediaKeys || video.readyState < 2)
+      throw new Error('Current video scene is unavailable');
+    context.drawImage(video, 0, 0, 8, 8);
+    return context.getImageData(0, 0, 8, 8).data;
+  };
 }

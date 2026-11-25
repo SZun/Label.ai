@@ -1,6 +1,20 @@
 // SMUI publishes its compiled Material stylesheet without a CSS export mapping.
 @use '../../node_modules/@smui/paper/bare.css';
 
+// WXT resets :host with all:initial !important in this shadow stylesheet.
+// Keep the viewport anchor above player UI and let clicks pass through it.
+:host {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
+  z-index: 2147483646 !important;
+}
+:host::backdrop {
+  background: transparent;
+  pointer-events: none;
+}
 .label-anchor {
   position: fixed;
   pointer-events: none;

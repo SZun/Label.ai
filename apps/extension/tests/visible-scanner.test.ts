@@ -155,3 +155,47 @@ it('waits for a CSS card to enter view and attempts an unreadable source only on
     card.remove();
   }
 });
+
+it('keeps the installed overlay inside a fullscreen player and restores its viewport anchor on exit', async () => {
+  vi.stubGlobal('defineContentScript', (script: unknown) => script);
+  class Observer {
+    observe() {}
+    disconnect() {}
+  }
+  vi.stubGlobal('IntersectionObserver', Observer);
+  vi.stubGlobal('ResizeObserver', Observer);
+  const player = document.body.appendChild(document.createElement('section'));
+  const host = document.documentElement.appendChild(document.createElement('label-ai-overlay'));
+  state.ui.mockResolvedValue({ shadowHost: host, mount() {}, remove() {} });
+  let fullscreen: Element | null = player;
+  Object.defineProperty(document, 'fullscreenElement', {
+    configurable: true,
+    get: () => fullscreen,
+  });
+  const dispose: Array<() => void> = [];
+  const context = {
+    onInvalidated: (listener: () => void) => dispose.push(listener),
+    addEventListener: (target: EventTarget, event: string, handler: EventListener) => {
+      target.addEventListener(event, handler);
+      dispose.push(() => target.removeEventListener(event, handler));
+    },
+    setInterval: vi.fn(),
+    requestAnimationFrame: vi.fn(),
+  };
+  const { default: script } = await import('../entrypoints/media.content/index');
+  try {
+    await script.main(context as unknown as ContentScriptContext);
+    expect(host.parentElement).toBe(player);
+    fullscreen = null;
+    document.dispatchEvent(new Event('fullscreenchange'));
+    expect(host.parentElement).toBe(document.documentElement);
+    fullscreen = player;
+    document.dispatchEvent(new Event('fullscreenchange'));
+    expect(host.parentElement).toBe(player);
+  } finally {
+    for (const cleanup of dispose) cleanup();
+    Reflect.deleteProperty(document, 'fullscreenElement');
+    host.remove();
+    player.remove();
+  }
+});

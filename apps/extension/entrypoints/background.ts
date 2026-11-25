@@ -20,12 +20,16 @@ import {
   type LocalDecision,
 } from '../src/core/protocol';
 import { BoundedQueue } from '../src/core/queue';
-import { BROWSING_MODEL_POLICY_VERSION, browsingModelLabel } from '../src/core/model-label';
+import {
+  BROWSING_MODEL_POLICY_VERSION,
+  browsingModelLabel,
+  playbackWindowLabel,
+} from '../src/core/model-label';
 import { migrateSettings, readSettings, SETTINGS_KEY } from '../src/transport/settings';
 import { localProvenance, clearProvenance } from '../src/transport/provenance';
 
 export default defineBackground(() => {
-  const queue = new BoundedQueue(1, 8);
+  const queue = new BoundedQueue(1, 8, 1);
   let detector: ReturnType<typeof createLocalDetector> | undefined;
   const injectingTabs = new Set<number>();
   const pending = new Map<
@@ -206,7 +210,7 @@ export default defineBackground(() => {
         finish(noLabel(input, 'CANCELED'));
       }, 45_000 * segmentCount);
       pending.set(key, { tabId, windowId: sender.tab!.windowId, documentId, abort, finish, input });
-      const accepted = queue.enqueue(key, async () => {
+      const run = async () => {
         try {
           if (abort.signal.aborted || !(await validSender(sender, await readSettings()))) {
             finish(noLabel(input, 'CANCELED'));
@@ -266,15 +270,20 @@ export default defineBackground(() => {
                   signal: abort.signal,
                 })
               : await engine.analyzeRgba({ ...decode(input.frame!), signal: abort.signal });
-            const estimated = LOCAL_TEST_BUILD
-              ? localTestDecision(true, sender.url, input.kind, result)
-              : browsingModelLabel(input.kind, result);
-            const estimateVersion = LOCAL_TEST_BUILD
-              ? LOCAL_TEST_POLICY_VERSION
-              : BROWSING_MODEL_POLICY_VERSION;
+            const playbackWindow = input.scope === 'playback-window';
+            const estimated = playbackWindow
+              ? playbackWindowLabel(result)
+              : LOCAL_TEST_BUILD
+                ? localTestDecision(true, sender.url, input.kind, result)
+                : browsingModelLabel(input.kind, result);
+            const estimateVersion = playbackWindow
+              ? 'observed-playback-window-v1'
+              : LOCAL_TEST_BUILD
+                ? LOCAL_TEST_POLICY_VERSION
+                : BROWSING_MODEL_POLICY_VERSION;
             // Existing calibrated policies apply to a single input. The long-clip
             // preview requires an eligible, independently positive result in every window.
-            const approved = segmentCount === 1 && result.shouldLabel;
+            const approved = !playbackWindow && segmentCount === 1 && result.shouldLabel;
             decision = {
               ...noLabel(input, result.status),
               shouldLabel: result.status === 'COMPLETED' && (approved || estimated),
@@ -293,7 +302,8 @@ export default defineBackground(() => {
           clearTimeout(timeout);
           pending.delete(key);
         }
-      });
+      };
+      const accepted = queue.enqueue(key, run, input.kind === 'video' ? 'playback' : undefined);
       if (!accepted) {
         clearTimeout(timeout);
         pending.delete(key);
@@ -403,9 +413,6 @@ export default defineBackground(() => {
   });
   browser.runtime.onStartup.addListener(() => {
     void syncRegistration().catch(() => {});
-  });
-  browser.action.onClicked.addListener(() => {
-    void browser.runtime.openOptionsPage();
   });
   void syncRegistration().catch(() => {});
 });

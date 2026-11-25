@@ -90,6 +90,16 @@ export function normalizeSettings(value: unknown): LocalSettings {
   };
 }
 
+function hasActivePasswordField(doc: Document): boolean {
+  const fields = doc.querySelectorAll('input[type="password"]');
+  for (const field of fields) {
+    // Public feeds may keep a dormant sign-in dialog mounted beside the player.
+    const container = field.closest('[hidden], dialog:not([open])');
+    if (!container || doc.defaultView?.getComputedStyle(container).display !== 'none') return true;
+  }
+  return false;
+}
+
 /** Verify the complete same-origin frame ancestry before reading any visible pixels. */
 export function eligibleDocumentChain(frame: Window, settings: LocalSettings): boolean {
   try {
@@ -98,11 +108,7 @@ export function eligibleDocumentChain(frame: Window, settings: LocalSettings): b
     while (true) {
       if (
         ancestor.location.origin !== origin ||
-        !isEligiblePage(
-          ancestor.location.href,
-          settings,
-          Boolean(ancestor.document.querySelector('input[type="password"]')),
-        )
+        !isEligiblePage(ancestor.location.href, settings, hasActivePasswordField(ancestor.document))
       )
         return false;
       if (ancestor.parent === ancestor) return true;

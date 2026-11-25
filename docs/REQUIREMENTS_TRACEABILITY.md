@@ -68,3 +68,5 @@ The IDs and short descriptions come from the preserved original proposal. Status
 | OPS-03 | CI and complete quality suite | Partial | CI includes type checks, package audit, five-browser matrix, native desktop Safari exact installation, Apple-host builds and real verifier tests. Strict native overlay and iOS automation are available through explicit dispatch; see current run. |
 | OPS-04 | Complete documentation and packaging | Partial | README, model reports, installation, privacy, package resources and compatibility matrix; live-site acceptance pending. |
 | OPS-05 | External release gates | Implemented | docs/RELEASE_GATES.md identifies hardware, evaluation, signing, store and user-approval requirements. |
+
+**SOCIAL-VIDEO** covers long and late-joined playback, MediaSource handles, recycled players, fullscreen and thumbnail contention. Unit regressions live in the playback, queue and visible-scanner suites. The installed-browser workflow exercises streamed playback and can probe named guest social posts. Guest access failures and completed scans without a badge must be reported separately.

@@ -31,3 +31,7 @@ Require independent tests on genuine photos, creator artwork, conventional CGI, 
 Follow AGENTS.md and use test-first changes. The owner's implementation direction authorizes building the on-device version for Chromium browsers and Safari. Preserve traceability for superseded features. Run the extension in actual browsers, inspect the final manifest/resources and record exactly which installations passed.
 
 Mandatory functional checks include offline real inference, zero upload attempts during successful and failed online analysis, an authentic media example left alone, stale-result rejection after DOM recycling, limited-resource cancellation and expiry, pointer and playback preservation, reduced motion, and honest Web Store/App Store readiness. Store publication and paid external services require separate authorization. Release claims about statistical accuracy require independent evaluation.
+
+## Continuous playback on public sites
+
+Apply the same on-device scanner to social players and ordinary pages. For long, live or late-joined playback, evaluate a bounded sequence from the current visible scene. Retire scene-level evidence on a cut, seek, player replacement, loss of visibility or expiry. Keep whole-file provenance and full-clip estimates scoped to their original media. The toolbar may report current player status without adding controls to the page or persisting browsing data.

@@ -18,6 +18,7 @@ import {
 import { badgeBounds, hasImageBadgeSpace } from '../../src/core/label-bounds';
 import { BoundedQueue } from '../../src/core/queue';
 import { CaptureSlots } from '../../src/core/capture-slots';
+import { playerStatus, type PlayerStatus } from '../../src/core/player-status';
 import { ScanningPermission } from '../../src/core/scanning-permission';
 import { LOCAL_TEST_BUILD } from '../../src/core/local-test';
 import {
@@ -28,8 +29,10 @@ import {
 import { RetryBudget, retryableReply } from '../../src/core/retry';
 import { backgroundLayoutKey } from '../../src/media/background-image';
 import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capture';
+import { needsPlaybackWindow, observePlaybackWindow } from '../../src/media/playback-window';
 import { videoSamplePlan, videoSampleSlot } from '../../src/media/video-sampling';
 import { canReadCorsVideo, readCorsVideoFrames } from '../../src/media/cors-video';
+import { visiblePlaybackArea } from '../../src/media/playback-order';
 import { acquireVideoOriginal } from '../../src/media/video-original';
 import { readSettings, SETTINGS_KEY } from '../../src/transport/settings';
 import '../../src/styles/label.scss';
@@ -43,6 +46,7 @@ interface MediaEntry {
   generation: number;
   binding?: Binding;
   decision?: LocalDecision;
+  lastState?: GalleryState;
   visible: boolean;
   animated: boolean;
   attempted: boolean;
@@ -53,6 +57,8 @@ interface MediaEntry {
   captureAbort?: AbortController;
   captureTimer?: ReturnType<typeof setTimeout>;
   captureLease?: string;
+  stopWindow?: () => void;
+  nextWindowAt?: number;
 }
 
 export default defineContentScript({
@@ -83,7 +89,9 @@ export default defineContentScript({
     const roots = new WeakSet<Node>();
     const observed = new WeakSet<Element>();
     const animatedSources = new WeakMap<Element, string>();
-    const queue = new BoundedQueue(1, 25);
+    const queue = new BoundedQueue(1, 25, 1);
+    const enqueuePlayback = (id: string, run: () => Promise<void>) =>
+      queue.enqueue(id, run, 'playback');
     const videoCaptures = new CaptureSlots(1);
     let scheduled = false;
     let pendingScans: Element[] = [];
@@ -103,8 +111,23 @@ export default defineContentScript({
       return;
     }
     ui.mount();
-    ui.shadowHost.style.cssText =
-      'position:fixed;inset:0;width:0;height:0;pointer-events:none;z-index:2147483646;';
+
+    let fullscreen: Element | null;
+    function updateFullscreenAnchor() {
+      fullscreen = document.fullscreenElement;
+      // The document retargets fullscreenElement to the outermost shadow host.
+      while (fullscreen?.shadowRoot?.fullscreenElement)
+        fullscreen = fullscreen.shadowRoot.fullscreenElement;
+      ui.shadowHost.removeAttribute('popover');
+      // Children of a native <video> do not render. For that case the badge
+      // enters the top layer on a positive decision, with viewport coordinates.
+      const anchor =
+        fullscreen && !(fullscreen instanceof HTMLVideoElement)
+          ? fullscreen
+          : document.documentElement;
+      if (ui.shadowHost.parentElement !== anchor) anchor.appendChild(ui.shadowHost);
+    }
+    updateFullscreenAnchor();
 
     const gallery = () => galleryDiagnosticPage(location.href, document, window.top === window);
     let settingsStatus: 'starting' | 'ready' | 'settings-error' = 'starting';
@@ -127,13 +150,45 @@ export default defineContentScript({
       return (
         sourceFor(entry.element) === entry.source &&
         (!(entry.element instanceof HTMLVideoElement) ||
-          Object.is(entry.element.duration, entry.videoDuration)) &&
+          Object.is(entry.element.duration, entry.videoDuration) ||
+          (entry.stopWindow !== undefined &&
+            entry.element.duration >= (entry.videoDuration ?? Infinity))) &&
         (entry.backgroundLayout === undefined ||
           entry.backgroundLayout === backgroundLayoutKey(entry.element, entry.source))
       );
     }
 
+    function currentPlayerStatus(): PlayerStatus {
+      if (!eligible()) return 'inactive';
+      let largest = 0;
+      let result: PlayerStatus = 'missing';
+      for (const entry of entries.values()) {
+        const video = entry.element;
+        if (!(video instanceof HTMLVideoElement) || !matchesVisibleMedia(entry)) continue;
+        const rect = video.getBoundingClientRect();
+        const area = visiblePlaybackArea(rect);
+        if (area <= largest) continue;
+        largest = area;
+        result = playerStatus(video, entry.lastState, Boolean(entry.binding));
+      }
+      return result;
+    }
+    const reportPlayerStatus = (message: unknown, sender: { id?: string; url?: string }) => {
+      if (
+        sender.id === browser.runtime.id &&
+        sender.url === browser.runtime.getURL('/popup.html') &&
+        message &&
+        typeof message === 'object' &&
+        'type' in message &&
+        message.type === 'label-ai:player-status'
+      )
+        return Promise.resolve(currentPlayerStatus());
+    };
+    browser.runtime.onMessage.addListener(reportPlayerStatus);
+    ctx.onInvalidated(() => browser.runtime.onMessage.removeListener(reportPlayerStatus));
+
     function markState(entry: MediaEntry, state: GalleryState) {
+      entry.lastState = state;
       if (gallery() && entry.element.isConnected && sourceFor(entry.element) === entry.source)
         entry.element.setAttribute(galleryAttribute, state);
     }
@@ -150,6 +205,12 @@ export default defineContentScript({
     }
 
     function cancel(entry: MediaEntry) {
+      if (entry.stopWindow) {
+        entry.stopWindow();
+        entry.stopWindow = undefined;
+        entry.decision = undefined;
+        entry.attempted = false;
+      }
       queue.cancel(entry.id);
       // Keep the capture lease until a running inference releases its frame buffers.
       if (!queue.has(entry.id) && entry.captureLease) {
@@ -177,7 +238,11 @@ export default defineContentScript({
 
     function suspendEntry(entry: MediaEntry) {
       const pending =
-        queue.has(entry.id) || entry.binding || entry.captureAbort || entry.frameCallback != null;
+        queue.has(entry.id) ||
+        entry.binding ||
+        entry.captureAbort ||
+        entry.frameCallback != null ||
+        entry.stopWindow;
       cancel(entry);
       if (pending && !entry.decision) {
         markState(entry, 'canceled');
@@ -210,6 +275,8 @@ export default defineContentScript({
     function reset(entry: MediaEntry) {
       cancel(entry);
       if (gallery()) entry.element.removeAttribute(galleryAttribute);
+      entry.lastState = undefined;
+      entry.nextWindowAt = undefined;
       entry.source = sourceFor(entry.element);
       if (entry.element instanceof HTMLVideoElement) entry.videoDuration = entry.element.duration;
       entry.backgroundLayout = undefined;
@@ -224,7 +291,9 @@ export default defineContentScript({
 
     function shown(element: Element): boolean {
       // IntersectionObserver alone may report transparent or hidden media as intersecting.
+      let insidePlayer = !fullscreen;
       for (let current: Element | null = element; current; ) {
+        if (current === fullscreen) insidePlayer = true;
         const style = getComputedStyle(current);
         if (
           style.visibility === 'hidden' ||
@@ -234,9 +303,12 @@ export default defineContentScript({
         )
           return false;
         const root = current.getRootNode();
-        current = current.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+        current =
+          current.assignedSlot ??
+          current.parentElement ??
+          (root instanceof ShadowRoot ? root.host : null);
       }
-      return true;
+      return insidePlayer;
     }
 
     function place(entry: MediaEntry): LabelPlacement | null {
@@ -245,8 +317,6 @@ export default defineContentScript({
       if (entry.decision.expiresAt <= Date.now() || !matchesCurrentMedia(entry)) return null;
       const bounds = badgeBounds(entry.element);
       if (!bounds || !shown(entry.element)) return null;
-      if (document.fullscreenElement && !document.fullscreenElement.contains(ui.shadowHost))
-        return null;
       const placement = {
         key: `${entry.id}:${entry.generation}`,
         ...bounds,
@@ -277,6 +347,26 @@ export default defineContentScript({
         if (placement) {
           if (placements.filter((p) => p.animate).length >= 2) placement.animate = false;
           placements.push(placement);
+        }
+      }
+      if (fullscreen instanceof HTMLVideoElement) {
+        if (
+          placements.length &&
+          ui.shadowHost.isConnected &&
+          typeof ui.shadowHost.showPopover === 'function'
+        ) {
+          if (!ui.shadowHost.hasAttribute('popover')) {
+            ui.shadowHost.setAttribute('popover', 'manual');
+            try {
+              ui.shadowHost.showPopover();
+            } catch {
+              // The publisher may detach its player during a fullscreen transition.
+              placements.length = 0;
+            }
+          }
+        } else {
+          ui.shadowHost.removeAttribute('popover');
+          placements.length = 0;
         }
       }
       ui.mounted?.setLabels(placements);
@@ -323,10 +413,50 @@ export default defineContentScript({
       }
     }
 
+    function startPlaybackWindow(entry: MediaEntry, video: HTMLVideoElement) {
+      if (performance.now() < (entry.nextWindowAt ?? 0)) return;
+      const lease = `${entry.id}:${entry.generation}:${newScanId()}`;
+      if (!videoCaptures.acquire(lease)) return;
+      entry.captureLease = lease;
+      markState(entry, 'pending');
+      const current = () => active() && matchesVisibleMedia(entry);
+      const stop = observePlaybackWindow(
+        video,
+        current,
+        (sample) => {
+          entry.attempted = true;
+          // Avoid resubmitting continuously on long feeds where the detector abstains.
+          entry.nextWindowAt = performance.now() + 8000;
+          const queued = enqueuePlayback(entry.id, async () => {
+            try {
+              if (entry.stopWindow === stop && current()) await submit(entry, sample);
+            } finally {
+              videoCaptures.release(lease);
+              if (entry.captureLease === lease) entry.captureLease = undefined;
+              if (entry.stopWindow === stop && !entry.decision?.shouldLabel) cancel(entry);
+              schedule();
+            }
+          });
+          if (!queued) {
+            cancel(entry);
+            schedule();
+          }
+        },
+        (unreadable) => {
+          cancel(entry);
+          entry.attempted = unreadable;
+          markState(entry, unreadable ? 'unsupported' : 'canceled');
+          schedule();
+        },
+      );
+      entry.stopWindow = stop;
+    }
+
     function startVideo(entry: MediaEntry) {
       const video = entry.element as HTMLVideoElement;
       if (
         entry.frameCallback != null ||
+        entry.stopWindow ||
         entry.captureLease ||
         entry.attempted ||
         video.paused ||
@@ -335,6 +465,10 @@ export default defineContentScript({
         return;
       const generation = entry.generation;
       const durationMs = video.duration * 1000;
+      if (needsPlaybackWindow(durationMs, video.currentTime * 1000)) {
+        startPlaybackWindow(entry, video);
+        return;
+      }
       const plan = videoSamplePlan(durationMs);
       if (!plan) {
         if (video.readyState >= 1) {
@@ -435,7 +569,7 @@ export default defineContentScript({
             const frames = entry.frames;
             entry.frames = [];
             const coverage = (observedTimesMs.at(-1)! - observedTimesMs[0]!) / durationMs;
-            const queued = queue.enqueue(entry.id, async () => {
+            const queued = enqueuePlayback(entry.id, async () => {
               const current = () =>
                 entry.generation === generation &&
                 entry.captureLease === captureLease &&
@@ -499,7 +633,26 @@ export default defineContentScript({
         suspend(true);
         return;
       }
+      // Virtualized feeds can leave the previous autoplaying card on screen by
+      // a few pixels. Give the player actually in view the next capture lease.
+      const areas = new Map<MediaEntry, number>();
+      let largestPlayer = 0;
       for (const entry of entries.values()) {
+        if (
+          !entry.visible ||
+          !(entry.element instanceof HTMLVideoElement) ||
+          entry.element.paused ||
+          !shown(entry.element)
+        )
+          continue;
+        const area = visiblePlaybackArea(entry.element.getBoundingClientRect());
+        areas.set(entry, area);
+        largestPlayer = Math.max(largestPlayer, area);
+      }
+      const ordered = Array.from(entries.values()).sort(
+        (a, b) => (areas.get(b) ?? 0) - (areas.get(a) ?? 0),
+      );
+      for (const entry of ordered) {
         if (!entry.element.isConnected) {
           cancel(entry);
           intersection.unobserve(entry.element);
@@ -514,6 +667,7 @@ export default defineContentScript({
         }
         if (entry.decision && entry.decision.expiresAt <= Date.now()) {
           entry.decision = undefined;
+          entry.lastState = undefined;
           if (gallery()) entry.element.removeAttribute(galleryAttribute);
           entry.attempted = false;
           entry.originalAttempted = false;
@@ -521,6 +675,14 @@ export default defineContentScript({
         if (entry.visible && !shown(entry.element)) {
           suspendEntry(entry);
           continue;
+        }
+        const area = areas.get(entry);
+        if (area !== undefined && largestPlayer > 4 * area) {
+          const rect = entry.element.getBoundingClientRect();
+          if (area < rect.width * rect.height * 0.15) {
+            suspendEntry(entry);
+            continue;
+          }
         }
         if (!active() || !entry.visible || entry.attempted || !entry.source || !entry.retry.ready())
           continue;
@@ -536,7 +698,7 @@ export default defineContentScript({
               entry.source.startsWith('blob:')
             ) {
               const generation = entry.generation;
-              const accepted = queue.enqueue(entry.id, async () => {
+              const accepted = enqueuePlayback(entry.id, async () => {
                 try {
                   if (
                     active() &&
@@ -750,7 +912,17 @@ export default defineContentScript({
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['src', 'srcset', 'sizes', 'style', 'class', 'poster'],
+      attributeFilter: [
+        'src',
+        'srcset',
+        'sizes',
+        'style',
+        'class',
+        'poster',
+        'hidden',
+        'open',
+        'type',
+      ],
     };
     const mutation = new MutationObserver((changes) => {
       for (const change of changes) {
@@ -777,12 +949,17 @@ export default defineContentScript({
           if (!(ev.target instanceof Element)) return;
           const entry = entries.get(ev.target);
           if (!entry) return;
-          if (event === 'durationchange' && matchesCurrentMedia(entry)) return;
+          if (event === 'durationchange' && matchesCurrentMedia(entry)) {
+            if (entry.stopWindow && entry.element instanceof HTMLVideoElement)
+              entry.videoDuration = entry.element.duration;
+            return;
+          }
           // Looping and scrubbing change playback time, while completed whole-clip
           // evidence remains bound to the same loaded resource. Partial captures
           // still reset on a seek. Source replacement always invalidates a verdict.
           if (
             event === 'seeking' &&
+            !entry.stopWindow &&
             (entry.binding || entry.decision || (entry.attempted && queue.has(entry.id))) &&
             matchesCurrentMedia(entry)
           )
@@ -791,6 +968,10 @@ export default defineContentScript({
         },
         { capture: true },
       );
+    ctx.addEventListener(document, 'fullscreenchange', () => {
+      updateFullscreenAnchor();
+      schedule();
+    });
     ctx.addEventListener(document, 'play', schedule, { capture: true });
     for (const event of ['pause', 'ended'])
       ctx.addEventListener(
@@ -799,7 +980,10 @@ export default defineContentScript({
         (ev) => {
           if (ev.target instanceof HTMLVideoElement) {
             const entry = entries.get(ev.target);
-            if (entry && entry.frameCallback != null) suspendEntry(entry);
+            if (entry && (entry.frameCallback != null || entry.stopWindow)) {
+              suspendEntry(entry);
+              schedule();
+            }
           }
         },
         { capture: true },

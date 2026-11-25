@@ -5,7 +5,7 @@ export type ModelEvidence = Pick<LocalResult, 'status' | 'rawScore'> & {
     Partial<
       Pick<
         NonNullable<LocalResult['temporal']>,
-        'motionEnergy' | 'reasonCodes' | 'sustainedFrameEvidence'
+        'sceneCuts' | 'motionEnergy' | 'reasonCodes' | 'sustainedFrameEvidence'
       >
     >;
 };
@@ -44,5 +44,14 @@ export function browsingModelLabel(kind: 'image' | 'video', result: ModelEvidenc
     (evidence.motionEnergy ?? 0) >= 0.01 &&
     evidence.reasonCodes?.every((reason) => reason === 'MIXED_FRAME_EVIDENCE') === true &&
     validScore(result, 0.1)
+  );
+}
+
+export function playbackWindowLabel(result: ModelEvidence): boolean {
+  return (
+    meetsModelThreshold('video', result, BROWSING_VIDEO_THRESHOLD) &&
+    result.temporal?.sustainedFrameEvidence === true &&
+    result.temporal.sceneCuts === 0 &&
+    (result.temporal.motionEnergy ?? 0) >= 0.01
   );
 }

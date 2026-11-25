@@ -73,6 +73,7 @@ export interface FramePayload {
 export interface AnalyzeRequest extends Binding {
   type: 'label-ai:analyze';
   kind: 'image' | 'video';
+  scope?: 'playback-window';
   frame?: FramePayload;
   frames?: FramePayload[];
   durationMs?: number;
@@ -123,6 +124,25 @@ export function isAnalyzeRequest(value: unknown): value is AnalyzeRequest {
       typeof item.original.mime !== 'string' ||
       !(item.kind === 'video' ? /^video\/mp4$/ : /^image\/(jpeg|png|webp|avif)$/).test(
         item.original.mime,
+      ))
+  )
+    return false;
+  if (
+    item.scope !== undefined &&
+    (item.scope !== 'playback-window' ||
+      item.kind !== 'video' ||
+      item.original ||
+      !Array.isArray(item.frames) ||
+      item.frames.length < 8 ||
+      !item.frames.every(validFrame) ||
+      !(item.durationMs! >= 4000 && item.durationMs! <= 4500) ||
+      item.frames[0]!.timestampMs !== 0 ||
+      item.frames.at(-1)!.timestampMs !== item.durationMs ||
+      item.frames.some(
+        (f, i, list) =>
+          i > 0 &&
+          (f.timestampMs <= list[i - 1]!.timestampMs ||
+            f.timestampMs - list[i - 1]!.timestampMs > 1000),
       ))
   )
     return false;

@@ -108,3 +108,18 @@ describe('DISC-04 and UX-06 positive source binding', () => {
     ).toBe(false);
   });
 });
+
+it('binds playback-window requests to a complete, sampled, monotonic interval', () => {
+  const request = {
+    instanceId: 'target', requestId: 'request', generation: 1, type: 'label-ai:analyze',
+    kind: 'video', scope: 'playback-window', durationMs: 4000, coverage: 1,
+    frames: Array.from({ length: 9 }, (_, i) => ({width: 1, height: 1, rgba: 'AAAAAA==', timestampMs: i * 500})),
+  };
+  expect(isAnalyzeRequest(request)).toBe(true);
+  for (const invalid of [
+    { scope: 'entire-document' }, { durationMs: 60_000 }, { coverage: 0.2 },
+    { frames: [] }, { frames: [null] }, { frames: request.frames.slice(1) },
+    { frames: request.frames.slice(0, -1) }, { frames: request.frames.toReversed() },
+    { kind: 'image' }, { original: { mime: 'video/mp4', base64: 'AAAA' } },
+  ]) expect(isAnalyzeRequest({ ...request, ...invalid })).toBe(false);
+});
