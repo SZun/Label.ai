@@ -58,6 +58,7 @@ interface MediaEntry {
   captureTimer?: ReturnType<typeof setTimeout>;
   captureLease?: string;
   stopWindow?: () => void;
+  needsFreshScene?: boolean;
   nextWindowAt?: number;
 }
 
@@ -208,6 +209,7 @@ export default defineContentScript({
       if (entry.stopWindow) {
         entry.stopWindow();
         entry.stopWindow = undefined;
+        entry.needsFreshScene = undefined;
         entry.decision = undefined;
         entry.attempted = false;
       }
@@ -265,7 +267,14 @@ export default defineContentScript({
       for (const entry of entries.values()) {
         // A blocked renewal can outlast the capture grant during WASM inference.
         // The worker owns already submitted pixels and independently rechecks the sender.
-        if (mayFinish && entry.binding && matchesVisibleMedia(entry)) continue;
+        if (
+          mayFinish &&
+          (entry.binding || (entry.stopWindow && entry.decision)) &&
+          matchesVisibleMedia(entry)
+        ) {
+          if (entry.stopWindow) entry.needsFreshScene = true;
+          continue;
+        }
         suspendEntry(entry);
       }
       queue.clear();
@@ -312,12 +321,19 @@ export default defineContentScript({
     }
 
     function place(entry: MediaEntry): LabelPlacement | null {
-      if (!entry.decision?.shouldLabel || !entry.visible || !entry.element.isConnected || !active())
+      if (
+        entry.needsFreshScene ||
+        !entry.decision?.shouldLabel ||
+        !entry.visible ||
+        !entry.element.isConnected ||
+        !active()
+      )
         return null;
       if (entry.decision.expiresAt <= Date.now() || !matchesCurrentMedia(entry)) return null;
       const bounds = badgeBounds(entry.element);
       if (!bounds || !shown(entry.element)) return null;
-      const placement = {
+      const placement: LabelPlacement = {
+        kind: entry.element instanceof HTMLVideoElement ? 'video' : 'image',
         key: `${entry.id}:${entry.generation}`,
         ...bounds,
         animate: !entry.animated,
@@ -447,6 +463,18 @@ export default defineContentScript({
           entry.attempted = unreadable;
           markState(entry, unreadable ? 'unsupported' : 'canceled');
           schedule();
+        },
+        {
+          pending: () =>
+            permission.lastAdmission &&
+            eligible() &&
+            matchesVisibleMedia(entry) &&
+            Boolean(entry.binding || entry.decision),
+          setSceneConfirmed: (confirmed) => {
+            if (Boolean(entry.needsFreshScene) === !confirmed) return;
+            entry.needsFreshScene = !confirmed;
+            schedule();
+          },
         },
       );
       entry.stopWindow = stop;

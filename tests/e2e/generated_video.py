@@ -36,7 +36,7 @@ def wait_for_video_badge(site, target):
       if (!video || !video.videoWidth) return false;
       const r = video.getBoundingClientRect();
       return [...document.querySelectorAll('label-ai-overlay')].some(host =>
-        [...host.shadowRoot.querySelectorAll('.slop-label')].some(badge => {
+        [...host.shadowRoot.querySelectorAll('[aria-label="Video analysis"] .slop-label')].some(badge => {
           const b = badge.getBoundingClientRect();
           return b.width > 0 && Math.abs(b.left - Math.max(0,r.left) - 8) < 3 &&
                   Math.abs(b.top - Math.max(0,r.top) - 8) < 3;

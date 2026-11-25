@@ -246,6 +246,9 @@ it.each([
   ['source change during inference', 300],
   ['seek without an event', 300],
   ['negative retry', 300],
+  ['delayed renewal', 300],
+  ['cut during renewal', 300],
+  ['denied renewal', 300],
   ['DVR rewind', 300],
   ['growing DVR duration', 300],
   ['late short', 22],
@@ -266,9 +269,10 @@ it.each([
   }
   let finish: (() => void) | undefined;
   let color = 30;
+  let renewal: Promise<{ allowed: boolean }> | undefined;
   mocks.scene.mockImplementation(() => new Uint8Array(8 * 8 * 4).fill(color));
   mocks.send.mockImplementation(async (message) => {
-    if (message.type === 'label-ai:can-scan') return { allowed: true };
+    if (message.type === 'label-ai:can-scan') return renewal ?? { allowed: true };
     if (message.type === 'label-ai:analyze') {
       expect(message.scope).toBe('playback-window');
       expect(message.frames.length).toBeGreaterThanOrEqual(8);
@@ -300,6 +304,31 @@ it.each([
       return;
     }
     expect(finish).toBeTypeOf('function');
+    if (scenario.includes('renewal')) {
+      let resolve!: (grant: { allowed: boolean }) => void;
+      renewal = new Promise((done) => {
+        resolve = done;
+      });
+      h.advanceClock(6000);
+      h.renew();
+      const reads = mocks.scene.mock.calls.length;
+      for (let n = 35; n <= 42; n++) present(n);
+      expect(mocks.scene.mock.calls).toHaveLength(reads);
+      expect(mocks.send.mock.calls.some(([m]) => m.type === 'label-ai:cancel')).toBe(false);
+      finish!();
+      await h.tick();
+      const labels = () => mocks.setLabels.mock.calls.at(-1)![0];
+      expect(labels()).toHaveLength(0);
+      resolve({ allowed: scenario !== 'denied renewal' });
+      await h.tick();
+      await h.tick();
+      expect(labels()).toHaveLength(0);
+      if (scenario === 'cut during renewal') color = 220;
+      for (let n = 43; n < 47; n++) present(n);
+      await h.tick();
+      expect(labels()).toHaveLength(scenario === 'delayed renewal' ? 1 : 0);
+      return;
+    }
     if (scenario === 'growing DVR duration') {
       currentDuration += 10;
       h.video.dispatchEvent(new Event('durationchange'));

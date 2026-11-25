@@ -40,6 +40,7 @@ export function observePlaybackWindow(
   current: () => boolean,
   ready: (sample: PlaybackSample) => void,
   invalid: (unreadable: boolean) => void,
+  renewal: { pending: () => boolean; setSceneConfirmed: (confirmed: boolean) => void },
 ) {
   const readScene = createVideoSceneReader(video);
   let previousGrid: Uint8ClampedArray | undefined;
@@ -91,7 +92,16 @@ export function observePlaybackWindow(
       const needsGrid =
         time - sceneTime >= SCENE_INTERVAL_MS ||
         (frames !== undefined && elapsed >= PLAYBACK_WINDOW_MS);
-      if ((needsFrame || needsGrid) && !current()) return retire();
+      if ((needsFrame || needsGrid) && !current()) {
+        // A busy WASM worker can finish a submitted window before it answers
+        // a renewal. Observe only playback time until a fresh grant arrives.
+        if (frames !== undefined || !renewal.pending()) return retire();
+        renewal.setSceneConfirmed(false);
+        sceneTime = time;
+        armTimeout();
+        callback = video.requestVideoFrameCallback(presented);
+        return;
+      }
       if (needsGrid) {
         const grid = readScene();
         if (
@@ -100,6 +110,7 @@ export function observePlaybackWindow(
         )
           return retire();
         previousGrid = grid;
+        renewal.setSceneConfirmed(true);
         sceneTime = time;
         armTimeout();
       }

@@ -92,6 +92,11 @@ def wait_on_player(page, selector, popup, worker):
         print("Recent video requests:", worker.evaluate("globalThis.socialTrace ?? []"), flush=True)
         print("Last toolbar status:", popup.locator('[role=status]').inner_text(timeout=5000), flush=True)
         print("Player at check:", page.locator(selector).evaluate("""v => ({
+          duration: Number.isFinite(v.duration) ? v.duration : 'stream',
+          sourceType: v.srcObject?.constructor?.name || v.currentSrc.split(':')[0],
+          pixels: (() => {try { const c=document.createElement('canvas'); c.width=c.height=1;
+            const g=c.getContext('2d'); g.drawImage(v,0,0,1,1); g.getImageData(0,0,1,1);
+            return 'readable'; } catch(e) {return e.name;} })(),
           time: v.currentTime, finite: Number.isFinite(v.duration), paused: v.paused,
           ready: v.readyState, frames: v.getVideoPlaybackQuality().totalVideoFrames,
           decision: document.documentElement.dataset.videoTestDecision,
