@@ -94,8 +94,11 @@ function hasActivePasswordField(doc: Document): boolean {
   const fields = doc.querySelectorAll('input[type="password"]');
   for (const field of fields) {
     // Public feeds may keep a dormant sign-in dialog mounted beside the player.
-    const container = field.closest('[hidden], dialog:not([open])');
-    if (!container || doc.defaultView?.getComputedStyle(container).display !== 'none') return true;
+    let layer: Element | null = field;
+    while (layer && doc.defaultView?.getComputedStyle(layer).display !== 'none') {
+      if (!layer.parentElement) return true;
+      layer = layer.parentElement;
+    }
   }
   return false;
 }

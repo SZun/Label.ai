@@ -61,6 +61,7 @@ interface MediaEntry {
   captureTimer?: ReturnType<typeof setTimeout>;
   captureLease?: string;
   stopWindow?: () => void;
+  sampledWindow?: boolean;
   needsFreshScene?: boolean;
   nextWindowAt?: number;
 }
@@ -304,7 +305,9 @@ export default defineContentScript({
       if (gallery()) entry.element.removeAttribute(galleryAttribute);
       entry.lastState = undefined;
       entry.nextWindowAt = undefined;
-      entry.source = sourceFor(entry.element);
+      const source = sourceFor(entry.element);
+      if (source !== entry.source) entry.sampledWindow = false;
+      entry.source = source;
       if (entry.element instanceof HTMLVideoElement) {
         entry.videoDuration = entry.element.duration;
         entry.playbackCanvas = currentCanvas(entry.element);
@@ -453,6 +456,7 @@ export default defineContentScript({
         current,
         (sample) => {
           entry.attempted = true;
+          entry.sampledWindow = true;
           // Avoid resubmitting continuously on long feeds where the detector abstains.
           entry.nextWindowAt = performance.now() + 8000;
           const queued = enqueuePlayback(entry.id, async () => {
@@ -506,9 +510,22 @@ export default defineContentScript({
         return;
       const generation = entry.generation;
       const durationMs = video.duration * 1000;
+      // A short, looping file can rewind while a slow worker scores its first
+      // scene. On replay, full-file sampling yields a decision bound to the
+      // resource and remains valid if inference finishes in the next lap.
+      const fileReplay = entry.sampledWindow && video.currentTime < 1;
       if (
         entry.playbackCanvas ||
-        needsPlaybackWindow(durationMs, video.currentTime * 1000, entry.source)
+        (needsPlaybackWindow(
+          durationMs,
+          video.currentTime * 1000,
+          entry.source,
+          (video.autoplay || video.loop) && !fileReplay,
+        ) &&
+          // Without a crossorigin attribute the decoder taints a canvas even if
+          // the CDN permits an anonymous read. The file path can score all
+          // observed timestamps from that single representation.
+          !(video.crossOrigin === null && canReadCorsVideo(video, entry.source)))
       ) {
         startPlaybackWindow(entry, video);
         return;

@@ -6,7 +6,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "e2e"))
-from meta_public_video import IS_TARGET_POST, META_POSTS, META_PERMALINKS, TARGET_PLAYER, OPTIONAL_CLOSE
+from meta_public_video import IS_TARGET_POST, META_POSTS, META_PERMALINKS, TARGET_PLAYER, OPTIONAL_CLOSE, POST_PLAY, DIAGNOSTICS
 
 
 class MetaPostIdentityTest(unittest.TestCase):
@@ -85,5 +85,35 @@ d.elementFromPoint = () => d.querySelector('button');
 if (!optionalClose()) throw new Error('missed the optional public viewer');
 dialog.querySelector('h2').textContent = 'Discard draft?';
 if (optionalClose()) throw new Error('attempted to dismiss an unrelated dialog');
+"""
+        subprocess.run(["node", "-e", program], check=True, cwd=extension)
+
+    def test_optional_cookie_refusal_and_native_play_are_bound_to_public_viewer(self):
+        extension = Path(__file__).resolve().parents[2] / "apps/extension"
+        program = (f"const post={json.dumps(META_POSTS['facebook'])}; "
+                   f"const url={json.dumps(META_PERMALINKS['facebook'])}; "
+                   f"const close={OPTIONAL_CLOSE}, play={POST_PLAY}, diagnostics={DIAGNOSTICS};") + """
+const {window} = new (require('jsdom').JSDOM)(`<div role=dialog><h2>Allow cookies on Facebook?</h2>
+<button>Allow all cookies</button><button>Decline optional cookies</button></div><main>
+<article><a href="/reel/1473526454600527/">Post</a><button aria-label="Play video"></button></article>
+<article><a href="/reel/987/">Other</a><button aria-label="Play video"></button></article></main>`, {url});
+const d=window.document;
+Object.assign(globalThis,{document:d, location:window.location, innerWidth:1000, innerHeight:720});
+window.Element.prototype.checkVisibility=()=>true;
+window.Element.prototype.getBoundingClientRect=()=>({x:10,y:10,width:120,height:50});
+let target = d.querySelector('button:nth-of-type(2)');
+d.elementFromPoint = () => target;
+if (!close()) throw new Error('missed a visible refuse-optional option');
+target = d.querySelector('button');
+if (close()) throw new Error('selected the accept-all button');
+d.querySelector('[role=dialog]').remove();
+target = d.querySelectorAll('article button')[1];
+if (play(post)) throw new Error('selected a different post');
+target = d.querySelectorAll('article button')[0];
+if (!play(post)) throw new Error('missed the target native play button before decoder creation');
+d.body.innerHTML += '<input type="password"><div>secret prompt, https://private.example/</div>';
+const state = diagnostics(post);
+if (!state.passwordField || !state.expectedRoute || state.videos !== 0 ||
+    /private[.]example|secret prompt/.test(JSON.stringify(state))) throw new Error('diagnostic leaked body or missed gate');
 """
         subprocess.run(["node", "-e", program], check=True, cwd=extension)

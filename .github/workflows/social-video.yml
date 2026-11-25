@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [stream, canvas, video-check, public-clip]
+        target: [stream, canvas, autoplay, video-check, public-clip]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/prepare-social-browser
@@ -48,6 +48,11 @@ jobs:
           fi
           if [[ "$TARGET" == public-clip ]]; then
             python -u tests/e2e/generated_video.py --direct --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium
+            exit
+          fi
+          if [[ "$TARGET" == autoplay ]]; then
+            command -v ffmpeg || sudo apt-get install -y ffmpeg
+            python -u tests/e2e/autoplay_video.py --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium
             exit
           fi
           args=()

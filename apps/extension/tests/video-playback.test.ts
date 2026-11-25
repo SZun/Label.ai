@@ -240,9 +240,81 @@ it.each([
   }
 });
 
+it.each(['manually played file', 'autoplaying CORS-readable CDN file'])(
+  'keeps the complete-clip route for a %s',
+  async (scenario) => {
+    const h = await playbackHarness(() => 25);
+    if (scenario === 'autoplaying CORS-readable CDN file') {
+      h.video.src = 'https://media.example.org/clip.mp4';
+      h.video.autoplay = true;
+      Object.defineProperties(h.video, { videoWidth: { value: 320 }, videoHeight: { value: 240 } });
+    }
+    mocks.send.mockImplementation(async (message) =>
+      message.type === 'label-ai:can-scan' ? { allowed: true } : undefined,
+    );
+    try {
+      await h.start();
+      for (let n = 0; n < 25 * 8; n++) h.presentFrame(n / 8, n + 1);
+      const submissions = mocks.send.mock.calls
+        .map(([message]) => message)
+        .filter((message) => message.type === 'label-ai:analyze');
+      expect(submissions).toHaveLength(1);
+      expect(submissions[0].scope).toBeUndefined();
+      expect(submissions[0].durationMs).toBe(25_000);
+      expect(mocks.scene).not.toHaveBeenCalled();
+    } finally {
+      h.dispose();
+    }
+  },
+);
+
+it('can complete a whole direct file on replay when the loop outruns scene inference', async () => {
+  const h = await playbackHarness(() => 16);
+  h.video.loop = true;
+  mocks.scene.mockImplementation(() => new Uint8ClampedArray(8 * 8 * 4));
+  let finish!: () => void;
+  mocks.send.mockImplementation(async (message) => {
+    if (message.type === 'label-ai:can-scan') return { allowed: true };
+    if (message.type !== 'label-ai:analyze') return;
+    if (message.scope === 'playback-window')
+      await new Promise<void>((resolve) => (finish = resolve));
+    return {
+      ...message,
+      status: 'COMPLETED',
+      shouldLabel: true,
+      expiresAt: Date.now() + 60_000,
+      policyVersion: 'test',
+    };
+  });
+  try {
+    await h.start();
+    for (let n = 0; n < 16 * 8; n++) h.presentFrame(n / 8, n + 1);
+    expect(finish).toBeTypeOf('function');
+    h.video.currentTime = 0;
+    h.video.dispatchEvent(new Event('seeking'));
+    finish();
+    await h.tick();
+    await h.tick();
+    expect(mocks.setLabels.mock.calls.at(-1)![0]).toHaveLength(0);
+    for (let n = 0; n < 16 * 8; n++) h.presentFrame(n / 8, n + 1);
+    await h.tick();
+    const requests = mocks.send.mock.calls
+      .map(([m]) => m)
+      .filter((m) => m.type === 'label-ai:analyze');
+    expect(requests.map((m) => m.scope)).toEqual(['playback-window', undefined]);
+    expect(requests[1].durationMs).toBe(16_000);
+    expect(mocks.setLabels.mock.calls.at(-1)![0]).toHaveLength(1);
+  } finally {
+    h.dispose();
+  }
+});
+
 it.each([
   ['long clip', 300],
   ['buffered short from the start', 25],
+  ['direct autoplay from the start', 25],
+  ['direct loop from the start', 16],
+  ['three presentations per second', 300],
   ['source change during inference', 300],
   ['seek without an event', 300],
   ['negative retry', 300],
@@ -259,7 +331,7 @@ it.each([
   ['pause after verdict', 300],
   ['insufficient watch time', 300],
 ] as const)('samples only the observed scene on %s', async (scenario, duration) => {
-  const start = scenario === 'buffered short from the start' ? 0 : duration === 22 ? 9 : 72;
+  const start = scenario.endsWith('from the start') ? 0 : duration === 22 ? 9 : 72;
   let currentDuration: number = duration;
   const h = await playbackHarness(() => currentDuration, start);
   if (scenario === 'buffered short from the start') {
@@ -267,6 +339,8 @@ it.each([
     vi.stubGlobal('MediaSourceHandle', Handle);
     Object.defineProperty(h.video, 'srcObject', { value: new Handle() });
   }
+  h.video.autoplay = scenario === 'direct autoplay from the start';
+  h.video.loop = scenario === 'direct loop from the start';
   let finish: (() => void) | undefined;
   let color = 30;
   let renewal: Promise<{ allowed: boolean }> | undefined;
@@ -298,7 +372,14 @@ it.each([
       h.advanceClock(125);
       h.presentFrame(start + n / 8, n + 1);
     };
-    for (let n = 0; n <= (scenario === 'insufficient watch time' ? 16 : 34); n++) present(n);
+    if (scenario === 'three presentations per second') {
+      for (let n = 0; n <= 12; n++) {
+        h.advanceClock(1000 / 3);
+        h.presentFrame(start + n / 3, n + 1);
+      }
+    } else {
+      for (let n = 0; n <= (scenario === 'insufficient watch time' ? 16 : 34); n++) present(n);
+    }
     if (scenario === 'insufficient watch time') {
       expect(finish).toBeUndefined();
       return;

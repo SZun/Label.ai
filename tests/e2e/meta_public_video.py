@@ -32,6 +32,25 @@ IS_TARGET_POST = """(post, url) => {
 # Bind the player to the specific post, even when recommendations share the
 # page. Match a permalink or creator inside a single-video region. Never use
 # this text as evidence for classification.
+POST_REGION = r"""(element, post, matches) => {
+  for (let region=element.parentElement; region && region!==document.body; region=region.parentElement) {
+    if (region.querySelectorAll('video').length > 1 ||
+        region.querySelectorAll('article,[role=article]').length > 1) return null;
+    const links = [...region.querySelectorAll('a[href]')];
+    const competing = links.some(a => /\/reels?\/[^/]+|\/watch\/?$/i.test(a.pathname) && !matches(a.href));
+    if (competing) return null;
+    if (links.some(a => matches(a.href)) || region.innerText?.toLowerCase().includes(post.author)) return region;
+    if (region.matches('article,[role=article]')) return null;
+  }
+  return null;
+}"""
+BUTTON_POINT = """button => {
+  if (!button.checkVisibility({opacityProperty:true, visibilityProperty:true})) return null;
+  const r=button.getBoundingClientRect(), x=r.x+r.width/2, y=r.y+r.height/2;
+  return r.width && r.height && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
+    button.contains(document.elementFromPoint(x,y)) ? [x,y] : null;
+}"""
+
 TARGET_PLAYER = """(post, checking) => {
   const matches = (url) => (""" + IS_TARGET_POST + """)(post, url);
   if (!matches(location.href)) return null;
@@ -43,14 +62,8 @@ TARGET_PLAYER = """(post, checking) => {
     const left = Math.max(0,r.left), top = Math.max(0,r.top);
     const width = Math.min(innerWidth,r.right)-left, height = Math.min(innerHeight,r.bottom)-top;
     if (width < 160 || height < 90 || !showing(v)) continue;
-    let region = v.parentElement;
-    while (region && region !== document.body) {
-      if (region.querySelectorAll('video').length !== 1) break;
-      if (region.innerText?.toLowerCase().includes(post.author) ||
-          [...region.querySelectorAll('a[href]')].some(a => matches(a.href))) break;
-      region = region.parentElement;
-    }
-    if (!region || region === document.body || region.querySelectorAll('video').length !== 1) continue;
+    const region = (""" + POST_REGION + """)(v, post, matches);
+    if (!region) continue;
     // A login dialog or an opaque cover can leave a hidden decoder playing.
     // Require the player or an actual player control to be hit at its center.
     const x = left + width/2, y = top + height/2;
@@ -84,26 +97,75 @@ START_PLAYER = """post => {
 # Both sites may offer public playback behind an optional account prompt.
 # Respect a mandatory sign-in. Only use a prompt's own visible Close control.
 OPTIONAL_CLOSE = """() => {
-  for (const dialog of document.querySelectorAll('[role=dialog],dialog[open]')) {
+  for (const dialog of document.querySelectorAll('[role=dialog],dialog[open],[aria-modal=true]')) {
     const heading = dialog.querySelector('h1,h2,[role=heading]');
     const title = heading?.textContent || dialog.getAttribute('aria-label') || '';
-    if (!/(?:log ?in|sign in|see more) (?:to|on) (?:facebook|instagram)/i.test(title)) continue;
+    const account = /(?:log ?in|sign in|see more) (?:to|on) (?:facebook|instagram)/i.test(title);
+    const cookies = /cookies?/i.test(title);
     for (const button of dialog.querySelectorAll('button,[role=button]')) {
-      const label = button.getAttribute('aria-label') || button.innerText || '';
-      if (!/^(?:close|not now)$/i.test(label.trim()) ||
-          !button.checkVisibility({opacityProperty:true,visibilityProperty:true})) continue;
-      const r = button.getBoundingClientRect();
-      const x = r.x + r.width/2, y = r.y + r.height/2;
-      if (r.width && r.height && x>=0 && y>=0 && x<innerWidth && y<innerHeight &&
-          button.contains(document.elementFromPoint(x,y))) return [x,y];
+      const label = (button.getAttribute('aria-label') || button.innerText || button.textContent || '').trim();
+      const refusal = /^(?:(?:decline|reject|refuse) (?:optional cookies|non-essential cookies|all(?: cookies)?)|(?:only allow|allow only) essential cookies|allow essential cookies only)$/i;
+      if (!(account && /^(?:close|not now)$/i.test(label)) && !(cookies && refusal.test(label))) continue;
+      const point = (""" + BUTTON_POINT + """)(button);
+      if (point) return {kind: cookies ? 'decline-optional-cookies' : 'close-account-prompt', point};
     }
   }
   return null;
 }"""
-VIEWER_READY = """post => {
-  const close = (""" + OPTIONAL_CLOSE + """)();
-  if (close) return close;
-  return (""" + START_PLAYER + """)(post);
+
+# Some public viewers instantiate their video only after Play is pressed.
+# Require a single visible play button owned by the exact target reel.
+POST_PLAY = """post => {
+  const matches = url => (""" + IS_TARGET_POST + """)(post, url);
+  if (!matches(location.href)) return null;
+  const points = [];
+  for (const button of document.querySelectorAll('button,[role=button]')) {
+    const label = (button.getAttribute('aria-label') || button.innerText || button.textContent || '').trim();
+    if (!/^(?:play|play video|play reel|play video reel)$/i.test(label)) continue;
+    if (!(""" + POST_REGION + """)(button, post, matches)) continue;
+    const point = (""" + BUTTON_POINT + """)(button);
+    if (point) points.push(point);
+  }
+  return points.length===1 ? points[0] : null;
+}"""
+VIEWER_READY = """({post, used}) => {
+  if (!(""" + IS_TARGET_POST + """)(post,location.href)) return false;
+  const prompt = (""" + OPTIONAL_CLOSE + """)();
+  if (prompt) return used.includes(prompt.kind) ? false : prompt;
+  if ((""" + START_PLAYER + """)(post)) return true;
+  const point = !used.includes('play') && (""" + POST_PLAY + """)(post);
+  return point && {kind:'play',point};
+}"""
+
+# Public CI logs must contain only coarse counts and fixed gate categories;
+# the same code also runs in an interactive signed-in temporary profile.
+DIAGNOSTICS = r"""post => {
+  const visible = e => e.checkVisibility({opacityProperty:true, visibilityProperty:true});
+  const body = document.body?.innerText || '';
+  const title = document.title || '';
+  const videos = [...document.querySelectorAll('video')];
+  const large = videos.filter(v => {
+    const r=v.getBoundingClientRect();
+    return visible(v) && Math.min(innerWidth,r.right)-Math.max(0,r.left)>=160 &&
+      Math.min(innerHeight,r.bottom)-Math.max(0,r.top)>=90;
+  });
+  const matches = url => (""" + IS_TARGET_POST + r""")(post,url);
+  const gate = /security check|confirm you.re human|not a bot|unusual traffic/i.test(body) ? 'verification' :
+    /(?:isn.t|is not|no longer) available|private (?:post|video|account)|content unavailable|couldn.t find this page/i.test(body) ? 'unavailable-or-private' :
+    /log ?in to (?:watch|continue|see)|you must log in|log in to facebook|login . instagram/i.test(body+' '+title) ? 'sign-in' :
+    /temporarily blocked|try again later|something went wrong/i.test(body) ? 'temporarily-unavailable' : 'none-observed';
+  return {
+    expectedRoute:matches(location.href), accountRoute:/\/(?:accounts\/login|login|checkpoint)(?:\/|$)/i.test(location.pathname),
+    gate, passwordField:[...document.querySelectorAll('input[type=password]')].some(visible),
+    optionalPrompt:((""" + OPTIONAL_CLOSE + """)()?.kind || 'none'),
+    iframes:document.querySelectorAll('iframe').length, videos:videos.length, inViewport:large.length,
+    decoded:large.filter(v=>v.readyState>=2 && v.videoWidth>0).length,
+    playing:large.filter(v=>!v.paused && !v.ended).length,
+    presentedFrames:Math.max(0,...large.map(v=>v.getVideoPlaybackQuality?.().totalVideoFrames || 0)),
+    primaryPostLink:[...document.querySelectorAll('a[href]')].some(a=>matches(a.href)),
+    primaryAuthorText:body.toLowerCase().includes(post.author),
+    targetBound:Boolean(document.querySelector('video[data-label-test-playback="1"]'))
+  };
 }"""
 
 BIND_MOVING_PLAYER = """async post => {
@@ -147,15 +209,28 @@ def check_visible_motion(page, player):
 def prepare_meta_player(page, platform):
     """Return the creator-bound player only after presentation of moving frames."""
     post = META_POSTS[platform]
-    ready = page.wait_for_function(VIEWER_READY, arg=post, timeout=35_000)
-    value = ready.json_value()
-    ready.dispose()
-    if isinstance(value, list):
-        page.mouse.click(*value)
-        page.wait_for_function(START_PLAYER, arg=post, timeout=20_000)
+    try:
+        return _play_meta_post(page, platform, post)
+    except Exception:
+        if not page.is_closed():
+            print(f"{platform}: public viewer state {page.evaluate(DIAGNOSTICS, post)}", flush=True)
+        raise
+
+
+def _play_meta_post(page, platform, post):
+    used = []
+    while True:
+        ready = page.wait_for_function(VIEWER_READY, arg={"post": post, "used": used}, timeout=35_000)
+        action = ready.json_value()
+        ready.dispose()
+        if action is True:
+            break
+        used.append(action["kind"])
+        page.mouse.click(*action["point"])
+        print(f"{platform}: used public viewer control {action['kind']}", flush=True)
     player = page.locator(PLAYER)
     if player.evaluate("v => v.paused"):
-        center = player.evaluate("""v => {
+        center = page.evaluate(POST_PLAY, post) or player.evaluate("""v => {
           const r = v.getBoundingClientRect();
           return [(Math.max(0,r.left) + Math.min(innerWidth,r.right))/2,
                   (Math.max(0,r.top) + Math.min(innerHeight,r.bottom))/2];
