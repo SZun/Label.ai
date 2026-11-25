@@ -1,3 +1,5 @@
+import { supportsDimensions } from './preprocess.ts';
+
 /** A strict envelope check before native decoding; the browser still verifies
  * CRCs and compressed pixel data. Only extension-captured, bounded still PNG is
  * accepted here. Browser-decoded JPEG/WebP/etc use analyzeRgba instead.
@@ -17,7 +19,7 @@ export function inspectBoundedPng(bytes: Uint8Array): { width: number; height: n
     if (name === 'IHDR') {
       if (chunks !== 1) throw new RangeError('Repeated PNG header');
       width = view.getUint32(offset + 8); height = view.getUint32(offset + 12);
-      if (width < 128 || height < 128 || width > 1024 || height > 1024) throw new RangeError('Unsupported PNG dimensions');
+      if (!supportsDimensions(width, height, 'image')) throw new RangeError('Unsupported PNG dimensions');
     }
     if (['acTL', 'fcTL', 'fdAT'].includes(name)) throw new RangeError('Animated PNG needs temporal analysis');
     if (name === 'IDAT') hasPixels = true;

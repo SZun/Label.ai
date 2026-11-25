@@ -40,7 +40,7 @@ export function analyzeTemporalEvidence(frames: ScoredFrame[], durationMs: numbe
   if (frames.length < 1 || frames.length > MAX_VIDEO_FRAMES) throw new RangeError('Video input requires 1 to 12 frames');
   for (let i = 0; i < frames.length; i++) {
     const frame = frames[i]!;
-    validateRgba(frame);
+    validateRgba(frame, 'video');
     if (!Number.isFinite(frame.logit)) throw new RangeError('Frame logit must be finite');
     if (!Number.isFinite(frame.timestampMs) || frame.timestampMs < 0 || frame.timestampMs > durationMs ||
         (i > 0 && frame.timestampMs <= frames[i - 1]!.timestampMs)) {

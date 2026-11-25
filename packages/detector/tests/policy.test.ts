@@ -47,3 +47,25 @@ test('DET-CAL-01 Platt mapping is explicit, finite, and not called a certainty s
   assert.ok(scoreImage(2, reviewedPolicy().image.calibration) > 0.8);
   assert.throws(() => scoreImage(2, { version: 'bad', slope: NaN, intercept: 0, calibrationSetSha256: 'a'.repeat(64) }), /calibration/i);
 });
+
+test('narrow image thumbnails provide preview evidence without inheriting calibrated approval', async () => {
+  const { createDetectorEngine } = await import('../src/engine.ts');
+  const engine = createDetectorEngine({ run: async () => 10, dispose: async () => {} }, reviewedPolicy());
+  const pixels = (width: number, height: number) => ({ width, height, rgba: new Uint8Array(width * height * 4) });
+  assert.equal((await engine.analyzeRgba(pixels(192, 128))).shouldLabel, true);
+  for (const [width, height] of [[250, 125], [96, 192], [192, 96]] as const) {
+    const result = await engine.analyzeRgba(pixels(width, height));
+    assert.equal(result.status, 'COMPLETED');
+    assert.ok(result.rawScore! > 0.99);
+    assert.equal(result.shouldLabel, false);
+    assert.equal(result.score, undefined);
+    assert.ok(result.reasonCodes.includes('SCORE_UNCALIBRATED'));
+  }
+  for (const [width, height] of [[127, 127], [95, 250], [191, 96]] as const) {
+    assert.equal((await engine.analyzeRgba(pixels(width, height))).status, 'UNSUPPORTED');
+  }
+  assert.equal((await engine.analyzeVideoFrames({
+    frames: [{ ...pixels(250, 125), timestampMs: 0 }], durationMs: 1000,
+  })).status, 'UNSUPPORTED');
+  await engine.dispose();
+});

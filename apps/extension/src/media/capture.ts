@@ -6,18 +6,18 @@ import {
   MAX_SIDE,
   VIDEO_MAX_SIDE,
   type FramePayload,
+  type AnalyzeRequest,
 } from '../core/protocol';
 import { fetchContentAddressed } from '../transport/acquire';
 import { matchesDisplayedOriginal, readCachedOriginal } from '../cached-original';
 import { readBlobOriginal } from './blob-original';
-import { readCorsBitmap } from './cors-image';
+import { backgroundCrop, backgroundImageSource } from './background-image';
+import { readCorsBitmap, readPublicBitmap } from './cors-image';
 
 export function sourceFor(element: Element): string {
   if (element instanceof HTMLImageElement) return element.currentSrc || element.src;
   if (element instanceof HTMLVideoElement) return element.currentSrc || element.src;
-  const background = getComputedStyle(element).backgroundImage;
-  const match = /^url\(["']?(data:image\/[^"')]+)["']?\)$/.exec(background);
-  return match?.[1] ?? '';
+  return backgroundImageSource(element);
 }
 
 function pixels(
@@ -26,6 +26,7 @@ function pixels(
   height: number,
   maxSide: number,
   timestampMs: number,
+  crop?: { x: number; y: number; width: number; height: number },
 ): FramePayload {
   const dimensions = boundedDimensions(width, height, maxSide);
   if (!dimensions) throw new Error('Unsupported media dimensions');
@@ -35,7 +36,19 @@ function pixels(
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) throw new Error('Canvas is unavailable');
   try {
-    context.drawImage(source, 0, 0, dimensions.width, dimensions.height);
+    if (crop)
+      context.drawImage(
+        source,
+        crop.x,
+        crop.y,
+        crop.width,
+        crop.height,
+        0,
+        0,
+        dimensions.width,
+        dimensions.height,
+      );
+    else context.drawImage(source, 0, 0, dimensions.width, dimensions.height);
     const rgba = context.getImageData(0, 0, dimensions.width, dimensions.height).data;
     return { ...dimensions, rgba: encodeBase64(rgba), timestampMs };
   } finally {
@@ -44,7 +57,32 @@ function pixels(
   }
 }
 
-export async function captureImage(element: Element, source: string, signal: AbortSignal) {
+function bitmapFrame(bitmap: ImageBitmap, current: () => boolean, background?: Element) {
+  try {
+    if (!current()) throw new Error('Obsolete image capture');
+    const crop = background && backgroundCrop(background, bitmap);
+    if (background && !crop)
+      throw new DOMException('Unsupported background layout', 'SecurityError');
+    return {
+      frame: pixels(
+        bitmap,
+        crop?.width ?? bitmap.width,
+        crop?.height ?? bitmap.height,
+        MAX_SIDE,
+        0,
+        crop,
+      ),
+    };
+  } finally {
+    bitmap.close();
+  }
+}
+
+export async function captureImage(
+  element: Element,
+  source: string,
+  signal: AbortSignal,
+): Promise<{ frame: FramePayload; original?: AnalyzeRequest['original'] }> {
   let frame: FramePayload;
   if (element instanceof HTMLImageElement) {
     if (!element.complete || !element.naturalWidth) throw new Error('Image is not ready');
@@ -54,15 +92,18 @@ export async function captureImage(element: Element, source: string, signal: Abo
       if (!(error instanceof DOMException) || error.name !== 'SecurityError') throw error;
       const bitmap = await readCorsBitmap(element, source, signal);
       if (!bitmap) throw error;
-      try {
-        if (signal.aborted || !element.isConnected || element.currentSrc !== source) throw error;
-        return { frame: pixels(bitmap, bitmap.width, bitmap.height, MAX_SIDE, 0) };
-      } finally {
-        bitmap.close();
-      }
+      return bitmapFrame(
+        bitmap,
+        () => !signal.aborted && element.isConnected && element.currentSrc === source,
+      );
     }
   } else {
-    // Embedded CSS images are decoded locally. External background URLs are never refetched.
+    if (!source.startsWith('data:image/')) {
+      const current = () => !signal.aborted && element.isConnected && sourceFor(element) === source;
+      const bitmap = await readPublicBitmap(source, signal, current);
+      if (!bitmap) throw new DOMException('Background pixels are inaccessible', 'SecurityError');
+      return bitmapFrame(bitmap, current, element);
+    }
     if (!embeddedOriginal(source)) throw new Error('Background pixels are inaccessible');
     const image = new Image();
     image.src = source;

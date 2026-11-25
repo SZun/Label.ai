@@ -29,3 +29,10 @@ test('DET-DECODE-02 animated and malformed containers cannot be treated as still
   assert.throws(() => inspectBoundedPng(new Uint8Array(80)), /PNG/i);
   assert.throws(() => inspectBoundedPng(png(640, 480).slice(0, 35)), /PNG/i);
 });
+
+test('accepts the same bounded narrow thumbnails as the decoded-image preview', () => {
+  assert.deepEqual(inspectBoundedPng(png(250, 125)), { width: 250, height: 125 });
+  assert.deepEqual(inspectBoundedPng(png(96, 192)), { width: 96, height: 192 });
+  assert.throws(() => inspectBoundedPng(png(127, 127)), /dimensions/);
+  assert.throws(() => inspectBoundedPng(png(250, 95)), /dimensions/);
+});

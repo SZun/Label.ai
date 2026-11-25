@@ -2,8 +2,8 @@ import { expect, it } from 'vitest';
 import { browsingModelLabel } from '../src/core/model-label';
 
 it('uses the ordinary image score boundary', () => {
-  expect(browsingModelLabel('image', { status: 'COMPLETED', rawScore: 0.65 })).toBe(true);
-  expect(browsingModelLabel('image', { status: 'COMPLETED', rawScore: 0.64999 })).toBe(false);
+  expect(browsingModelLabel('image', { status: 'COMPLETED', rawScore: 0.1 })).toBe(true);
+  expect(browsingModelLabel('image', { status: 'COMPLETED', rawScore: 0.09999 })).toBe(false);
 });
 
 it('requires eligible temporal evidence and a high lower-quartile video score', () => {

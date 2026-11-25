@@ -15,7 +15,7 @@ import {
   type FramePayload,
   type LocalDecision,
 } from '../../src/core/protocol';
-import { badgeBounds } from '../../src/core/label-bounds';
+import { badgeBounds, hasImageBadgeSpace } from '../../src/core/label-bounds';
 import { BoundedQueue } from '../../src/core/queue';
 import { CaptureSlots } from '../../src/core/capture-slots';
 import { ScanningPermission } from '../../src/core/scanning-permission';
@@ -26,7 +26,9 @@ import {
   type GalleryState,
 } from '../../src/core/gallery-diagnostics';
 import { RetryBudget, retryableReply } from '../../src/core/retry';
+import { backgroundLayoutKey } from '../../src/media/background-image';
 import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capture';
+import { MAX_SAMPLED_DURATION_MS, videoSampleSlot } from '../../src/media/video-sampling';
 import { acquireVideoOriginal } from '../../src/media/video-original';
 import { readSettings, SETTINGS_KEY } from '../../src/transport/settings';
 import '../../src/styles/label.scss';
@@ -35,6 +37,7 @@ interface MediaEntry {
   element: Element;
   id: string;
   source: string;
+  backgroundLayout?: string;
   generation: number;
   binding?: Binding;
   decision?: LocalDecision;
@@ -118,6 +121,14 @@ export default defineContentScript({
     const eligible = () => !ended && !document.hidden && eligibleDocumentChain(window, settings);
     const active = () => eligible() && permission.allowed;
 
+    function matchesCurrentMedia(entry: MediaEntry) {
+      return (
+        sourceFor(entry.element) === entry.source &&
+        (entry.backgroundLayout === undefined ||
+          entry.backgroundLayout === backgroundLayoutKey(entry.element, entry.source))
+      );
+    }
+
     function markState(entry: MediaEntry, state: GalleryState) {
       if (gallery() && entry.element.isConnected && sourceFor(entry.element) === entry.source)
         entry.element.setAttribute(galleryAttribute, state);
@@ -181,6 +192,7 @@ export default defineContentScript({
       cancel(entry);
       if (gallery()) entry.element.removeAttribute(galleryAttribute);
       entry.source = sourceFor(entry.element);
+      entry.backgroundLayout = undefined;
       entry.generation += 1;
       entry.attempted = false;
       entry.originalAttempted = false;
@@ -210,8 +222,7 @@ export default defineContentScript({
     function place(entry: MediaEntry): LabelPlacement | null {
       if (!entry.decision?.shouldLabel || !entry.visible || !entry.element.isConnected || !active())
         return null;
-      if (entry.decision.expiresAt <= Date.now() || sourceFor(entry.element) !== entry.source)
-        return null;
+      if (entry.decision.expiresAt <= Date.now() || !matchesCurrentMedia(entry)) return null;
       const bounds = badgeBounds(entry.element);
       if (!bounds || !shown(entry.element)) return null;
       if (document.fullscreenElement && !document.fullscreenElement.contains(ui.shadowHost))
@@ -278,7 +289,7 @@ export default defineContentScript({
         !entry.visible ||
         !shown(entry.element) ||
         !entry.element.isConnected ||
-        sourceFor(entry.element) !== entry.source
+        !matchesCurrentMedia(entry)
       ) {
         markState(entry, 'canceled');
         entry.attempted = false;
@@ -319,7 +330,7 @@ export default defineContentScript({
         markState(entry, 'canceled');
         entry.attempted = true;
         schedule();
-      }, 20_000);
+      }, 30_000);
       const sample = (_now: number, metadata: VideoFrameCallbackMetadata) => {
         entry.frameCallback = undefined;
         if (entry.generation !== generation || entry.captureLease !== captureLease) return;
@@ -335,7 +346,11 @@ export default defineContentScript({
           return;
         }
         const durationMs = video.duration * 1000;
-        if (!Number.isFinite(durationMs) || durationMs <= 0 || durationMs > 300_000) {
+        if (
+          !Number.isFinite(durationMs) ||
+          durationMs <= 0 ||
+          durationMs > MAX_SAMPLED_DURATION_MS
+        ) {
           cancel(entry);
           markState(entry, 'unsupported');
           entry.attempted = true;
@@ -343,14 +358,11 @@ export default defineContentScript({
         }
         const timestampMs = metadata.mediaTime * 1000;
         const last = entry.frames.at(-1);
-        const interval = Math.min(1000, Math.max(200, durationMs / 12));
+        const slot = videoSampleSlot(timestampMs, durationMs);
+        const previousSlot = last ? videoSampleSlot(last.timestampMs, durationMs) : -1;
         try {
-          if (!last || timestampMs - last.timestampMs >= interval)
-            entry.frames.push(captureVideoFrame(video, timestampMs));
-          if (
-            entry.frames.length >= 12 ||
-            (entry.frames.length >= 3 && timestampMs >= durationMs - interval)
-          ) {
+          if (slot > previousSlot) entry.frames.push(captureVideoFrame(video, timestampMs));
+          if (slot === 11 && entry.frames.length >= 3) {
             entry.attempted = true;
             if (entry.captureTimer !== undefined) clearTimeout(entry.captureTimer);
             entry.captureTimer = undefined;
@@ -358,8 +370,7 @@ export default defineContentScript({
             entry.frames = [];
             const coverage = Math.min(
               1,
-              ((frames.at(-1)?.timestampMs ?? 0) - (frames[0]?.timestampMs ?? 0) + interval) /
-                durationMs,
+              ((frames.at(-1)?.timestampMs ?? 0) - (frames[0]?.timestampMs ?? 0)) / durationMs,
             );
             const queued = queue.enqueue(entry.id, async () => {
               try {
@@ -417,7 +428,7 @@ export default defineContentScript({
           entries.delete(entry.element);
           continue;
         }
-        if (sourceFor(entry.element) !== entry.source) {
+        if (!matchesCurrentMedia(entry)) {
           reset(entry);
           continue;
         }
@@ -434,11 +445,9 @@ export default defineContentScript({
         if (!active() || !entry.visible || entry.attempted || !entry.source || !entry.retry.ready())
           continue;
         const rect = entry.element.getBoundingClientRect();
-        // A 128px-wide 16:9 thumbnail is only 72px tall. Capture uses the
-        // decoded image dimensions, independent of how its publisher sizes it.
-        const minimumHeight = entry.element instanceof HTMLVideoElement ? 90 : 72;
-        if (rect.width < 128 || rect.height < minimumHeight) continue;
+        if (!hasImageBadgeSpace(rect.width, rect.height)) continue;
         if (entry.element instanceof HTMLVideoElement) {
+          if (rect.width < 128 || rect.height < 90) continue;
           if (!entry.originalAttempted) {
             if (entry.element.readyState < 1) continue;
             entry.originalAttempted = true;
@@ -519,6 +528,7 @@ export default defineContentScript({
           const controller = new AbortController();
           try {
             entry.captureAbort = controller;
+            const layout = backgroundLayoutKey(entry.element, entry.source);
             const payload = await captureImage(entry.element, entry.source, controller.signal);
             if (
               !controller.signal.aborted &&
@@ -526,8 +536,10 @@ export default defineContentScript({
               active() &&
               entry.visible &&
               shown(entry.element) &&
-              sourceFor(entry.element) === entry.source
+              sourceFor(entry.element) === entry.source &&
+              layout === backgroundLayoutKey(entry.element, entry.source)
             ) {
+              entry.backgroundLayout = layout;
               await submit(entry, { kind: 'image', ...payload });
             } else if (entry.generation === generation) {
               markState(entry, 'canceled');
@@ -590,7 +602,7 @@ export default defineContentScript({
       if (observed.has(element)) return;
       if (
         !(element instanceof HTMLImageElement || element instanceof HTMLVideoElement) &&
-        !sourceFor(element).startsWith('data:image/')
+        !sourceFor(element)
       )
         return;
       observed.add(element);

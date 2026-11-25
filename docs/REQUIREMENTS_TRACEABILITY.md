@@ -18,7 +18,7 @@ The IDs and short descriptions come from the preserved original proposal. Status
 | UX-04 | No other normal browsing UI | Implemented | Noninteractive SMUI Paper is the sole in-page UI. Controls live on the extension options page. |
 | UX-05 | Noninterference and accessibility | Partial | Isolated styling, pointer-events, reduced-motion rule and test. Full native accessibility and controls review pending. |
 | UX-06 | Fail closed on all nonpositive states | Implemented | Core protocol, detector/provenance policy tests and binding.test.ts exercise the default no-label path. |
-| DISC-01 | Generic image discovery | Partial | Content script discovers img/currentSrc and eligible inline backgrounds. Some external backgrounds remain inaccessible. |
+| DISC-01 | Generic image discovery | Partial | Content script discovers img/currentSrc, embedded backgrounds and eligible single-image public HTTPS photo cards. CORS-denied cards remain inaccessible. The ordinary-page browser regression includes a 120×68 feed thumbnail and a dynamic CDN-backed CSS card. |
 | DISC-02 | Generic video discovery | Partial | Video elements and source events, MP4/WebM developer inputs and temporal analyzer. Platform fixtures pending. |
 | DISC-03 | Dynamic lifecycle | Partial | Mutation, visibility and resize observers, registered frames and accessible open roots. Feed/site trials pending. |
 | DISC-04 | Correct source binding | Partial | Generation, request and source checks plus binding tests and the browser source-change acceptance. |

@@ -2,7 +2,7 @@
 
 Label.ai performs media analysis on the user's device. The extension uses the real, pinned Detectra ONNX image model through ONNX Runtime Web/WASM. The model is never queried through a hosted API. This directory contains developer provisioning, local calibration tools, license notices, and actual inference reports.
 
-The ordinary browser extension uses a versioned **preview** policy: a completed image raw score of at least 0.65 can trigger a badge. For video, the lower-quartile frame score must reach 0.65 and the whole-clip temporal checks must pass. A verified, applicable credential takes priority. The detector package’s separate calibrated release routes remain disabled. No held-out dataset establishes the target precision or false-positive bounds, and no fitted temporal calibration artifact is bundled.
+The ordinary browser extension uses a versioned **preview** policy: a completed image raw score of at least 0.10 can trigger a badge. For video, the lower-quartile frame score must reach 0.65 and the whole-clip temporal checks must pass. A verified, applicable credential takes priority. The detector package’s separate calibrated release routes remain disabled. No held-out dataset establishes the target precision or false-positive bounds, and no fitted temporal calibration artifact is bundled.
 
 ## What is implemented
 
@@ -60,7 +60,7 @@ await detector.analyzeVideoFrames({ frames, durationMs, signal });
 await detector.dispose();
 ```
 
-Each video frame adds `timestampMs` to the same RGBA shape. Width and height must each be 128–1024, integer, with exactly `width * height * 4` bytes. The extension captures video at a smaller limit to control transfer and memory cost. Neither input includes a source URL or filename. Inference is serialized and the engine caps its pending jobs at two; the extension also applies global queue and lifecycle budgets.
+Each video frame adds `timestampMs` to the same RGBA shape. Image and video frames support integer dimensions of 128–1024 on both axes. The image preview also supports a shorter side of 96–127 pixels when the longer side is at least 192 pixels and at most 1024. All frames require exactly `width * height * 4` bytes. The extension captures video at a smaller limit to control transfer and memory cost. Neither input includes a source URL or filename. Inference is serialized and the engine caps its pending jobs at two; the extension also applies global queue and lifecycle budgets.
 
 An optional `analyzeImage({bytes,mime,signal})` accepts **bounded, non-animated PNG only**, intended for already-captured pixels. It checks container dimensions and animation chunks before native decoding. In contexts without `createImageBitmap`/`OffscreenCanvas`, it returns unsupported; use `analyzeRgba` in a service worker. Browser-supported JPEG, WebP, and other sources are decoded/captured by the extension and use RGBA. This image API does not establish source provenance.
 

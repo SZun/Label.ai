@@ -41,7 +41,7 @@ export default defineConfig({
     description: localTestBuild
       ? 'Experimental, on-device forensic labels for localhost test pages only.'
       : 'Private, on-device analysis of visible images and videos. Media never leaves your device for analysis.',
-    version: '0.1.3',
+    version: '0.1.4',
     icons: ICON_PATHS,
     incognito: 'not_allowed',
     permissions: ['storage', 'scripting'],

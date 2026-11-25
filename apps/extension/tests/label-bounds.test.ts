@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { badgeBounds } from '../src/core/label-bounds';
+import { badgeBounds, hasImageBadgeSpace } from '../src/core/label-bounds';
 
 function rect(element: Element, x: number, y: number, width: number, height: number) {
   vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(new DOMRect(x, y, width, height));
@@ -35,4 +35,12 @@ it('bounds a badge to the intersection of a shadow-host scroller and the viewpor
   expect(badgeBounds(image)).toEqual({ x: 748, y: 18, width: 124, compact: true });
   rect(host, 740, 265, 140, 300);
   expect(badgeBounds(image)).toBeNull();
+});
+
+it('admits compact feed thumbnails only when the complete badge can fit', () => {
+  expect(hasImageBadgeSpace(120, 68)).toBe(true);
+  expect(hasImageBadgeSpace(112, 52)).toBe(true);
+  expect(hasImageBadgeSpace(111, 120)).toBe(false);
+  expect(hasImageBadgeSpace(128, 51)).toBe(false);
+  expect(hasImageBadgeSpace(250, 43)).toBe(false);
 });

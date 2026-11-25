@@ -53,9 +53,9 @@ export function createDetectorEngine(runner: InferenceRunner, inputPolicy: Local
     return job;
   }
 
-  async function run(input: RgbaInput): Promise<number> {
+  async function run(input: RgbaInput, kind: 'image' | 'video'): Promise<number> {
     checkCanceled(input.signal);
-    const tensor = preprocessRgba(input);
+    const tensor = preprocessRgba(input, kind);
     const logit = await runner.run(tensor);
     checkCanceled(input.signal);
     if (!Number.isFinite(logit)) throw new TypeError('Nonfinite model output');
@@ -65,7 +65,12 @@ export function createDetectorEngine(runner: InferenceRunner, inputPolicy: Local
   return {
     analyzeRgba(input) {
       return enqueue(async () => {
-        const logit = await run(input);
+        const logit = await run(input, 'image');
+        if (Math.min(input.width, input.height) < 128) {
+          // Existing release evidence and calibration predate this preview-only size range.
+          return { ...result('COMPLETED', ['LOCAL_IMAGE_MODEL', 'NARROW_THUMBNAIL_PREVIEW', 'SCORE_UNCALIBRATED']),
+            logit, rawScore: sigmoid(logit) };
+        }
         const score = scoreImage(logit, policy.image.calibration);
         const approved = approveRoute(policy, 'image');
         const reasons = ['LOCAL_IMAGE_MODEL'];
@@ -85,7 +90,7 @@ export function createDetectorEngine(runner: InferenceRunner, inputPolicy: Local
         const scoredFrames = [];
         for (const frame of input.frames) {
           checkCanceled(input.signal);
-          const logit = await run({ ...frame, ...(input.signal ? { signal: input.signal } : {}) });
+          const logit = await run({ ...frame, ...(input.signal ? { signal: input.signal } : {}) }, 'video');
           scoredFrames.push({ ...frame, logit });
           // Native WASM may finish its Promise synchronously. Yield a task so
           // cancel messages and deadline timers run before another costly frame.

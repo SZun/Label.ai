@@ -2,7 +2,7 @@ export const INPUT_SIZE = 384;
 export const PREPROCESSING_VERSION = 'rgb-white-bilinear440-center384-imagenet-v1';
 export type RgbaInput = { rgba: Uint8Array | Uint8ClampedArray; width: number; height: number; signal?: AbortSignal };
 
-const MAX_INPUT_PIXELS = 1024 * 1024;
+type MediaKind = 'image' | 'video';
 const MEAN = [0.485, 0.456, 0.406] as const;
 const STD = [0.229, 0.224, 0.225] as const;
 
@@ -10,12 +10,16 @@ export function checkCanceled(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException('Analysis aborted', 'AbortError');
 }
 
-export function validateRgba({ rgba, width, height, signal }: RgbaInput): void {
+export function supportsDimensions(width: number, height: number, kind: MediaKind): boolean {
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height)) return false;
+  const short = Math.min(width, height), long = Math.max(width, height);
+  if (long > 1024) return false;
+  return short >= 128 || (kind === 'image' && short >= 96 && long >= 192);
+}
+
+export function validateRgba({ rgba, width, height, signal }: RgbaInput, kind: MediaKind = 'image'): void {
   checkCanceled(signal);
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 128 || height < 128 ||
-      width > 1024 || height > 1024 || width * height > MAX_INPUT_PIXELS) {
-    throw new RangeError('Input dimensions must be integers between 128 and 1024');
-  }
+  if (!supportsDimensions(width, height, kind)) throw new RangeError('Unsupported input dimensions');
   if (!(rgba instanceof Uint8Array || rgba instanceof Uint8ClampedArray) || rgba.length !== width * height * 4) {
     throw new RangeError('RGBA input size does not match dimensions');
   }
@@ -29,8 +33,8 @@ function channel(rgba: Uint8Array | Uint8ClampedArray, index: number, color: num
 /** Deterministic bilinear resize/crop. This exact transform is versioned for calibration.
  * It never mutates caller data and has no browser, URL, filename, or metadata dependencies.
  */
-export function preprocessRgba(input: RgbaInput): Float32Array {
-  validateRgba(input);
+export function preprocessRgba(input: RgbaInput, kind: MediaKind = 'image'): Float32Array {
+  validateRgba(input, kind);
   const { rgba, width, height, signal } = input;
   const scale = 440 / Math.min(width, height);
   const resizedWidth = Math.round(width * scale);

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { captureImage } from '../src/media/capture';
+import { captureImage, sourceFor } from '../src/media/capture';
 
 const source = 'https://media.publisher.example/art/cover.jpg';
 const bytes = Uint8Array.of(255, 216, 255, 192, 0, 11, 8, 0, 20, 0, 30, 1, 1, 17, 0, 255, 217);
@@ -167,3 +167,140 @@ it.each(['animation', 'size', 'keyframe'])(
     expect(createImageBitmap).not.toHaveBeenCalled();
   },
 );
+
+function background(value: string) {
+  const card = document.createElement('article');
+  card.style.backgroundImage = value;
+  card.style.backgroundSize = 'cover';
+  card.style.backgroundPosition = '50% 50%';
+  Object.defineProperties(card, {
+    clientWidth: { value: 300, configurable: true },
+    clientHeight: { value: 200 },
+  });
+  return document.body.appendChild(card);
+}
+
+it.each([
+  ['https://publisher.example/images/story(1).jpg', 'basic'],
+  [source, 'cors'],
+])('reads the selected public CSS card image %s for local inference', async (url, type) => {
+  const card = background(`url("${url}")`);
+  try {
+    expect(sourceFor(card)).toBe(url);
+    expect(fetchImage).not.toHaveBeenCalled();
+    fetchImage.mockResolvedValue(reply('image/jpeg', bytes, url, type));
+    read.mockReset().mockReturnValue({ data: new Uint8ClampedArray(30 * 20 * 4) });
+    const result = await captureImage(card, url, cancel.signal);
+    expect(result.frame).toMatchObject({ width: 30, height: 20 });
+    expect(result.original).toBeUndefined();
+    expect(fetchImage).toHaveBeenCalledOnce();
+    expect(fetchImage).toHaveBeenCalledWith(
+      url,
+      expect.objectContaining({
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        redirect: 'error',
+        mode: 'cors',
+      }),
+    );
+    expect(bitmap.close).toHaveBeenCalledOnce();
+  } finally {
+    card.remove();
+  }
+});
+
+it.each([
+  'linear-gradient(red, blue)',
+  `url("${source}"), url("https://cdn.example/next.png")`,
+  `linear-gradient(red, blue), url("${source}")`,
+  `image-set(url("${source}") 1x)`,
+  'url("https://cdn.example/card.jpg?token=secret")',
+  'url("https://cdn.example/card.jpg?auth_token=secret")',
+  'url("https://intranet./card.jpg")',
+  'url("https://cdn.example/private/card.jpg")',
+  'url("https://localhost/card.jpg")',
+  'url("blob:https://publisher.example/a")',
+])('skips unsupported or private CSS sources: %s', (value) => {
+  const card = background(value);
+  try {
+    expect(sourceFor(card)).toBe('');
+    expect(fetchImage).not.toHaveBeenCalled();
+  } finally {
+    card.remove();
+  }
+});
+
+it('drops a decoded CSS card if the publisher replaces its image during the read', async () => {
+  const card = background(`url("${source}")`);
+  try {
+    vi.mocked(createImageBitmap).mockImplementationOnce(async () => {
+      card.style.backgroundImage = 'none';
+      return bitmap as unknown as ImageBitmap;
+    });
+    await expect(captureImage(card, source, cancel.signal)).rejects.toThrow();
+    expect(bitmap.close).toHaveBeenCalledOnce();
+  } finally {
+    card.remove();
+  }
+});
+
+it('declines an oversized CSS card before decoding its bitmap', async () => {
+  const card = background(`url("${source}")`);
+  const large = bytes.slice();
+  large.set([0x20, 0, 0x20, 0], 7);
+  try {
+    fetchImage.mockResolvedValue(reply('image/jpeg', large));
+    await expect(captureImage(card, source, cancel.signal)).rejects.toThrow();
+    expect(fetchImage).toHaveBeenCalledOnce();
+    expect(createImageBitmap).not.toHaveBeenCalled();
+  } finally {
+    card.remove();
+  }
+});
+
+it('classifies only the painted portion of a centered cover photo', async () => {
+  const card = background(`url("${source}")`);
+  Object.defineProperty(card, 'clientWidth', { value: 200 });
+  try {
+    read.mockReset().mockReturnValue({ data: new Uint8ClampedArray(20 * 20 * 4) });
+    const { frame } = await captureImage(card, source, cancel.signal);
+    const canvas = document.createElement('canvas').getContext('2d')!;
+    expect(canvas.drawImage).toHaveBeenCalledWith(bitmap, 5, 0, 20, 20, 0, 0, 20, 20);
+    expect(frame).toMatchObject({ width: 20, height: 20 });
+  } finally {
+    card.remove();
+  }
+});
+
+it('does not treat sprite sheets or a parent with separate media as a card photo', () => {
+  const card = background(`url("${source}")`);
+  try {
+    card.style.backgroundPosition = '-160px 0px';
+    expect(sourceFor(card)).toBe('');
+    card.style.backgroundPosition = 'center';
+    card.style.backgroundSize = '640px 320px';
+    expect(sourceFor(card)).toBe('');
+    card.style.backgroundSize = 'cover';
+    card.style.backgroundClip = 'text';
+    expect(sourceFor(card)).toBe('');
+    card.style.backgroundClip = 'border-box';
+    card.style.backgroundRepeat = 'round';
+    expect(sourceFor(card)).toBe('');
+    card.style.backgroundRepeat = 'no-repeat';
+    card.append(document.createElement('img'));
+    expect(sourceFor(card)).toBe('');
+  } finally {
+    card.remove();
+  }
+});
+
+it('does not classify a small auto-sized CSS texture repeated across a card', async () => {
+  const card = background(`url("${source}")`);
+  try {
+    card.style.backgroundSize = 'auto';
+    await expect(captureImage(card, source, cancel.signal)).rejects.toThrow();
+    expect(read).not.toHaveBeenCalled();
+  } finally {
+    card.remove();
+  }
+});

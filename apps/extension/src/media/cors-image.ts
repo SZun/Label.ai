@@ -3,21 +3,20 @@ import { staticWebpDimensions } from './webp';
 import { DEFAULT_SETTINGS, isEligiblePage } from '../core/policy';
 import { MAX_ORIGINAL_BYTES } from '../core/protocol';
 
-function eligibleCdnUrl(source: string): boolean {
+export function eligiblePublicImageUrl(source: string): boolean {
   try {
     const url = new URL(source);
     const host = url.hostname.replace(/\.$/, '');
     return (
       url.protocol === 'https:' &&
-      url.origin !== location.origin &&
       !url.hash &&
-      host !== 'localhost' &&
+      host.includes('.') &&
       !/^\d+(?:\.\d+){3}$/.test(host) &&
       !host.startsWith('[') &&
       !host.endsWith('.localhost') &&
       !host.endsWith('.local') &&
       !Array.from(url.searchParams.keys()).some((key) =>
-        /^(?:x-amz-|x-goog-|token$|access_token$|signature$|sig$|auth$|password$|api[_-]?key$)/i.test(
+        /token|^(?:x-amz-|x-goog-|signature$|sig$|auth(?:orization)?$|password$|api[_-]?key$|client[_-]?secret$|jwt$)/i.test(
           key,
         ),
       ) &&
@@ -46,7 +45,6 @@ function matchesImageDimensions(
   width: number,
   height: number,
 ) {
-  if (width < 1 || height < 1 || width * height > MAX_COMPARE_PIXELS) return false;
   if (width === image.naturalWidth && height === image.naturalHeight) return true;
   const sets = [image.srcset];
   if (image.parentElement instanceof HTMLPictureElement)
@@ -91,10 +89,26 @@ export async function readCorsBitmap(
     height < 1 ||
     width * height > MAX_COMPARE_PIXELS ||
     image.crossOrigin === 'use-credentials' ||
-    !eligibleCdnUrl(source)
+    !eligiblePublicImageUrl(source) ||
+    new URL(source).origin === location.origin
   )
     return;
 
+  return readPublicBitmap(source, signal, current, (w, h) =>
+    matchesImageDimensions(image, source, w, h),
+  );
+}
+
+/** Public static raster bytes support local inference. Never use a second network
+ * response as provenance for a displayed image. */
+export async function readPublicBitmap(
+  source: string,
+  signal: AbortSignal,
+  current: () => boolean,
+  matchesSize?: (width: number, height: number) => boolean,
+): Promise<ImageBitmap | undefined> {
+  if (signal.aborted || !current() || !eligiblePublicImageUrl(source)) return;
+  const responseType = new URL(source).origin === location.origin ? 'basic' : 'cors';
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal.addEventListener('abort', abort, { once: true });
@@ -115,7 +129,7 @@ export async function readCorsBitmap(
       controller.signal.aborted ||
       !current() ||
       !response.ok ||
-      response.type !== 'cors' ||
+      response.type !== responseType ||
       response.redirected ||
       response.url !== source ||
       (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'image/webp') ||
@@ -126,7 +140,14 @@ export async function readCorsBitmap(
     const bytes = await readBounded(response, controller.signal);
     if (!bytes || !current()) return;
     const size = encodedDimensions(bytes, mime);
-    if (!size || !matchesImageDimensions(image, source, size.width, size.height)) return;
+    if (
+      !size ||
+      size.width < 1 ||
+      size.height < 1 ||
+      size.width * size.height > MAX_COMPARE_PIXELS ||
+      (matchesSize && !matchesSize(size.width, size.height))
+    )
+      return;
     const bitmap = await createImageBitmap(new Blob([bytes], { type: mime }));
     if (
       !current() ||

@@ -15,6 +15,17 @@ from pathlib import Path
 from PIL import Image
 
 
+def browser_timestamps(duration: float) -> list[float]:
+    """Ideal playback targets in seconds, matching src/media/video-sampling.ts."""
+    if not 0 < duration <= 22.5:
+        raise ValueError("Unsupported video duration")
+    third = duration / 3
+    interval = min(third / 4, 1.4)
+    first = (third - 3 * interval) / 2
+    return [group * third + first + offset * interval
+            for group in range(3) for offset in range(4)]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", type=Path)
@@ -57,10 +68,7 @@ def main() -> None:
             width, height = round(stream["width"] * scale), round(stream["height"] * scale)
             frames = []
             if args.browser_sampling:
-                if duration <= 0 or duration > 300:
-                    raise ValueError("Unsupported video duration")
-                interval = min(1, max(.2, duration / 12))
-                timestamps = [index * interval for index in range(12) if index * interval < duration]
+                timestamps = browser_timestamps(duration)
             else:
                 timestamps = [index / 11 * max(0, duration - 0.1) for index in range(12)]
             for index, timestamp in enumerate(timestamps):

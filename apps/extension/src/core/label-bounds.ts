@@ -7,6 +7,12 @@ function layoutParent(element: Element): Element | null {
 
 const clips = /^(hidden|clip|scroll|auto|overlay)$/;
 
+const compactWidth = 182;
+
+export function hasImageBadgeSpace(width: number, height: number): boolean {
+  return width >= 112 && height >= (width < compactWidth ? 52 : 44);
+}
+
 export function badgeBounds(element: Element) {
   const rect = element.getBoundingClientRect();
   let left = Math.max(0, rect.left);
@@ -35,8 +41,12 @@ export function badgeBounds(element: Element) {
   }
 
   const visibleWidth = right - left;
-  const compact = visibleWidth < 182;
   // Compact badges can wrap. Keep room for two lines and a margin on every side.
-  if (visibleWidth < 112 || bottom - top < (compact ? 52 : 44)) return null;
-  return { x: left + 8, y: top + 8, width: visibleWidth - 16, compact };
+  if (!hasImageBadgeSpace(visibleWidth, bottom - top)) return null;
+  return {
+    x: left + 8,
+    y: top + 8,
+    width: visibleWidth - 16,
+    compact: visibleWidth < compactWidth,
+  };
 }

@@ -147,7 +147,7 @@ beforeEach(async () => {
   await startWorker();
 });
 
-it('keeps the permissive local-test threshold confined to the loopback build', async () => {
+it('keeps local-test decisions confined to the separate loopback build', async () => {
   const loopback = 'http://127.0.0.1:8765';
   state.inference.mockResolvedValue({
     status: 'COMPLETED',
@@ -155,7 +155,7 @@ it('keeps the permissive local-test threshold confined to the loopback build', a
     policyVersion: 'local-v1-unvalidated',
     rawScore: 0.25,
   });
-  expect((await sendImage(loopback)).shouldLabel).toBe(false);
+  expect((await sendImage(loopback)).policyVersion).toBe('browsing-model-estimate-v2');
   vi.stubGlobal('__LABEL_AI_LOCAL_TEST__', true);
   await startWorker();
   const positive = await sendImage(loopback);
@@ -173,11 +173,11 @@ it('labels unsigned media on an ordinary website using the regular browsing poli
     status: 'COMPLETED',
     shouldLabel: false,
     policyVersion: 'local-v1-unvalidated',
-    rawScore: 0.65,
+    rawScore: 0.2165,
   });
   const result = await sendImage(url);
   expect(result.shouldLabel).toBe(true);
-  expect(result.policyVersion).toBe('browsing-model-estimate-v1');
+  expect(result.policyVersion).toBe('browsing-model-estimate-v2');
   state.hostAllowed = false;
   expect((await sendImage(url)).shouldLabel).toBe(false);
   expect(state.inference).toHaveBeenCalledTimes(1);
@@ -231,7 +231,7 @@ it('uses multiple eligible video frames in the regular browsing policy', async (
     },
   );
   expect(response.shouldLabel).toBe(true);
-  expect(response.policyVersion).toBe('browsing-model-estimate-v1');
+  expect(response.policyVersion).toBe('browsing-model-estimate-v2');
   expect(state.videoInference.mock.calls[0][0].frames).toHaveLength(8);
 });
 afterEach(() => {
