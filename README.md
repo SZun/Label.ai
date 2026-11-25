@@ -14,7 +14,7 @@ npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:chrome
 ```
 
 1. In a desktop Chromium browser, open the extensions manager. In Chrome this is `chrome://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select `apps/extension/.output/chrome-mv3`. If you already loaded that directory, click **Reload** on its extension card. Disable **Label.ai (Local Test)** if installed.
-2. Check that the card says **Label.ai** version **0.1.2** or later, website access is **On all sites**, and scanning is active. Open or refresh a public webpage. The extension scans as you scroll or play a short clip. There is no site list, server to start, or file to upload. The toolbar opens global pause, resume and data controls.
+2. Check that the card says **Label.ai** version **0.1.3** or later, website access is **On all sites**, and scanning is active. Open or refresh a public webpage. The extension scans as you scroll or play a short clip. There is no site list, server to start, or file to upload. The toolbar opens global pause, resume and data controls.
 3. The badge appears over eligible positive media. The model needs readable pixels, enough visible space for the badge, and sufficient consistent playback for video. Browser-internal pages, private contexts, DRM and cross-origin media whose pixels the browser protects are outside coverage. An unlabeled item has no authenticity verdict.
 
 For Safari, run `npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:safari`. On macOS select the unpacked `apps/extension/.output/safari-mv3` in **Add Temporary Extension…** in Safari’s developer settings where available. For an Apple containing app use `make safari-xcode` on a Mac with Xcode. Enable the extension and grant **All Websites** access in Safari. See [Safari acceptance](docs/SAFARI_ACCEPTANCE.md) for the verification status.
@@ -23,11 +23,13 @@ For Safari, run `npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:safari`
 
 With the regular extension active, open the public [Keras textual inversion tutorial](https://keras.io/examples/generative/fine_tune_via_textual_inversion/#taking-the-fine-tuned-model-for-a-spin). Scroll to the first row of generated samples in **Taking the Fine Tuned Model for a Spin**. Keep that row in view while the model runs. Each row of three pictures in this tutorial is a single PNG and receives one badge for that whole image.
 
+The [Stable Diffusion article on Wikipedia](https://en.wikipedia.org/wiki/Stable_Diffusion#Image_modification) also contains two city-sphere images displayed side by side and hosted by Wikimedia. These exercise real CDN thumbnails during normal navigation.
+
 ### Optional repeatable check
 
 Run `python3 tools/test_gallery.py --prepare` and open [the local gallery](http://127.0.0.1:8765) in the regular extension. Scroll through the signed Firefly cat, four unsigned Stable Diffusion images and four genuine photographs. The gallery reports the detected build and each item’s actual scanner state separately from its known origin. Add `--videos` to download the two optional clips. The local file picker displays files as browser object URLs.
 
-To check left, middle and right placement, open [the three-column check](http://127.0.0.1:8765/columns) with the same server running. It displays one unsigned generated PNG in three independent image elements at different widths. On a desktop window, all three should have their own badge at the same time.
+To check left, middle and right placement, open [the three-column check](http://127.0.0.1:8765/columns) with the same server running. It displays one unsigned generated PNG in three independent image elements at different widths. On a desktop window, all three should have their own badge at the same time. The page reports the running build/version, scanner access, per-image result, and whether a badge is visible.
 
 Developers who specifically want to explore lower thresholds can run `npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:chrome:test`. That separate **Label.ai (Local Test)** package is limited to HTTP loopback pages.
 
@@ -40,7 +42,7 @@ Developers who specifically want to explore lower thresholds can run `npm exec -
 | `packages/detector`, `ml` | Local ONNX Runtime Web image inference, temporal video features, checksummed model provisioning, policy gates and developer measurements. |
 | `tools`, `tests` | Evaluation, package auditing, reproducible ZIPs, browser acceptance tests, Apple packaging and generated test fixtures. |
 
-No account or backend is required. Media, frames, addresses, hashes and model outputs are never sent to an analysis service. A qualifying content-addressed image can be read from the publisher using a credential-free GET. An eligible same-origin JPEG or static PNG can be read from the browser cache after matching displayed pixels. Supported immutable same-origin Blob objects are read locally, including complete MP4 originals. The extension ignores remote credential references. See the [privacy description](docs/PRIVACY.md).
+No account or backend is required. Media, frames, addresses, hashes and model outputs are never sent to an analysis service. A qualifying content-addressed image can be read from the publisher using a credential-free GET. The scanner can make an anonymous CORS GET for a visible public CDN image when the browser blocks its original pixels but the image server allows access. This read supplies a model estimate. An eligible same-origin JPEG or static PNG can be read from the browser cache after matching displayed pixels. Supported immutable same-origin Blob objects are read locally, including complete MP4 originals. The extension ignores remote credential references. See the [privacy description](docs/PRIVACY.md).
 
 ## Verify a build
 

@@ -10,6 +10,7 @@ import {
 import { fetchContentAddressed } from '../transport/acquire';
 import { matchesDisplayedOriginal, readCachedOriginal } from '../cached-original';
 import { readBlobOriginal } from './blob-original';
+import { readCorsBitmap } from './cors-image';
 
 export function sourceFor(element: Element): string {
   if (element instanceof HTMLImageElement) return element.currentSrc || element.src;
@@ -47,7 +48,19 @@ export async function captureImage(element: Element, source: string, signal: Abo
   let frame: FramePayload;
   if (element instanceof HTMLImageElement) {
     if (!element.complete || !element.naturalWidth) throw new Error('Image is not ready');
-    frame = pixels(element, element.naturalWidth, element.naturalHeight, MAX_SIDE, 0);
+    try {
+      frame = pixels(element, element.naturalWidth, element.naturalHeight, MAX_SIDE, 0);
+    } catch (error) {
+      if (!(error instanceof DOMException) || error.name !== 'SecurityError') throw error;
+      const bitmap = await readCorsBitmap(element, source, signal);
+      if (!bitmap) throw error;
+      try {
+        if (signal.aborted || !element.isConnected || element.currentSrc !== source) throw error;
+        return { frame: pixels(bitmap, bitmap.width, bitmap.height, MAX_SIDE, 0) };
+      } finally {
+        bitmap.close();
+      }
+    }
   } else {
     // Embedded CSS images are decoded locally. External background URLs are never refetched.
     if (!embeddedOriginal(source)) throw new Error('Background pixels are inaccessible');

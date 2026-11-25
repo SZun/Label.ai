@@ -62,7 +62,7 @@ class GalleryTests(unittest.TestCase):
             status, headers, body = self.request(origin, 'GET', '/assets/' + self.signed_digest + '.jpg')
             self.assertEqual((status, headers['Content-Type'], body), (200, 'image/jpeg', self.signed))
 
-    def test_columns_page_serves_three_separate_copies_without_gallery_hooks(self):
+    def test_columns_page_reports_each_separately_scanned_image(self):
         images = []
 
         class Images(HTMLParser):
@@ -78,8 +78,13 @@ class GalleryTests(unittest.TestCase):
             self.assertEqual([image['id'] for image in images], ['left', 'center', 'right'])
             self.assertEqual([image['width'] for image in images], ['230', '160', '128'])
             self.assertEqual({image['src'] for image in images}, {'/assets/' + self.generated_digest + '.png'})
-            self.assertNotIn(b'<script', body)
-            self.assertNotIn(b'label-ai-test-gallery', body)
+            self.assertIn(b'src="/gallery.js"', body)
+            self.assertIn(b'<meta name="label-ai-test-gallery" content="1">', body)
+            self.assertEqual(body.count(b'class="analysis-status"'), 3)
+            local_version = json.loads((Path(__file__).resolve().parents[2] /
+                                        'apps/extension/package.json').read_text())['version']
+            self.assertIn(f'data-expected-version="{local_version}"'.encode(), body)
+            self.assertIn(b'id="scanner-status"', body)
             self.assertIn(b'href="/gallery.css"', body)
             self.assertIn(b'href="/columns"', self.request(origin, 'GET', '/')[2])
 
@@ -136,6 +141,7 @@ class GalleryTests(unittest.TestCase):
             self.assertIn(b'class="analysis-status"', body)
             _, _, script = self.request(origin, 'GET', '/gallery.js')
             for value in (b'data-label-ai-build', b'data-label-ai-test-state', b'completed-no-label',
-                          b'local-test', b'production', b'outdated', b'Not yet scanned'):
+                          b'data-label-ai-version', b'data-label-ai-scanner-state', b'local-test',
+                          b'production', b'outdated', b'Not yet scanned'):
                 self.assertIn(value, script)
             self.assertIn(b'attributeFilter', script)

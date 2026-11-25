@@ -1,7 +1,7 @@
 import { contentAddressedSource } from '../core/media';
 import { MAX_ORIGINAL_BYTES, encodeBase64 } from '../core/protocol';
 
-/** The only external acquisition path. No arbitrary URL, credentials or redirects. */
+/** Fetch hash-addressed original bytes for provenance; no arbitrary URL, credentials or redirects. */
 export async function fetchContentAddressed(
   source: string,
   pageUrl: string,

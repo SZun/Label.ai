@@ -134,27 +134,36 @@ def sample_card(asset):
             '<small class="analysis-status">Not yet scanned.</small></figcaption></figure>')
 
 
-def columns_page(asset):
+def scanner_status(expected_version):
+    return (f'<p id="scanner-status" role="status" data-expected-version="{escape(expected_version)}">'
+            'Waiting for the extension scanner.</p>')
+
+
+def columns_page(asset, expected_version):
     samples = ''.join(
         f'<div><img id="{position}" src="{asset.path}" width="{width}" height="{width}" '
-        f'alt="Stable Diffusion reference image"><p>{position.capitalize()} · {width} px</p></div>'
+        f'alt="Stable Diffusion reference image"><p>{position.capitalize()} · {width} px</p>'
+        '<small class="analysis-status">Not yet scanned.</small></div>'
         for position, width in [('left', 230), ('center', 160), ('right', 128)]
     )
     return f'''<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="label-ai-test-gallery" content="1">
 <title>Label.ai column placement check</title>
+<script src="/gallery.js" defer></script>
 <link rel="icon" href="data:,"><link rel="stylesheet" href="/gallery.css">
 </head><body><main>
 <h1>Column placement check</h1>
 <p>Each column displays a separate copy of the same generated image from DiffusionDB.
 Keep the images visible while Label.ai scans them. Each copy should receive its own badge.</p>
+{scanner_status(expected_version)}
 <div class="column-samples">{samples}</div>
 <p><a href="/">Return to the test gallery</a></p>
 </main></body></html>'''.encode()
 
 
-def page(samples, port):
+def page(samples, port, expected_version):
     cards = ''.join(map(sample_card, samples))
     return f'''<!doctype html>
 <html lang="en">
@@ -170,7 +179,7 @@ def page(samples, port):
 <header><h1>Label.ai test gallery</h1>
 <p>Load Label.ai and open <code>http://127.0.0.1:{port}</code>. Scanning starts automatically. Refresh this page after installation or extension reload. Keep this tab in the foreground, scroll to each sample, and wait for its scan to finish.</p>
 <p>The captions document the fixture origins. Label.ai adds its animated overlay when it independently labels the media. The on-device detector also analyzes unsigned media. Statistical detection can miss AI-generated content or produce false positives. <a href="#local-title">Try your own files.</a></p>
-<p id="scanner-status" role="status">Waiting for the extension. Check that scanning is active, then refresh.</p>
+{scanner_status(expected_version)}
 <p id="build-help">Use the latest regular build from <code>apps/extension/.output/chrome-mv3</code>. In <code>chrome://extensions</code>, reload the updated extension, disable older or duplicate installs, and grant website access.</p></header>
 <section aria-labelledby="samples-title"><h2 id="samples-title">Known-origin samples</h2>
 <p><a href="/columns">Compare label placement in three columns</a></p><div class="grid">{cards}</div></section>
@@ -195,6 +204,8 @@ code { font-size: .9em; overflow-wrap: anywhere; }
 .column-samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-block: 24px; }
 .column-samples > :nth-child(2) { justify-self: center; }
 .column-samples > :last-child { justify-self: end; }
+.column-samples > :first-child { justify-self: start; }
+.column-samples .analysis-status { display: block; width: 0; min-width: 100%; }
 .column-samples img { display: block; max-width: 100%; height: auto; }
 @media (max-width: 759px) { .column-samples { grid-template-columns: 1fr; } }
 figure { overflow: hidden; margin: 0; border: 1px solid #d9e0ea; background: white; border-radius: 10px; }
@@ -216,7 +227,7 @@ const status = document.getElementById("local-status");
 const scannerStatus = document.getElementById("scanner-status");
 const stateMessages = Object.freeze({
   pending: "Scanning…",
-  labeled: "Last scan: AI-generated label applied.",
+  labeled: "Positive decision. Badge visible.",
   "completed-no-label": "Last scan completed without a label.",
   unsupported: "Last scan: unsupported media.",
   failed: "Last scan failed. Refresh or retry in the foreground.",
@@ -224,24 +235,53 @@ const stateMessages = Object.freeze({
 });
 function updateScannerStatus() {
   const hosts = Array.from(document.querySelectorAll("label-ai-overlay"));
-  const build = hosts[0]?.getAttribute("data-label-ai-build");
+  const host = hosts[0];
+  const build = host?.getAttribute("data-label-ai-build");
+  const version = host?.getAttribute("data-label-ai-version");
+  const state = host?.getAttribute("data-label-ai-scanner-state");
+  const expected = scannerStatus.dataset.expectedVersion;
+  const buildName = build === "production" ? "Label.ai" : "Label.ai (Local Test)";
+  const activity = {
+    active: "Scanner active.",
+    starting: "Starting scanner.",
+    paused: "Scanning paused. Open Label.ai settings to resume.",
+    inactive: "Scanner inactive on this page. Bring this tab to the foreground.",
+    "awaiting-access": "Waiting for browser access. Check the extension's site access and active tab.",
+    "settings-error": "Cannot read scanner settings. Reload the extension and this page.",
+  };
   let message;
   if (!hosts.length) {
-    message = "Waiting for Label.ai. Check that scanning is active and browser site access is allowed, then refresh.";
+    message = "No scanner connected to this tab. Enable Label.ai, grant site access, resume scanning and refresh.";
   } else if (hosts.length > 1) {
-    message = "Multiple Label.ai overlays found. Disable duplicate extensions, then refresh.";
-  } else if (build === "production") {
-    message = "Connected: Label.ai (regular build). Keep this page visible while it scans.";
-  } else if (build === "local-test") {
-    message = "Connected: Label.ai (Local Test). Keep this page visible while it scans.";
+    message = "Multiple Label.ai scanners found. Disable duplicate extensions, then refresh.";
+  } else if (!version || !["production", "local-test"].includes(build)) {
+    message = `Found a scanner without current build diagnostics. Reload the matching ${expected} build and refresh.`;
   } else {
-    message = "Label.ai overlay found, but the build is outdated or unknown. Rebuild and reload the extension, then refresh.";
+    message = `${buildName} ${version}. ${activity[state] || "Unknown scanner state."}`;
+    if (version !== expected) message += ` Gallery expects ${expected}. Rebuild and reload if your extension is outdated.`;
+    if (build === "local-test") message += " This build scans local test pages only. Load the regular build for ordinary websites.";
   }
   if (scannerStatus.textContent !== message) scannerStatus.textContent = message;
-  for (const media of document.querySelectorAll("figure > img, figure > video")) {
+  // Read rendered badges as well as scanner decisions. A positive decision can
+  // precede the overlay render, or outlast it when an item scrolls out of view.
+  const badges = hosts.flatMap(h => Array.from(h.shadowRoot?.querySelectorAll(".slop-label") || [],
+    badge => badge.getBoundingClientRect()));
+  for (const media of document.querySelectorAll("figure > img, figure > video, .column-samples img")) {
     const result = media.parentElement.querySelector(".analysis-status");
-    const state = media.getAttribute("data-label-ai-test-state");
-    const text = Object.hasOwn(stateMessages, state) ? stateMessages[state] : "Not yet scanned. Scroll this sample into view.";
+    const outcome = media.getAttribute("data-label-ai-test-state");
+    let text = Object.hasOwn(stateMessages, outcome) ? stateMessages[outcome] : "Not yet scanned.";
+    if (outcome === "labeled") {
+      const r = media.getBoundingClientRect();
+      const attached = badges.some(b => b.width > 0 && b.height > 0 && b.left >= Math.max(r.left, 0) - 1 &&
+        b.top >= Math.max(r.top, 0) - 1 && b.right <= Math.min(r.right, innerWidth) + 1 &&
+        b.bottom <= Math.min(r.bottom, innerHeight) + 1);
+      if (!attached) {
+        const onScreen = r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 &&
+          r.left < innerWidth && r.top < innerHeight;
+        text = onScreen ? "Positive decision. No badge currently visible on this item." :
+          "Positive decision. Scroll this item into view to check the badge.";
+      }
+    }
     if (result && result.textContent !== text) result.textContent = text;
   }
 }
@@ -250,9 +290,11 @@ observer.observe(document.documentElement, {
   childList: true,
   subtree: true,
   attributes: true,
-  attributeFilter: ["data-label-ai-build", "data-label-ai-test-state"],
+  attributeFilter: ["data-label-ai-build", "data-label-ai-version", "data-label-ai-scanner-state", "data-label-ai-test-state"],
 });
 updateScannerStatus();
+// Shadow-root placement and layout changes do not mutate the gallery DOM.
+window.setInterval(updateScannerStatus, 1000);
 let objectUrls = [];
 function clearLocal() {
   container.replaceChildren();
@@ -312,9 +354,9 @@ function display(files) {
   if (skipped) status.textContent += ` Skipped ${skipped}.`;
   if (objectUrls.length) container.scrollIntoView({block: "start"});
 }
-picker.addEventListener("change", () => display(Array.from(picker.files)));
-document.getElementById("clear-local").addEventListener("click", clearLocal);
-window.addEventListener("pagehide", clearLocal);
+picker?.addEventListener("change", () => display(Array.from(picker.files)));
+document.getElementById("clear-local")?.addEventListener("click", clearLocal);
+if (picker) window.addEventListener("pagehide", clearLocal);
 '''.encode()
 
 CSP = ("default-src 'none'; img-src 'self' blob: data:; media-src 'self' blob:; "
@@ -339,10 +381,11 @@ def byte_range(value, size):
 @contextmanager
 def gallery(port=0, root=ROOT, include_videos=False):
     """Return a loopback-only, GET-only publisher of an explicit asset allowlist."""
+    expected_version = json.loads((ROOT / 'apps/extension/package.json').read_text())['version']
     samples = build_assets(root, include_videos)
     resources = {sample.path: (sample.mime, sample.content) for sample in samples}
     generated = next(sample for sample in samples if sample.element_id == 'generated-1')
-    resources['/columns'] = ('text/html; charset=utf-8', columns_page(generated))
+    resources['/columns'] = ('text/html; charset=utf-8', columns_page(generated, expected_version))
     resources['/gallery.css'] = ('text/css; charset=utf-8', STYLE)
     resources['/gallery.js'] = ('text/javascript; charset=utf-8', SCRIPT)
     requests = []
@@ -358,7 +401,7 @@ def gallery(port=0, root=ROOT, include_videos=False):
                 self.send_error(403)
                 return
             if self.path == '/':
-                mime, data = 'text/html; charset=utf-8', page(samples, self.server.server_port)
+                mime, data = 'text/html; charset=utf-8', page(samples, self.server.server_port, expected_version)
             elif self.path in resources:
                 mime, data = resources[self.path]
             else:

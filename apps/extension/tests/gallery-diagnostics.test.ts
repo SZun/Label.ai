@@ -18,6 +18,8 @@ describe('Gallery-only diagnostics', () => {
   it('requires the explicit top-level HTTP loopback gallery marker', () => {
     expect(galleryDiagnosticPage('http://127.0.0.1:8765/', page(marker), true)).toBe(true);
     expect(galleryDiagnosticPage('http://localhost:4321/', page(marker), true)).toBe(true);
+    expect(galleryDiagnosticPage('http://localhost:4321/columns', page(marker), true)).toBe(true);
+    expect(galleryDiagnosticPage('http://localhost:4321/columns', page(''), true)).toBe(false);
     expect(galleryDiagnosticPage('http://localhost:4321/', page(''), true)).toBe(false);
     expect(galleryDiagnosticPage('https://example.com/', page(marker), true)).toBe(false);
     expect(galleryDiagnosticPage('http://localhost:4321/account', page(marker), true)).toBe(false);

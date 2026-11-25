@@ -14,7 +14,7 @@ export function galleryDiagnosticPage(url: string, document: Document, topFrame:
   return (
     topFrame &&
     isLocalTestUrl(url) &&
-    new URL(url).pathname === '/' &&
+    ['/', '/columns'].includes(new URL(url).pathname) &&
     document.querySelector('meta[name="label-ai-test-gallery"][content="1"]') !== null
   );
 }

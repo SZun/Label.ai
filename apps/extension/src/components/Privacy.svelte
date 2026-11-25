@@ -109,7 +109,8 @@
   <p>
     Some publishers provide content-addressed images. Label.ai may download those images from the
     same site, without cookies, to verify their signed credentials on your device. It never sends
-    them elsewhere.
+    them elsewhere. For publicly accessible CDN images, it may also request the selected image
+    anonymously to analyze its pixels when the CDN allows it. The CDN can see the page origin.
   </p>
   {#if !LOCAL_TEST_BUILD}
     <p>

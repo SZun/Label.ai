@@ -33,9 +33,11 @@ def wait_for_label(page, selector, expected, timeout=45_000):
     )
 
 
-def check_three_columns(page, origin):
+def check_three_columns(page, origin, version):
     """The same pixels must produce three separately anchored, fully fitting badges."""
     page.goto(origin + "/columns")
+    page.locator(f'label-ai-overlay[data-label-ai-version="{version}"][data-label-ai-scanner-state="active"]').wait_for(state="attached")
+    page.get_by_text("Scanner active.", exact=False).first.wait_for(state="visible")
     for width in (1000, 1200):
         if width == 1200:
             # Fixed descendants inside a transformed body use body coordinates.
@@ -149,7 +151,7 @@ def run(build, production=False):
             assert site.locator("#local-media-1").get_attribute("src").startswith("blob:")
             site.locator("#clear-local").click()
             assert site.locator("#local-media-1").count() == 0
-            check_three_columns(site, origin)
+            check_three_columns(site, origin, manifest["version"])
             assert not forbidden, forbidden
             assert all(method in {"GET", "HEAD"} for method, _ in requests), requests
         return {"simultaneously_labeled_columns": ["left", "middle", "right"], "signed_positive": True, "unsigned_generated_labeled": 4,

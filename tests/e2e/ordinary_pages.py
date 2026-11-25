@@ -20,7 +20,12 @@ PUBLIC_TUTORIAL = (
     "https://keras.io/examples/generative/fine_tune_via_textual_inversion/"
     "#taking-the-fine-tuned-model-for-a-spin"
 )
-PUBLIC_OUTPUT = 'img[src$="/fine_tune_via_textual_inversion_42_1.png"]'
+PUBLIC_ARTICLE = "https://en.wikipedia.org/wiki/Stable_Diffusion#Image_modification"
+PUBLIC_CDN_OUTPUTS = (
+    'img[src*="NightCitySphere"][src*="SD1.5"]',
+    'img[src*="NightCitySphere"][src*="SDXL"]',
+)
+PUBLIC_OUTPUTS = [f'img[src$="/fine_tune_via_textual_inversion_{number}_1.png"]' for number in (42, 43, 44, 45)]
 
 
 
@@ -43,6 +48,7 @@ def run(build, live=False):
     samples = smoke_assets(ROOT)
     shell = '<!doctype html><meta charset="utf-8"><link rel="icon" href="data:,"><title>Photos</title>'
     denied = []
+    anonymous_reads = []
     with TemporaryDirectory() as profile, TemporaryDirectory() as generation, sync_playwright() as pw:
         clip = make_video(samples[0].content, Path(generation))
         resources = {
@@ -50,6 +56,8 @@ def run(build, live=False):
             NEWS + "/p.png": ("image/png", samples[0].content),
             ART + "/feed": ("text/html", shell + '<main></main>'),
             CDN + "/photo.png": ("image/png", samples[2].content),
+            CDN + "/plain.png": ("image/png", samples[0].content),
+            CDN + "/restricted.png": ("image/png", samples[0].content),
             ART + "/short": ("text/html", shell + '<img id="cover" width="260" height="260" src="/cover.png"><video controls muted playsinline preload="auto" width="320" height="320" src="/v.webm"></video>'),
             ART + "/cover.png": ("image/png", samples[0].content),
             ART + "/v.webm": ("video/webm", clip),
@@ -61,7 +69,12 @@ def run(build, live=False):
                 denied.append([request.method, request.url])
                 return route.abort()
             mime, body = resources[request.url]
-            headers = {"Access-Control-Allow-Origin": ART} if request.url.startswith(CDN + "/") else {}
+            is_cdn = request.url.startswith(CDN + "/")
+            headers = {"Access-Control-Allow-Origin": ART} if is_cdn and not request.url.endswith("/restricted.png") else {}
+            if is_cdn and request.resource_type == "fetch":
+                sent = request.all_headers()
+                assert not any(key in sent for key in ("cookie", "referer", "authorization")), "CDN read sent identifying headers"
+                anonymous_reads.append(request.url)
             return route.fulfill(status=200, content_type=mime, headers=headers, body=body)
 
         launch = ["--disable-extensions-except=" + str(build), "--load-extension=" + str(build),
@@ -73,19 +86,14 @@ def run(build, live=False):
             if live:
                 response = site.goto(PUBLIC_TUTORIAL, wait_until="domcontentloaded", timeout=45_000)
                 assert response and response.ok, "Public tutorial unavailable"
-                try:
-                    wait_for_label(site, PUBLIC_OUTPUT, True)
-                except Exception:
-                    details = site.locator(PUBLIC_OUTPUT).evaluate("""image => ({
-                      size: [image.naturalWidth, image.naturalHeight],
-                      rect: image.getBoundingClientRect().toJSON(),
-                      focused: document.hasFocus(), visible: !document.hidden,
-                      passwordForm: Boolean(document.querySelector('input[type=password]')),
-                      overlays: document.querySelectorAll('label-ai-overlay').length
-                    })""")
-                    print(json.dumps({"live_tutorial_image": details}), flush=True)
-                    raise
-                print("Public tutorial output labeled", flush=True)
+                for selector in PUBLIC_OUTPUTS:
+                    wait_for_label(site, selector, True)
+                    print("Labeled public Keras output", selector, flush=True)
+                response = site.goto(PUBLIC_ARTICLE, wait_until="domcontentloaded", timeout=45_000)
+                assert response and response.ok, "Public Wikipedia article unavailable"
+                for selector in PUBLIC_CDN_OUTPUTS:
+                    wait_for_label(site, selector, True)
+                    print("Labeled Wikimedia-hosted image in live article", selector, flush=True)
                 site.close()
                 site = context.new_page()
                 site.bring_to_front()
@@ -99,6 +107,18 @@ def run(build, live=False):
               document.querySelector('main').append(image);
             }""", CDN + "/photo.png")
             wait_for_label(site, "#item", True)
+            # Common publisher markup omits crossorigin even when its CDN
+            # allows anonymous reads. Exercise the unchanged, tainted <img>.
+            site.evaluate("""src => {
+                const image = new Image(240, 160);
+                image.id = 'plain'; image.src = src;
+                document.querySelector('main').replaceChildren(image);
+            }""", CDN + "/plain.png")
+            wait_for_label(site, "#plain", True)
+            assert CDN + "/plain.png" in anonymous_reads
+            with site.expect_request(lambda req: req.url == CDN + "/restricted.png" and req.resource_type == "fetch"):
+                site.locator("#plain").evaluate("(img, src) => { img.src = src }", CDN + "/restricted.png")
+            wait_for_label(site, "#plain", False)
             assert site.locator("[data-label-ai-test-state],[data-label-ai-build]").count() == 0
             site.goto(ART + "/short")
             # Starting playback as soon as the empty overlay host mounts can
@@ -112,7 +132,8 @@ def run(build, live=False):
             site.get_by_text(TEXT, exact=True).wait_for(state="visible", timeout=75_000)
             assert not denied, denied
     return {"same_origin_unsigned_image": True, "dynamic_cors_cdn_image_on_second_origin": True,
-            "video_pan_of_generated_still": True, "public_keras_tutorial_image_labeled": live, "unexpected_http_requests": denied}
+            "video_pan_of_generated_still": True, "public_keras_tutorial_images_labeled": 4 if live else 0, "public_wikipedia_images_labeled": 2 if live else 0,
+            "plain_cdn_image_labeled": True, "unexpected_http_requests": denied}
 
 
 if __name__ == "__main__":

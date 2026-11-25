@@ -102,16 +102,20 @@ export default defineContentScript({
       'position:fixed;inset:0;width:0;height:0;pointer-events:none;z-index:2147483646;';
 
     const gallery = () => galleryDiagnosticPage(location.href, document, window.top === window);
+    let settingsStatus: 'starting' | 'ready' | 'settings-error' = 'starting';
     const galleryAttribute = 'data-label-ai-test-state';
     if (gallery()) {
+      ui.shadowHost.setAttribute('data-label-ai-version', browser.runtime.getManifest().version);
+      ui.shadowHost.setAttribute('data-label-ai-scanner-state', 'starting');
       ui.shadowHost.setAttribute(
         'data-label-ai-build',
         LOCAL_TEST_BUILD ? 'local-test' : 'production',
       );
     }
 
-    const eligible = () =>
-      !ended && !document.hidden && document.hasFocus() && eligibleDocumentChain(window, settings);
+    // A visible tab can lose DOM focus to the address bar, DevTools or an
+    // embedded frame. The worker verifies the active tab and focused window.
+    const eligible = () => !ended && !document.hidden && eligibleDocumentChain(window, settings);
     const active = () => eligible() && permission.allowed;
 
     function markState(entry: MediaEntry, state: GalleryState) {
@@ -222,7 +226,20 @@ export default defineContentScript({
       return placement;
     }
 
+    function updateGalleryScannerStatus() {
+      if (!gallery()) return;
+      let state: string = settingsStatus;
+      if (settingsStatus === 'ready') {
+        if (!settings.enabled) state = 'paused';
+        else if (!eligible()) state = 'inactive';
+        else state = permission.allowed ? 'active' : 'awaiting-access';
+      }
+      if (ui.shadowHost.getAttribute('data-label-ai-scanner-state') !== state)
+        ui.shadowHost.setAttribute('data-label-ai-scanner-state', state);
+    }
+
     function render() {
+      updateGalleryScannerStatus();
       const placements: LabelPlacement[] = [];
       for (const entry of entries.values()) {
         const placement = place(entry);
@@ -689,15 +706,9 @@ export default defineContentScript({
       refreshPermission();
       schedule();
     });
-    ctx.addEventListener(window, 'focus', () => {
-      refreshPermission();
-      schedule();
-    });
-    ctx.addEventListener(window, 'blur', () => {
-      permission.invalidate();
-      suspend();
-      schedule();
-    });
+    for (const event of ['focus', 'blur']) {
+      ctx.addEventListener(window, event, refreshPermission);
+    }
     ctx.addEventListener(window, 'scroll', schedule, { passive: true, capture: true });
     ctx.addEventListener(window, 'resize', schedule, { passive: true });
     for (const event of ['popstate', 'hashchange'])
@@ -715,6 +726,7 @@ export default defineContentScript({
     const settingsChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
       if (area !== 'local' || !changes[SETTINGS_KEY]) return;
       settingsChangedDuringLoad = true;
+      settingsStatus = 'ready';
       settings = normalizeSettings(changes[SETTINGS_KEY].newValue);
       permission.invalidate();
       for (const entry of entries.values()) {
@@ -747,8 +759,12 @@ export default defineContentScript({
     });
     try {
       const stored = await readSettings();
-      if (!settingsChangedDuringLoad) settings = stored;
+      if (!settingsChangedDuringLoad) {
+        settings = stored;
+        settingsStatus = 'ready';
+      }
     } catch {
+      if (!settingsChangedDuringLoad) settingsStatus = 'settings-error';
       // If settings cannot be read, do not grant capture until a change arrives.
     }
     if (ctx.isInvalid) return;

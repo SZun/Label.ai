@@ -326,10 +326,18 @@ it('preserves an equivalent persistent content registration when a worker restar
       persistAcrossSessions: true,
     },
   ]);
+  state.activeTab = {
+    id: 1,
+    url: 'https://news.example/story',
+    status: 'complete',
+    incognito: false,
+    windowId: 7,
+  };
   state.hooks.startup[0]();
   await flush();
   expect(unregister).not.toHaveBeenCalled();
   expect(register).not.toHaveBeenCalled();
+  expect(state.inject).toHaveBeenCalledOnce();
 });
 
 it('registers all eligible sites at startup without opening options, and injects the active tab', async () => {
@@ -457,6 +465,19 @@ it('injects the active page after restored native permission, without duplicate 
   ]);
   state.inject.mockClear();
   state.hooks.added[0]();
+  await flush();
+  expect(state.inject).toHaveBeenCalledOnce();
+});
+
+it('restores a missing scanner when an already-open browser window gains focus', async () => {
+  state.activeTab = {
+    id: 1,
+    url: 'https://news.example/story',
+    status: 'complete',
+    incognito: false,
+    windowId: 7,
+  };
+  state.hooks.focus[0](7);
   await flush();
   expect(state.inject).toHaveBeenCalledOnce();
 });

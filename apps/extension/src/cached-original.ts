@@ -1,6 +1,6 @@
 import { encodeBase64, MAX_ORIGINAL_BYTES } from './core/protocol';
 
-const MAX_COMPARE_PIXELS = 5_000_000;
+export const MAX_COMPARE_PIXELS = 5_000_000;
 type Original = { base64: string; mime: string };
 
 export function cacheEligible(source: string, origin: string): boolean {
@@ -20,25 +20,34 @@ export function cacheEligible(source: string, origin: string): boolean {
 }
 
 // Check encoded dimensions before invoking a native decoder on arbitrary cached bytes.
-export function eligibleJpeg(bytes: Uint8Array, width: number, height: number): boolean {
-  if (bytes[0] !== 0xff || bytes[1] !== 0xd8 || width * height > MAX_COMPARE_PIXELS) return false;
+export function jpegDimensions(bytes: Uint8Array) {
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return;
   let index = 2;
   while (index + 4 < bytes.length && bytes[index] === 0xff) {
     while (bytes[index] === 0xff) index++;
     const marker = bytes[index++];
     const length = (bytes[index] << 8) | bytes[index + 1];
-    if (length < 2 || index + length > bytes.length || marker === 0xda) return false;
+    if (length < 2 || index + length > bytes.length || marker === 0xda) return;
     if ([0xc0, 0xc1, 0xc2].includes(marker)) {
-      return (
-        length >= 8 &&
-        bytes[index + 2] === 8 &&
-        ((bytes[index + 3] << 8) | bytes[index + 4]) === height &&
-        ((bytes[index + 5] << 8) | bytes[index + 6]) === width
-      );
+      if (length < 8 || bytes[index + 2] !== 8) return;
+      return {
+        height: (bytes[index + 3] << 8) | bytes[index + 4],
+        width: (bytes[index + 5] << 8) | bytes[index + 6],
+      };
     }
     index += length;
   }
-  return false;
+}
+
+export function eligibleJpeg(bytes: Uint8Array, width: number, height: number): boolean {
+  const size = jpegDimensions(bytes);
+  return (
+    width > 0 &&
+    height > 0 &&
+    width * height <= MAX_COMPARE_PIXELS &&
+    size?.width === width &&
+    size.height === height
+  );
 }
 
 export function eligiblePng(bytes: Uint8Array, width: number, height: number): boolean {
@@ -79,7 +88,7 @@ function eligibleOriginal(bytes: Uint8Array, mime: string, width: number, height
     : mime === 'image/png' && eligiblePng(bytes, width, height);
 }
 
-async function readBounded(
+export async function readBounded(
   response: Response,
   signal: AbortSignal,
 ): Promise<Uint8Array<ArrayBuffer> | undefined> {

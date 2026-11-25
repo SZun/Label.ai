@@ -74,8 +74,11 @@ export default defineBackground(() => {
       existing.allFrames === true &&
       existing.runAt === 'document_idle' &&
       existing.persistAcrossSessions !== false
-    )
-      return;
+    ) {
+      // Persistent registration covers future navigations. An already-open tab
+      // can still lack a live scanner after reloading or enabling the extension.
+      return injectActiveTab(settings);
+    }
     if (existing) await browser.scripting.unregisterContentScripts({ ids: ['label-ai-media'] });
     if (origins.length) {
       await browser.scripting.registerContentScripts([
@@ -344,10 +347,7 @@ export default defineBackground(() => {
     void clear();
   });
   browser.permissions.onAdded.addListener(() => {
-    void syncRegistration()
-      .then(readSettings)
-      .then((settings) => injectActiveTab(settings))
-      .catch(() => {});
+    void syncRegistration().catch(() => {});
   });
   browser.tabs.onActivated.addListener(({ tabId }) => {
     for (const [key, job] of pending)
@@ -374,6 +374,11 @@ export default defineBackground(() => {
         job.abort.abort();
         job.finish(noLabel(job.input, 'CANCELED'));
       }
+    if (windowId >= 0) {
+      void readSettings()
+        .then((settings) => injectActiveTab(settings))
+        .catch(() => {});
+    }
   });
   browser.runtime.onInstalled.addListener(() => {
     void migrateSettings()
