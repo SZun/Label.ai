@@ -42,6 +42,9 @@ def check_three_columns(page, origin):
             # The extension positions its overlay against the viewport.
             page.evaluate("document.body.style.transform = 'translateX(24px)'")
         page.set_viewport_size({"width": width, "height": 720})
+        print("Checking three-column placement at viewport", width, page.locator("img").evaluate_all(
+            "(images) => images.map(i => [i.id, i.clientWidth, i.clientHeight])"
+        ), flush=True)
         page.wait_for_function("""() => {
           const images = [...document.images];
           const badges = [...document.querySelectorAll('label-ai-overlay')]

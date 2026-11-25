@@ -417,11 +417,10 @@ export default defineContentScript({
         if (!active() || !entry.visible || entry.attempted || !entry.source || !entry.retry.ready())
           continue;
         const rect = entry.element.getBoundingClientRect();
-        if (
-          rect.width < 128 ||
-          rect.height < (entry.element instanceof HTMLVideoElement ? 90 : 128)
-        )
-          continue;
+        // A 128px-wide 16:9 thumbnail is only 72px tall. Capture uses the
+        // decoded image dimensions, independent of how its publisher sizes it.
+        const minimumHeight = entry.element instanceof HTMLVideoElement ? 90 : 72;
+        if (rect.width < 128 || rect.height < minimumHeight) continue;
         if (entry.element instanceof HTMLVideoElement) {
           if (!entry.originalAttempted) {
             if (entry.element.readyState < 1) continue;
