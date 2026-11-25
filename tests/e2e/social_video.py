@@ -61,6 +61,45 @@ START_STREAM = """async path => {
 }"""
 
 
+def watch_status(context, worker):
+    # Open the packaged toolbar in a background tab. Its normal message path
+    # inspects the original active page and exposes only a coarse local status.
+    popup_url = worker.evaluate("chrome.runtime.getURL('popup.html')")
+    with context.expect_page() as new_page:
+        worker.evaluate("url => chrome.tabs.create({url,active:false})", popup_url)
+    return new_page.value
+
+
+def start_trace(worker):
+    # Test-only worker instrumentation records lifecycle and sample counts. Media
+    # bytes, URLs and model scores are deliberately omitted.
+    worker.evaluate("""() => {
+      globalThis.socialTrace = [];
+      chrome.runtime.onMessage.addListener(m => {
+        if (m?.kind === 'video' || m?.type === 'label-ai:cancel') {
+          const trace = globalThis.socialTrace;
+          trace.push([m.type, m.scope ?? 'whole', (m.frames ?? []).length, m.durationMs ?? 0]);
+          if (trace.length > 32) trace.shift();
+        }
+      });
+    }""")
+
+
+def wait_on_player(page, selector, popup, worker):
+    try:
+        wait_for_video_badge(page, selector)
+    finally:
+        print("Recent video requests:", worker.evaluate("globalThis.socialTrace ?? []"), flush=True)
+        print("Last toolbar status:", popup.locator('[role=status]').inner_text(timeout=5000), flush=True)
+        print("Player at check:", page.locator(selector).evaluate("""v => ({
+          time: v.currentTime, finite: Number.isFinite(v.duration), paused: v.paused,
+          ready: v.readyState, frames: v.getVideoPlaybackQuality().totalVideoFrames,
+          decision: document.documentElement.dataset.videoTestDecision,
+          badgeCount: Array.from(document.querySelectorAll('label-ai-overlay'))
+            .reduce((n,e)=>n+(e.shadowRoot?.querySelectorAll('.slop-label').length??0),0)
+        })"""), flush=True)
+
+
 def stream_test(context, worker, folder):
     generated = fixture(ROOT / "artifacts/social-video" / GENERATED,
                         SHOWCASE + "video/" + GENERATED, GENERATED_HASH)
@@ -86,12 +125,14 @@ def stream_test(context, worker, folder):
     page.locator("label-ai-overlay").wait_for(state="attached")
     observe_decisions(worker)
     video = page.locator("video")
+    popup = watch_status(context, worker)
+    page.bring_to_front()
     for index in (1, 2):
         page.evaluate("delete document.documentElement.dataset.videoTestDecision")
         page.evaluate(START_STREAM, f"/{index}.mp4")
         assert video.evaluate("v => v.currentSrc.startsWith('blob:') && v.duration === Infinity && v.currentTime >= 70")
         if index == 1:
-            wait_for_video_badge(page, "video")
+            wait_on_player(page, "video", popup, worker)
             print("Generated footage labeled on a playing MediaSource joined at 70s", flush=True)
         else:
             page.locator("label-ai-overlay .slop-label").wait_for(state="detached", timeout=12_000)
@@ -129,7 +170,7 @@ SELECT_PLAYER = """platform => {
 }"""
 
 
-def live_test(context, platform):
+def live_test(context, worker, platform):
     url = PERMALINKS[platform]
     page = context.new_page()
     page.bring_to_front()
@@ -158,7 +199,9 @@ def live_test(context, platform):
         message = page.locator("body").inner_text(timeout=2000)
         raise RuntimeError(f"{platform}: guest playback unverified; page says {message[:450]!r}") from exc
     print(f"{platform}: verified visible moving frames on the target video", flush=True)
-    wait_for_video_badge(page, selector)
+    popup = watch_status(context, worker)
+    page.bring_to_front()
+    wait_on_player(page, selector, popup, worker)
     assert page.evaluate(SELECT_PLAYER, platform)
     print(f"{platform}: production badge verified on the playing guest video at {url}", flush=True)
 
@@ -175,7 +218,8 @@ if __name__ == "__main__":
     with TemporaryDirectory() as profile, TemporaryDirectory() as folder, sync_playwright() as pw:
         with browser_session(pw, profile, launch, args) as context:
             worker = wait_for_registration(context, build)
+            start_trace(worker)
             if args.live:
-                live_test(context, args.live)
+                live_test(context, worker, args.live)
             else:
                 stream_test(context, worker, Path(folder))

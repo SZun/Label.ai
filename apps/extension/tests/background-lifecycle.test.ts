@@ -529,18 +529,50 @@ it.each([true, false])(
 
 it('uses the segment-specific browsing policy and respects the local-test host boundary', async () => {
   const request = {
-    type: 'label-ai:analyze', kind: 'video', scope: 'playback-window',
-    instanceId: 'clip', generation: 0, requestId: 'observed',
-    durationMs: 4000, coverage: 1,
-    frames: Array.from({ length: 9 }, (_, i) => ({ width: 1, height: 1, rgba: 'AAAA/w==', timestampMs: i * 500 })),
+    type: 'label-ai:analyze',
+    kind: 'video',
+    scope: 'playback-window',
+    instanceId: 'clip',
+    generation: 0,
+    requestId: 'observed',
+    durationMs: 4000,
+    coverage: 1,
+    frames: Array.from({ length: 9 }, (_, i) => ({
+      width: 1,
+      height: 1,
+      rgba: 'AAAA/w==',
+      timestampMs: i * 500,
+    })),
   };
-  const sendWindow = (url: string) => state.hooks.message[0](request, { id: 'test', url, tab: { id: 1, windowId: 7, incognito: false }});
-  const result = { status: 'COMPLETED', shouldLabel: true, policyVersion: 'detector', rawScore: 0.2,
-    temporal: { eligible: false, sceneCuts: 0, motionEnergy: 0.02, sustainedFrameEvidence: true, reasonCodes: ['MIXED_FRAME_EVIDENCE'] }};
+  const sendWindow = (url: string) =>
+    state.hooks.message[0](request, {
+      id: 'test',
+      url,
+      tab: { id: 1, windowId: 7, incognito: false },
+    });
+  const result = {
+    status: 'COMPLETED',
+    shouldLabel: true,
+    policyVersion: 'detector',
+    rawScore: 0.2,
+    temporal: {
+      eligible: false,
+      sceneCuts: 0,
+      motionEnergy: 0.02,
+      sustainedFrameEvidence: true,
+      reasonCodes: ['MIXED_FRAME_EVIDENCE'],
+    },
+  };
   state.videoInference.mockResolvedValue(result);
   const publicUrl = 'https://film.example/watch';
-  expect(await sendWindow(publicUrl)).toMatchObject({shouldLabel: true, policyVersion: 'observed-playback-window-v1'});
-  state.videoInference.mockResolvedValueOnce({ ...result, temporal: {...result.temporal, sceneCuts: 1} });
+  expect(await sendWindow(publicUrl)).toMatchObject({
+    shouldLabel: true,
+    policyVersion: 'observed-playback-window-v1',
+  });
+  state.videoInference.mockResolvedValueOnce({
+    ...result,
+    temporal: { ...result.temporal, sceneCuts: 1 },
+  });
   expect((await sendWindow(publicUrl)).shouldLabel).toBe(false);
   vi.stubGlobal('__LABEL_AI_LOCAL_TEST__', true);
   await startWorker();
