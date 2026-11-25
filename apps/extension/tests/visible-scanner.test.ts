@@ -66,6 +66,7 @@ it('requests native admission for a visible document when keyboard focus is in t
 
 it('waits for a CSS card to enter view and attempts an unreadable source only once', async () => {
   const source = 'https://public-cdn.example/cover.jpg';
+  const alreadyPlaying = document.body.appendChild(document.createElement('video'));
   const card = document.body.appendChild(document.createElement('article'));
   card.style.backgroundImage = `url("${source}")`;
   vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 300, 200));
@@ -114,6 +115,7 @@ it('waits for a CSS card to enter view and attempts an unreadable source only on
   const { default: script } = await import('../entrypoints/media.content/index');
   try {
     await script.main(context as unknown as ContentScriptContext);
+    expect(observed.has(alreadyPlaying)).toBe(true);
     await flush();
     expect(observed.has(card)).toBe(true);
     expect(fetchImage).not.toHaveBeenCalled();
@@ -153,6 +155,7 @@ it('waits for a CSS card to enter view and attempts an unreadable source only on
   } finally {
     for (const cleanup of dispose) cleanup();
     card.remove();
+    alreadyPlaying.remove();
   }
 });
 

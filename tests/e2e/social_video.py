@@ -97,6 +97,12 @@ def wait_on_player(page, selector, popup, worker):
           pixels: (() => {try { const c=document.createElement('canvas'); c.width=c.height=1;
             const g=c.getContext('2d'); g.drawImage(v,0,0,1,1); g.getImageData(0,0,1,1);
             return 'readable'; } catch(e) {return e.name;} })(),
+          chain: (() => {const chain=[];for(let e=v;e;e=e.parentElement){const s=getComputedStyle(e);
+            const r=e.getBoundingClientRect();chain.push([e.tagName,s.display,s.visibility,s.opacity,
+            [r.x,r.y,r.width,r.height].map(Math.round)]);} return chain;})(),
+          stack: (()=>{const r=v.getBoundingClientRect(); return document.elementsFromPoint(
+            Math.max(0,r.left)+Math.min(innerWidth,r.width)/2,Math.max(0,r.top)+Math.min(innerHeight,r.height)/2
+          ).slice(0,8).map(e=>e.tagName)})(),
           time: v.currentTime, finite: Number.isFinite(v.duration), paused: v.paused,
           ready: v.readyState, frames: v.getVideoPlaybackQuality().totalVideoFrames,
           decision: document.documentElement.dataset.videoTestDecision,

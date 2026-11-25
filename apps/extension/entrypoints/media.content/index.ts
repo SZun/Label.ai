@@ -32,6 +32,7 @@ import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capt
 import { needsPlaybackWindow, observePlaybackWindow } from '../../src/media/playback-window';
 import { videoSamplePlan, videoSampleSlot } from '../../src/media/video-sampling';
 import { canReadCorsVideo, readCorsVideoFrames } from '../../src/media/cors-video';
+import { playingVideoCovers } from '../../src/media/video-cover';
 import { visiblePlaybackArea } from '../../src/media/playback-order';
 import { acquireVideoOriginal } from '../../src/media/video-original';
 import { readSettings, SETTINGS_KEY } from '../../src/transport/settings';
@@ -332,6 +333,11 @@ export default defineContentScript({
       if (entry.decision.expiresAt <= Date.now() || !matchesCurrentMedia(entry)) return null;
       const bounds = badgeBounds(entry.element);
       if (!bounds || !shown(entry.element)) return null;
+      if (
+        !(entry.element instanceof HTMLVideoElement) &&
+        playingVideoCovers(entry.element, entry.element.getBoundingClientRect())
+      )
+        return null;
       const placement: LabelPlacement = {
         kind: entry.element instanceof HTMLVideoElement ? 'video' : 'image',
         key: `${entry.id}:${entry.generation}`,
@@ -1000,7 +1006,18 @@ export default defineContentScript({
       updateFullscreenAnchor();
       schedule();
     });
-    ctx.addEventListener(document, 'play', schedule, { capture: true });
+    // Feed hydration can enqueue thousands of DOM nodes ahead of the active player.
+    // Register it immediately, with normal viewport and permission checks downstream.
+    for (const event of ['play', 'playing'])
+      ctx.addEventListener(
+        document,
+        event,
+        (ev) => {
+          if (ev.target instanceof HTMLVideoElement) register(ev.target);
+          schedule();
+        },
+        { capture: true },
+      );
     for (const event of ['pause', 'ended'])
       ctx.addEventListener(
         document,
@@ -1085,6 +1102,7 @@ export default defineContentScript({
     }
     if (ctx.isInvalid) return;
     refreshPermission();
+    for (const video of document.querySelectorAll('video')) register(video);
     scan(document.body);
   },
 });
