@@ -24,9 +24,9 @@ PUBLIC_TUTORIAL = (
 )
 PUBLIC_ARTICLE = "https://en.wikipedia.org/wiki/Stable_Diffusion#Image_modification"
 PUBLIC_CDN_OUTPUTS = (
-    'img[src$="with_Shinto_shrine.png"]',
-    'img[src$="with_Shinto_shrine_using_negative_prompt_for_green_trees.png"]',
-    'img[src$="with_Shinto_shrine_using_negative_prompt_for_round_stones.png"]',
+    'img[src*="with_Shinto_shrine.png"]',
+    'img[src*="with_Shinto_shrine_using_negative_prompt_for_green_trees.png"]',
+    'img[src*="with_Shinto_shrine_using_negative_prompt_for_round_stones.png"]',
     'img[src*="NightCitySphere"][src*="SD1.5"]',
     'img[src*="NightCitySphere"][src*="SDXL"]',
 )
@@ -107,25 +107,6 @@ def run(build, live=False):
             worker = wait_for_registration(context, build)
             site = context.new_page()
             site.bring_to_front()
-            if live:
-                response = site.goto(PUBLIC_TUTORIAL, wait_until="domcontentloaded", timeout=45_000)
-                assert response and response.ok, "Public tutorial unavailable"
-                for selector in PUBLIC_OUTPUTS:
-                    wait_for_label(site, selector, True)
-                    print("Labeled public Keras output", selector, flush=True)
-                response = site.goto(PUBLIC_ARTICLE, wait_until="domcontentloaded", timeout=45_000)
-                article_status = response.status if response else None
-                if article_status in (403, 429):
-                    print(f"::warning::Live Wikipedia check blocked by publisher (HTTP {article_status}); no detection result.", flush=True)
-                else:
-                    assert response and response.ok, f"Public Wikipedia article returned {article_status}"
-                    for selector in PUBLIC_CDN_OUTPUTS:
-                        wait_for_label(site, selector, True)
-                        article_labels += 1
-                        print("Labeled Wikimedia-hosted image in live article", selector, flush=True)
-                site.close()
-                site = context.new_page()
-                site.bring_to_front()
             context.route(lambda url: urlsplit(url).scheme in {"http", "https"}, respond)
             site.goto(NEWS + "/photo")
             wait_for_label(site, "#subject", True)
@@ -207,6 +188,27 @@ def run(build, live=False):
                 messages = worker.evaluate("() => globalThis.videoTestEvents")
                 raise AssertionError(f"Video badge missing. Playback {state}. Scanner {messages}") from error
             assert not denied, denied
+            print("Labeled video on the ordinary HTTPS page", flush=True)
+            context.unroute_all(behavior="wait")
+            site.close()
+            site = context.new_page()
+            site.bring_to_front()
+            if live:
+                response = site.goto(PUBLIC_TUTORIAL, wait_until="domcontentloaded", timeout=45_000)
+                assert response and response.ok, "Public tutorial unavailable"
+                for selector in PUBLIC_OUTPUTS:
+                    wait_for_label(site, selector, True)
+                    print("Labeled public Keras output", selector, flush=True)
+                response = site.goto(PUBLIC_ARTICLE, wait_until="domcontentloaded", timeout=45_000)
+                article_status = response.status if response else None
+                if article_status in (403, 429):
+                    print(f"::warning::Live Wikipedia check blocked by publisher (HTTP {article_status}); no detection result.", flush=True)
+                else:
+                    assert response and response.ok, f"Public Wikipedia article returned {article_status}"
+                    for selector in PUBLIC_CDN_OUTPUTS:
+                        wait_for_label(site, selector, True)
+                        article_labels += 1
+                        print("Labeled Wikimedia-hosted image in live article", selector, flush=True)
     return {"same_origin_unsigned_image": True, "dynamic_cors_cdn_image_on_second_origin": True,
             "video_pan_of_generated_still": True, "public_keras_tutorial_images_labeled": 4 if live else 0, "public_wikipedia_http_status": article_status, "public_wikipedia_images_labeled": article_labels,
             "previously_missed_hidream_labeled": True, "css_cdn_card_labeled": True,
