@@ -88,3 +88,24 @@ it('abstains while a click-through poster covers the published canvas', () => {
   poster.style.opacity = '0';
   expect(playbackSurfaceFor(video)).toBeInstanceOf(HTMLCanvasElement);
 });
+
+it('resolves a player canvas under an unpainted input layer and decoder wrapper', () => {
+  const { card, video, canvas, hits } = player();
+  video.style.opacity = '1';
+  video.parentElement!.style.opacity = '0';
+  const controls = card.appendChild(document.createElement('div'));
+  controls.style.opacity = '0';
+  const button = controls.appendChild(document.createElement('button'));
+  hits.mockReturnValue([button, controls, video, video.parentElement!, canvas]);
+  expect(playbackSurfaceFor(video)).toBe(canvas);
+  controls.style.opacity = '1';
+  expect(playbackSurfaceFor(video)).toBeUndefined();
+});
+
+it('uses the explicitly visible video inside a visibility-hidden wrapper', () => {
+  const { video } = player();
+  video.style.opacity = '1';
+  video.parentElement!.style.visibility = 'hidden';
+  video.style.visibility = 'visible';
+  expect(playbackSurfaceFor(video)).toBe(video);
+});

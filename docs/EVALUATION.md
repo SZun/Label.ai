@@ -38,3 +38,14 @@ Installed Chrome exercised a generated stream joined 70 seconds into playback. I
 The publisher identified its Bluesky example as Sora 2 footage. Chrome played that exact post and sampled it. Three independently decoded four-second windows from its first twelve seconds produced lower-quartile model scores of 0.0074, 0.0071 and 0.0022. All three missed the display threshold. An exploratory higher-resolution center crop also missed all three, and one genuine camera control scored higher than the generated windows. Raw scores are uncalibrated. [Publisher post](https://bsky.app/profile/carnage4life.bsky.social/post/3m23sq2iios2g) · [Browser check](https://github.com/SZun/Label.ai/actions/runs/45527174384/job/138913458060)
 
 The YouTube guest session required sign-in before playback. On TikTok an early positional test mistook a badge above the player for a confirmed video decision. Acceptance now requires a badge explicitly bound to video. [YouTube check](https://github.com/SZun/Label.ai/actions/runs/45527174384/job/138913458074) · [TikTok check](https://github.com/SZun/Label.ai/actions/runs/45527174384/job/138913458053)
+
+### Five-platform playback acceptance
+
+The Social video playback workflow installs the production extension in Chrome for Testing and opens one independently identified public generated video each on YouTube, TikTok, Facebook, Instagram and X. The five-platform job requires five successful live checks. A site that blocks playback, a post that changes during the check, and a detector that leaves the player unlabelled each prevent a pass. The separate stream, canvas, local video and public MP4 checks exercise the same build.
+
+To reproduce a single check with a visible Chrome for Testing window, build the extension, install the Playwright dependency from `tests/e2e/requirements.txt`, and run the following from the repository root. Set `CHROME_FOR_TESTING` to the browser executable. Choose `youtube`, `tiktok`, `facebook`, `instagram` or `x`. The temporary profile starts fresh and is deleted when the check exits.
+
+```sh
+python3 tests/e2e/social_video.py --live instagram --headed --manual-start \
+  --browser "$CHROME_FOR_TESTING" --build apps/extension/.output/chrome-mv3
+```

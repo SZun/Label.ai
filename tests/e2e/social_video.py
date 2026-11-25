@@ -9,13 +9,15 @@ from playwright.sync_api import Error as BrowserError, sync_playwright
 
 from browser_test import browser_session, wait_for_registration
 from generated_video import PAGE, ROOT, SHOWCASE, fixture, observe_decisions, wait_for_video_badge
+from meta_public_video import META_PERMALINKS, prepare_meta_player, verify_meta_player
+from x_public_video import X_POST_URL, assert_x_post, prepare_x_playback
 from tools.prepare_video_smoke import FILES, MDN
 
 YOUTUBE = "https://www.youtube.com/watch?v=Itbc12qXr30"
 # The original Bigfoot Vlog 1 is documented at knowyourmeme.com/memes/ai-bigfoot-and-yeti-vlogs.
 TIKTOK = "https://www.tiktok.com/@bigfootvlogs/video/7508418787968830742"
 BLUESKY = "https://bsky.app/profile/carnage4life.bsky.social/post/3m23sq2iios2g"
-PERMALINKS = {"youtube": YOUTUBE, "tiktok": TIKTOK, "bluesky": BLUESKY}
+PERMALINKS = {"youtube": YOUTUBE, "tiktok": TIKTOK, "bluesky": BLUESKY, **META_PERMALINKS, "x": X_POST_URL}
 GENERATED = "a_little_boy.mp4"
 GENERATED_HASH = "2b14849b68b0379111e9e82f6e95240a3c9ceee241d78a37d84a0fd8890be259"
 
@@ -143,10 +145,15 @@ def stream_test(context, worker, folder, canvas_player=False):
           card.style.cssText = 'position:relative;width:500px;height:320px';
           v.before(card);
           card.append(v);
-          v.style.opacity = '0';
+          const decoder = document.createElement('div');
+          decoder.style.cssText = 'position:absolute;inset:0;opacity:0';
+          card.append(decoder); decoder.append(v);
           const screen = document.createElement('canvas');
           screen.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
           card.append(screen);
+          const gestures = document.createElement('div');
+          gestures.style.cssText = 'position:absolute;inset:0;opacity:0';
+          card.append(gestures);
           function draw() {
             if (v.videoWidth && v.readyState >= 2) {
               if(screen.width !== v.videoWidth || screen.height !== v.videoHeight) {
@@ -198,6 +205,8 @@ SELECT_PLAYER = """platform => {
     if (players.length === 1) player = players[0];
   }
   if (!player) return false;
+  if (document.querySelector('video[data-label-test-playback="1"]') &&
+      player.dataset.labelTestPlayback !== '1') return false;
   player.dataset.labelTestPlayback = '1';
   return true;
 }"""
@@ -299,12 +308,14 @@ def play_tiktok(page, target):
 
 
 
-def live_test(context, worker, platform):
+def live_test(context, worker, platform, manual_start=False):
     url = PERMALINKS[platform]
     page = context.new_page()
     page.bring_to_front()
     response = page.goto(url, wait_until="domcontentloaded", timeout=60_000)
     print(f"{platform} guest permalink HTTP {response.status if response else 'unknown'}", flush=True)
+    if manual_start:
+        input("Start this public video in the test browser, then press Enter here: ")
     selector = 'video[data-label-test-playback="1"]'
     try:
         if platform == "bluesky":
@@ -315,26 +326,51 @@ def live_test(context, worker, platform):
             play = post.get_by_role("button", name=re.compile(r"^play(?: video)?$", re.IGNORECASE)).first
             if play.is_visible():
                 play.click()
-        page.wait_for_function(SELECT_PLAYER, arg=platform, timeout=35_000)
-        target = page.locator(selector)
-        if platform == "tiktok":
-            play_tiktok(page, target)
+        if platform in META_PERMALINKS:
+            target = prepare_meta_player(page, platform)
+        elif platform == "x":
+            selector = prepare_x_playback(page)
+            target = page.locator(selector)
         else:
-            target.evaluate("v => { v.muted = true; return v.play(); }", timeout=10_000)
-        first = target.evaluate("v => v.getVideoPlaybackQuality().totalVideoFrames")
-        page.wait_for_function("""start => {
-          const v = document.querySelector('video[data-label-test-playback="1"]');
-          return v && !v.paused && v.getVideoPlaybackQuality().totalVideoFrames > start + 2;
-        }""", arg=first, timeout=18_000)
+            page.wait_for_function(SELECT_PLAYER, arg=platform, timeout=35_000)
+            target = page.locator(selector)
+            if platform == "tiktok":
+                play_tiktok(page, target)
+            else:
+                target.evaluate("v => { v.muted = true; return v.play(); }", timeout=10_000)
+            first = target.evaluate("v => v.getVideoPlaybackQuality().totalVideoFrames")
+            page.wait_for_function("""start => {
+              const v = document.querySelector('video[data-label-test-playback="1"]');
+              return v && !v.paused && v.getVideoPlaybackQuality().totalVideoFrames > start + 2;
+            }""", arg=first, timeout=18_000)
+        bound = target.element_handle()
+        if bound is None:
+            raise RuntimeError(f"{platform}: the post replaced its video element")
+        source = bound.evaluate_handle("v => ({src: v.currentSrc, stream: v.srcObject})")
     except BrowserError as exc:
-        # Show only the public page's visible message, never browser cookies or media URLs.
-        message = page.locator("body").inner_text(timeout=2000)
-        raise RuntimeError(f"{platform}: guest playback unverified; page says {message[:450]!r}") from exc
+        # Emit only coarse access states, including when using a signed-in test profile.
+        gate = page.locator("body").evaluate("""body => {
+          const text = body.innerText;
+          if (/not a bot|unusual traffic|verify you are human/i.test(text)) return 'verification screen';
+          if (/log in to (watch|continue)|sign in to (watch|continue)/i.test(text)) return 'sign-in required';
+          if (/not available|unavailable/i.test(text)) return 'unavailable post';
+          return 'target player or advancing frames unavailable';
+        }""", timeout=3000)
+        raise RuntimeError(f"{platform}: playback unverified ({gate})") from exc
     print(f"{platform}: verified visible moving frames on the target video", flush=True)
     popup = watch_status(context, worker)
     page.bring_to_front()
     wait_on_player(page, selector, popup, worker)
-    assert page.evaluate(SELECT_PLAYER, platform)
+    if platform in META_PERMALINKS:
+        verify_meta_player(page, platform, target)
+    elif platform == "x":
+        assert_x_post(page, selector)
+    else:
+        assert page.evaluate(SELECT_PLAYER, platform), "The post or player changed during scanning"
+    assert target.evaluate("(v, args) => v === args[0] && v.isConnected && "
+                           "v.currentSrc === args[1].src && v.srcObject === args[1].stream", [bound, source]), (
+        "The post replaced its player or media before the badge was verified"
+    )
     print(f"{platform}: production badge verified on the playing guest video at {url}", flush=True)
 
 
@@ -344,7 +380,11 @@ if __name__ == "__main__":
     parser.add_argument("--browser")
     parser.add_argument("--canvas-player", action="store_true")
     parser.add_argument("--live", choices=PERMALINKS)
+    parser.add_argument("--headed", action="store_true", help="Show the temporary Chrome test profile")
+    parser.add_argument("--manual-start", action="store_true", help="Wait for you to start the public post")
     args = parser.parse_args()
+    if args.manual_start and not (args.headed and args.live):
+        parser.error("--manual-start requires --headed and --live")
     build = args.build.resolve()
     launch = [f"--disable-extensions-except={build}", f"--load-extension={build}",
               "--disable-component-update", "--disable-background-networking", "--disable-sync"]
@@ -353,6 +393,6 @@ if __name__ == "__main__":
             worker = wait_for_registration(context, build)
             start_trace(worker)
             if args.live:
-                live_test(context, worker, args.live)
+                live_test(context, worker, args.live, args.manual_start)
             else:
                 stream_test(context, worker, Path(folder), args.canvas_player)

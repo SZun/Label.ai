@@ -1,0 +1,19 @@
+name: Prepare installed extension and Chrome
+description: Download the built production extension and start from a fresh Chrome for Testing installation.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - uses: actions/download-artifact@v4
+      with:
+        name: social-video-extension
+        path: artifacts
+    - name: Install regular extension and Chrome for Testing
+      shell: bash
+      run: |
+        unzip -q artifacts/chromium.zip -d artifacts/chromium
+        python -m pip install -r tests/e2e/requirements.txt
+        python -m playwright install-deps chromium
+        python tests/e2e/prepare_browser.py chrome-for-testing "$RUNNER_TEMP/chrome" > "$RUNNER_TEMP/browser-path"

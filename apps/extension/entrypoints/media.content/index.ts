@@ -32,7 +32,7 @@ import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capt
 import { needsPlaybackWindow, observePlaybackWindow } from '../../src/media/playback-window';
 import { videoSamplePlan, videoSampleSlot } from '../../src/media/video-sampling';
 import { canReadCorsVideo, readCorsVideoFrames } from '../../src/media/cors-video';
-import { playbackSurfaceFor } from '../../src/media/playback-surface';
+import { playbackSurfaceFor, rendered } from '../../src/media/playback-surface';
 import { playingVideoCovers } from '../../src/media/video-cover';
 import { visiblePlaybackArea } from '../../src/media/playback-order';
 import { acquireVideoOriginal } from '../../src/media/video-original';
@@ -151,7 +151,6 @@ export default defineContentScript({
     const active = () => eligible() && permission.allowed;
 
     function currentCanvas(video: HTMLVideoElement): HTMLCanvasElement | undefined {
-      if (getComputedStyle(video).opacity !== '0') return;
       const surface = playbackSurfaceFor(video);
       return surface instanceof HTMLCanvasElement ? surface : undefined;
     }
@@ -323,24 +322,7 @@ export default defineContentScript({
     function shown(element: Element): boolean {
       // IntersectionObserver alone may report transparent or hidden media as intersecting.
       if (element instanceof HTMLVideoElement) element = currentCanvas(element) ?? element;
-      let insidePlayer = !fullscreen;
-      for (let current: Element | null = element; current; ) {
-        if (current === fullscreen) insidePlayer = true;
-        const style = getComputedStyle(current);
-        if (
-          style.visibility === 'hidden' ||
-          style.visibility === 'collapse' ||
-          style.display === 'none' ||
-          Number.parseFloat(style.opacity) === 0
-        )
-          return false;
-        const root = current.getRootNode();
-        current =
-          current.assignedSlot ??
-          current.parentElement ??
-          (root instanceof ShadowRoot ? root.host : null);
-      }
-      return insidePlayer;
+      return rendered(element, fullscreen);
     }
 
     function place(entry: MediaEntry): LabelPlacement | null {

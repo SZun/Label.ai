@@ -1,12 +1,13 @@
 import { visiblePlaybackArea } from './playback-order';
 
-function rendered(element: Element): boolean {
+export function rendered(element: Element, within?: Element | null): boolean {
+  let inScope = !within;
   for (let current: Element | null = element; current; ) {
+    if (current === within) inScope = true;
     const style = getComputedStyle(current);
     if (
       style.display === 'none' ||
-      style.visibility === 'hidden' ||
-      style.visibility === 'collapse' ||
+      (current === element && (style.visibility === 'hidden' || style.visibility === 'collapse')) ||
       Number.parseFloat(style.opacity) === 0
     )
       return false;
@@ -16,7 +17,7 @@ function rendered(element: Element): boolean {
       current.parentElement ??
       (root instanceof ShadowRoot ? root.host : null);
   }
-  return true;
+  return inScope;
 }
 
 function sameBounds(a: DOMRectReadOnly, b: DOMRectReadOnly) {
@@ -69,8 +70,10 @@ function exposedCanvas(
     if (
       scopes.every(({ root, target }) => {
         const stack = root.elementsFromPoint?.(x, y);
-        // The zero-opacity decoder itself often receives the player's clicks.
-        return stack?.find((item) => item !== decoder) === target;
+        // Invisible gesture controls and their descendants can still receive hits.
+        return (
+          stack?.find((item) => item !== decoder && (item === target || rendered(item))) === target
+        );
       })
     )
       hits++;

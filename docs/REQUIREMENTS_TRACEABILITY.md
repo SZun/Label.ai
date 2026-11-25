@@ -70,3 +70,10 @@ The IDs and short descriptions come from the preserved original proposal. Status
 | OPS-05 | External release gates | Implemented | docs/RELEASE_GATES.md identifies hardware, evaluation, signing, store and user-approval requirements. |
 
 **SOCIAL-VIDEO** covers long and late-joined playback, MediaSource handles, recycled players, fullscreen and thumbnail contention. Unit regressions live in the playback, queue and visible-scanner suites. The installed-browser workflow exercises streamed playback and can probe named guest social posts. Guest access failures and completed scans without a badge must be reported separately.
+
+## Public social video acceptance
+
+| Requirement | Production behavior | Verification |
+| --- | --- | --- |
+| VIDEO-SOCIAL-05 | Automatically label generated moving footage on YouTube, TikTok, Facebook, Instagram and X. | Each native public post must play and carry the production video badge. All five results are required by the five-platform-acceptance job. |
+| VIDEO-WEB | Discover moving video on ordinary public websites without a site list or uploads. | The same content script runs across sites. Separate Chrome checks cover native video, MediaSource playback, a player canvas behind transparent input controls, and removal of stale badges on camera footage. Cross-origin iframe admission and protected video remain limitations. |
