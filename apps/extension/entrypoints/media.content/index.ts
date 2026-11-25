@@ -371,7 +371,7 @@ export default defineContentScript({
           placements.push(placement);
         }
       }
-      if (fullscreen instanceof HTMLVideoElement) {
+      if (fullscreen) {
         if (
           placements.length &&
           ui.shadowHost.isConnected &&
@@ -388,7 +388,9 @@ export default defineContentScript({
           }
         } else {
           ui.shadowHost.removeAttribute('popover');
-          placements.length = 0;
+          // An ordinary fullscreen container can still host a badge without
+          // Popover support; native video cannot render children.
+          if (fullscreen instanceof HTMLVideoElement) placements.length = 0;
         }
       }
       ui.mounted?.setLabels(placements);

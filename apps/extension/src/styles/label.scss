@@ -11,6 +11,16 @@
   pointer-events: none !important;
   z-index: 2147483646 !important;
 }
+:host([popover]) {
+  // A zero-sized popover can clip all descendants through its native scroll box.
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+}
 :host::backdrop {
   background: transparent;
   pointer-events: none;

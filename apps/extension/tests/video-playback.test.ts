@@ -426,6 +426,13 @@ it('keeps a positive badge above direct video fullscreen and hides it behind ano
     expect(showPopover).toHaveBeenCalledTimes(1);
     expect(shadowHost.getAttribute('popover')).toBe('manual');
     expect(mocks.setLabels.mock.lastCall![0]).toHaveLength(1);
+    const player = document.body.appendChild(document.createElement('section'));
+    player.append(h.video);
+    fullscreen = player;
+    document.dispatchEvent(new Event('fullscreenchange'));
+    await h.tick();
+    expect(showPopover).toHaveBeenCalledTimes(2);
+    expect(mocks.setLabels.mock.lastCall![0]).toHaveLength(1);
     fullscreen = other;
     document.dispatchEvent(new Event('fullscreenchange'));
     await h.tick();

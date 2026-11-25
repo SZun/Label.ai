@@ -1,5 +1,6 @@
 """Exercise the installed production extension on publisher-hosted generated video."""
 import argparse
+import base64
 import hashlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -46,27 +47,47 @@ def wait_for_video_badge(site, target):
 
 def check_fullscreen_badge(site):
     # A user can fullscreen the entire player UI or use the native video control.
-    # Hit-testing ensures the badge actually paints in front of the fullscreen
-    # element. A nonzero rectangle alone also passes behind its opaque backdrop.
+    # A nonzero rectangle alone also passes behind an opaque fullscreen backdrop.
     assert site.locator('label-ai-overlay').evaluate(
         "el => getComputedStyle(el).position === 'fixed' && getComputedStyle(el).pointerEvents === 'none'"
     )
     for selector in ("#player", "#film"):
+        print(f"Entering fullscreen on {selector}", flush=True)
         site.locator(selector).evaluate("el => el.requestFullscreen()")
         site.wait_for_function("s => document.fullscreenElement === document.querySelector(s)", arg=selector)
         wait_for_video_badge(site, "#film")
-        site.wait_for_function("""() => {
-          const host = document.querySelector('label-ai-overlay');
-          const badge = host?.shadowRoot?.querySelector('.slop-label');
-          if (!badge) return false;
-          const {left,top,width,height} = badge.getBoundingClientRect();
-          badge.style.setProperty('pointer-events','auto','important');
-          try {
-            return document.elementFromPoint(left + width / 2, top + height / 2) === host;
-          } finally {
-            badge.style.removeProperty('pointer-events');
+        badge = site.locator('label-ai-overlay [aria-label="Video analysis"] .slop-label')
+        badge.evaluate("el => Promise.all(el.getAnimations().map(a => a.finished))")
+        bounds = badge.bounding_box()
+        assert bounds, (selector, "missing video badge")
+        screenshot = site.screenshot(clip=bounds)
+        # Inspect Chrome's compositor output. The production badge stays click-through,
+        # including when the browser retargets native hit tests to the video itself.
+        colors = site.evaluate("""async encoded => {
+          const picture = new Image();
+          picture.src = 'data:image/png;base64,' + encoded;
+          await picture.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = picture.width; canvas.height = picture.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(picture, 0, 0);
+          const {data} = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          let background = 0, lettering = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            if (data[i] === 33 && data[i+1] === 33 && data[i+2] === 33) background++;
+            if (data[i] > 245 && data[i+1] > 245 && data[i+2] > 245) lettering++;
           }
-        }""", timeout=10_000)
+          return {background, lettering, pixels: data.length / 4};
+        }""", base64.b64encode(screenshot).decode("ascii"))
+        state = badge.evaluate("""el => {
+          const host = el.getRootNode().host, r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.x+r.width/2, r.y+r.height/2);
+          return {fullscreen: document.fullscreenElement?.id, anchor: host.parentElement?.tagName,
+                  popover: host.matches(':popover-open'), hit: hit?.tagName};
+        }""")
+        print(f"{selector} badge paint {colors}, player state {state}", flush=True)
+        assert colors["background"] > colors["pixels"] * .35 and colors["lettering"] > 20, (selector, colors, state)
+        assert state["hit"] != "LABEL-AI-OVERLAY", (selector, "badge blocks player controls")
         site.evaluate("document.exitFullscreen()")
         wait_for_video_badge(site, "#film")
         assert site.locator('html > label-ai-overlay').count() == 1
