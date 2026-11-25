@@ -171,20 +171,24 @@ def video_check(site):
     from tools.test_gallery import gallery
     with gallery(video_check=True) as (origin, requests):
         site.goto(origin)
-        site.wait_for_function("""document.querySelector('label-ai-overlay')
-          ?.getAttribute('data-label-ai-scanner-state') === 'active'""", timeout=30_000)
+        site.locator('label-ai-overlay[data-label-ai-scanner-state="active"]').wait_for(
+            state="attached", timeout=30_000)
         for player_id in ['generated-video','genuine-video']:
             target = site.locator('#' + player_id)
             target.scroll_into_view_if_needed()
             assert target.evaluate("v => v.loop")
             target.evaluate("v => { v.muted = true; return v.play(); }")
             if player_id == 'generated-video':
-                wait_for_video_badge(site, '#' + player_id)
-                assert target.get_attribute('data-label-ai-test-state') == 'labeled'
+                site.locator('#generated-video[data-label-ai-test-state="labeled"]').wait_for(timeout=100_000)
+                badge = site.locator('label-ai-overlay [aria-label="Video analysis"] .slop-label')
+                badge.wait_for(state="visible")
+                player_box, badge_box = target.bounding_box(), badge.bounding_box()
+                assert player_box and badge_box
+                assert abs(badge_box["x"] - max(0, player_box["x"]) - 8) < 3
+                assert abs(badge_box["y"] - max(0, player_box["y"]) - 8) < 3
                 print("Video check: production extension displayed a Luma video badge", flush=True)
             else:
-                site.wait_for_function("""document.querySelector('#genuine-video')
-                  ?.getAttribute('data-label-ai-test-state') === 'completed-no-label'""", timeout=100_000)
+                site.locator('#genuine-video[data-label-ai-test-state="completed-no-label"]').wait_for(timeout=100_000)
                 assert target.evaluate("""v => {
                   const t=v.getBoundingClientRect();
                   return [...document.querySelector('label-ai-overlay').shadowRoot.querySelectorAll('.slop-label')]
