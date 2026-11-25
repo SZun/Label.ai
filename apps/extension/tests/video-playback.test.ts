@@ -6,6 +6,12 @@ const mocks = vi.hoisted(() => ({
   ui: vi.fn(),
   setLabels: vi.fn(),
   scene: vi.fn(),
+  captureFrame: vi.fn((_video: HTMLVideoElement, timestampMs: number) => ({
+    width: 128,
+    height: 128,
+    rgba: '',
+    timestampMs,
+  })),
 }));
 vi.mock('wxt/browser', () => ({
   browser: {
@@ -25,12 +31,7 @@ vi.mock('../src/transport/settings', () => ({
 vi.mock('../src/media/capture', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/media/capture')>()),
   createVideoSceneReader: () => mocks.scene,
-  captureVideoFrame: (_: HTMLVideoElement, timestampMs: number) => ({
-    width: 128,
-    height: 128,
-    rgba: '',
-    timestampMs,
-  }),
+  captureVideoFrame: mocks.captureFrame,
 }));
 
 afterEach(() => {
@@ -304,6 +305,76 @@ it('can complete a whole direct file on replay when the loop outruns scene infer
     expect(requests.map((m) => m.scope)).toEqual(['playback-window', undefined]);
     expect(requests[1].durationMs).toBe(16_000);
     expect(mocks.setLabels.mock.calls.at(-1)![0]).toHaveLength(1);
+  } finally {
+    h.dispose();
+  }
+});
+
+it('falls back to the full file on replay after a scene cut prevents the first window submission', async () => {
+  const h = await playbackHarness(() => 16);
+  h.video.loop = true;
+  let color = 10;
+  mocks.scene.mockImplementation(() => new Uint8ClampedArray(8 * 8 * 4).fill(color));
+  mocks.send.mockImplementation(async (message) => {
+    if (message.type === 'label-ai:can-scan') return { allowed: true };
+    if (message.type === 'label-ai:analyze')
+      return {
+        ...message,
+        status: 'COMPLETED',
+        shouldLabel: true,
+        expiresAt: Date.now() + 60_000,
+        policyVersion: 'test',
+      };
+  });
+  const submissions = () =>
+    mocks.send.mock.calls.map(([m]) => m).filter((m) => m.type === 'label-ai:analyze');
+  try {
+    await h.start();
+    h.presentFrame(0, 1);
+    color = 240;
+    h.presentFrame(0.5, 2);
+    expect(submissions()).toHaveLength(0);
+    h.video.currentTime = 0;
+    h.video.dispatchEvent(new Event('seeking'));
+    await h.tick();
+    for (let n = 0; n < 16 * 8; n++) h.presentFrame(n / 8, n + 1);
+    await h.tick();
+    expect(submissions()).toHaveLength(1);
+    expect(submissions()[0].scope).toBeUndefined();
+    expect(submissions()[0].durationMs).toBe(16_000);
+    expect(mocks.setLabels.mock.lastCall![0]).toHaveLength(1);
+  } finally {
+    h.dispose();
+  }
+});
+
+it('retries a transient frame capture failure without changing the video source', async () => {
+  const h = await playbackHarness(() => 4);
+  mocks.captureFrame.mockImplementationOnce(() => {
+    throw new Error('Temporary decoder interruption');
+  });
+  mocks.send.mockImplementation(async (message) => {
+    if (message.type === 'label-ai:can-scan') return { allowed: true };
+    if (message.type === 'label-ai:analyze')
+      return {
+        ...message,
+        status: 'COMPLETED',
+        shouldLabel: true,
+        expiresAt: Date.now() + 60_000,
+        policyVersion: 'test',
+      };
+  });
+  try {
+    await h.start();
+    for (let n = 0; n < 12; n++) h.presentFrame(n / 24, n + 1);
+    expect(mocks.captureFrame).toHaveBeenCalledTimes(1);
+    h.advanceClock(2000);
+    h.renew();
+    await h.tick();
+    for (let n = 0; n < 4 * 24; n++) h.presentFrame(n / 24, n + 1);
+    await h.tick();
+    expect(mocks.send.mock.calls.filter(([m]) => m.type === 'label-ai:analyze')).toHaveLength(1);
+    expect(mocks.setLabels.mock.lastCall![0]).toHaveLength(1);
   } finally {
     h.dispose();
   }
