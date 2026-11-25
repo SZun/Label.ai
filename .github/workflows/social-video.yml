@@ -38,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON((inputs.live_sites || contains(github.event.pull_request.labels.*.name, 'test-live-social') || contains(github.event.pull_request.body, '<!-- test-live-social -->')) && '["stream","canvas","youtube","tiktok","bluesky"]' || '["stream","canvas"]') }}
+        target: ${{ fromJSON((inputs.live_sites || contains(github.event.pull_request.labels.*.name, 'test-live-social') || contains(github.event.pull_request.body, '<!-- test-live-social -->')) && '["stream","canvas","public-clip","youtube","tiktok","bluesky"]' || '["stream","canvas"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,6 +58,10 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
+          if [[ "$TARGET" == public-clip ]]; then
+            python -u tests/e2e/generated_video.py --direct --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium
+            exit
+          fi
           args=()
           if [[ "$TARGET" == stream || "$TARGET" == canvas ]]; then
             if [[ "$TARGET" == canvas ]]; then args+=(--canvas-player); fi

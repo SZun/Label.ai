@@ -167,6 +167,22 @@ def feed(context, worker):
     assert not forbidden, forbidden
 
 
+def direct_public_clip(site):
+    url = SHOWCASE + "video/a_little_boy.mp4"
+    response = site.goto(url, wait_until="domcontentloaded", timeout=45_000)
+    assert response and response.ok and response.headers.get("content-type", "").startswith("video/mp4")
+    player = site.locator("video").first
+    player.wait_for(state="visible")
+    site.locator("label-ai-overlay").wait_for(state="attached")
+    site.wait_for_function("document.querySelector('video').readyState >= 2")
+    # Same actions as enabling Loop in Chrome's native context menu and pressing Play.
+    player.evaluate("v => { v.loop = true; v.muted = true; return v.play() }")
+    site.wait_for_function("document.querySelector('video').getVideoPlaybackQuality().totalVideoFrames >= 3")
+    assert player.evaluate("v => v.currentSrc") == url
+    wait_for_video_badge(site, "video")
+    print(f"Video-specific badge on Chrome's native standalone MP4 player: {url}", flush=True)
+
+
 def showcase(site):
     site.goto(SHOWCASE, wait_until="domcontentloaded", timeout=50_000)
     # The publisher rotates slides every 4s and clones them for looping. Hover
@@ -198,6 +214,7 @@ if __name__ == "__main__":
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--browser")
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--direct", action="store_true")
     args = parser.parse_args()
     build = args.build.resolve()
     with TemporaryDirectory() as profile, sync_playwright() as pw:
@@ -205,7 +222,11 @@ if __name__ == "__main__":
                   "--disable-background-networking", "--disable-component-update", "--disable-sync"]
         with browser_session(pw, profile, launch, args) as context:
             worker = wait_for_registration(context, build)
-            if args.live:
+            if args.direct:
+                site = context.new_page()
+                site.bring_to_front()
+                direct_public_clip(site)
+            elif args.live:
                 site = context.new_page()
                 site.bring_to_front()
                 showcase(site)
