@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "model_id": "detectra-v3-vits16-384",
+  "filename": "detectra-v3.onnx",
+  "url": "https://huggingface.co/TensorFold/detectra-v1/resolve/2bbc31161daa46932e05ee6f96e7016ee817bbde/model.onnx",
+  "sha256": "1414b9aafaa01a644ed706224973f09b53a1388282104409862df9893b1b962b",
+  "bytes": 43684258,
+  "license": "MIT",
+  "model_card": "https://huggingface.co/TensorFold/detectra-v1/blob/2bbc31161daa46932e05ee6f96e7016ee817bbde/README.md",
+  "source_repository": "https://github.com/ashhart/Detectra",
+  "base_model": "https://huggingface.co/OwensLab/commfor-model-384",
+  "onnxruntime_version": "1.31.1",
+  "wasm_runtime": {
+    "filename": "ort-wasm-simd-threaded.wasm",
+    "bytes": 14848852,
+    "sha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d"
+  },
+  "preprocessing_version": "rgb-white-bilinear440-center384-imagenet-v1",
+  "input": { "name": "pixel_values", "type": "float32", "shape": [1, 3, 384, 384] },
+  "output": { "name": "logit", "type": "float32", "shape": [1, 1] },
+  "label_route_approved": false,
+  "limitations": [
+    "Author-reported metrics are not Label.ai validation and do not satisfy the release precision/FPR gate.",
+    "Rendered pixels differ from original bytes; metadata and provenance are not evaluated by this model.",
+    "This image model alone does not establish whole-video AI generation.",
+    "Model scores are not calibrated certainty estimates for arbitrary web media."
+  ]
+}

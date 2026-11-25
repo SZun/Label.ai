@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "purpose": "DEVELOPER_SMOKE_ONLY_NOT_RELEASE_VALIDATION",
+  "generatedAt": "2026-11-24T21:29:39.747Z",
+  "runtime": "onnxruntime-web/wasm",
+  "runtimeVersion": "1.31.1",
+  "numThreads": 1,
+  "environment": {
+    "node": "v24.22.3",
+    "platform": "linux",
+    "architecture": "x64"
+  },
+  "modelId": "detectra-v3-vits16-384",
+  "modelSha256": "1414b9aafaa01a644ed706224973f09b53a1388282104409862df9893b1b962b",
+  "preprocessingVersion": "rgb-white-bilinear440-center384-imagenet-v1",
+  "temporalFeatureVersion": "luma32-consecutive-difference2-logit-distribution-v1",
+  "manifestSha256": "0714087ef6c5705a5f2bb2f88c7e5b2aded86091a3f5864053787648f9a2c48f",
+  "loadMs": 816.909393,
+  "inferenceCalls": 8,
+  "imageRouteApproved": false,
+  "videoRouteApproved": false,
+  "limitations": [
+    "Small, public fixtures are not a generator/site-disjoint release holdout.",
+    "No video training/calibration artifact is bundled. Temporal raw score is a robust frame-score diagnostic, not a validated probability.",
+    "Node WASM verifies inference; browser and Safari extension installation require separate evidence."
+  ],
+  "rows": [
+    {
+      "file": "4e1f3d61-f913-4f25-a866-d2c434045d38.png",
+      "sha256": "0802fa92f70da72045927f7230559a8b012853058e9c6f6ca41cfc06174e0de3",
+      "kind": "image",
+      "origin": "generated",
+      "elapsedMs": 1493.29134,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "logit": 13.881840705871582,
+      "rawScore": 0.9999990641790222,
+      "score": 0.9999990641790222
+    },
+    {
+      "file": "193cd9a2-4e2c-429e-842b-867d4cc1c0db.png",
+      "sha256": "dd640441034caa306d851c71c2615dbf739e1651ffe82d1fed235be698604165",
+      "kind": "image",
+      "origin": "generated",
+      "elapsedMs": 1391.0483469999995,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "logit": 7.358102321624756,
+      "rawScore": 0.9993629991229019,
+      "score": 0.9993629991229019
+    },
+    {
+      "file": "bb0b2d6b-8b74-4f0e-88be-fc8dc3d6ff9e.png",
+      "sha256": "e216af5f13c8c69d85464c82b36915b65e45078b14fc84a318a15d79ae09b3d5",
+      "kind": "image",
+      "origin": "generated",
+      "elapsedMs": 1405.048933,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "logit": 4.82663631439209,
+      "rawScore": 0.9920502739339061,
+      "score": 0.9920502739339061
+    },
+    {
+      "file": "0181d6f8-f366-448d-b0fd-8d0a8b45cea9.png",
+      "sha256": "c4c6aff59ed9d995e3b1a6c76ca02bdd086f89e79282c8ba1efc530b670b19a0",
+      "kind": "image",
+      "origin": "generated",
+      "elapsedMs": 1516.7584029999998,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "logit": 13.123074531555176,
+      "rawScore": 0.999998001425797,
+      "score": 0.999998001425797
+    },
+    {
+      "file": "camera.png",
+      "sha256": "b0793d2adda0fa6ae899c03989482bff9a42d3d5690fc7e3648f2795d730c23a",
+      "kind": "image",
+      "origin": "genuine",
+      "elapsedMs": 1426.5628879999995,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "logit": -7.216817855834961,
+      "rawScore": 0.0007335962701695503,
+      "score": 0.0007335962701695503
+    },
+    {
+      "file": "coffee.png",
+      "sha256": "cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7",
+      "kind": "image",
+      "origin": "genuine",
+      "elapsedMs": 1402.338991999999,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "logit": -4.226141929626465,
+      "rawScore": 0.014398303461632067,
+      "score": 0.014398303461632067
+    },
+    {
+      "file": "chelsea.png",
+      "sha256": "596aa1e7cb875eb79f437e310381d26b338a81c2da23439704a73c4651e8c4bb",
+      "kind": "image",
+      "origin": "genuine",
+      "elapsedMs": 1498.0733280000004,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "logit": -7.566527366638184,
+      "rawScore": 0.0005172187187924406,
+      "score": 0.0005172187187924406
+    },
+    {
+      "file": "astronaut.png",
+      "sha256": "88431cd9653ccd539741b555fb0a46b61558b301d4110412b5bc28b5e3ea6cb5",
+      "kind": "image",
+      "origin": "genuine",
+      "elapsedMs": 1451.5978259999993,
+      "status": "COMPLETED",
+      "shouldLabel": false,
+      "classification": "UNCERTAIN",
+      "reasonCodes": [
+        "LOCAL_IMAGE_MODEL",
+        "IMAGE_ROUTE_UNVALIDATED",
+        "SCORE_UNCALIBRATED"
+      ],
+      "policyVersion": "local-v1-unvalidated",
+      "modelVersion": "detectra-v3-vits16-384",
+      "logit": -2.606518268585205,
+      "rawScore": 0.06872009200799337,
+      "score": 0.06872009200799337
+    }
+  ]
+}

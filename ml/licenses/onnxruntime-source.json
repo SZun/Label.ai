@@ -1,0 +1,6 @@
+{
+  "version": "1.31.1",
+  "source": "https://files.pythonhosted.org/packages/eb/27/c6a823bac55b2977bea2027c3ec9393a2c1002cb9a09eb40354563e02730/onnxruntime-1.31.1-cp312-cp312-manylinux_2_28_x86_64.whl",
+  "sha256": "1f3dea47f2f0e5117c2404cea7d21fd253ae7836a3bf167a501cdfbb2600d536",
+  "note": "Official Python wheel supplies upstream runtime notices omitted by the NPM package; notices may include components unused by WASM."
+}

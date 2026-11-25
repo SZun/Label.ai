@@ -1,0 +1,67 @@
+name: Social video playback
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      live_sites:
+        description: "Exercise the public YouTube, TikTok and Bluesky guest players"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: make bootstrap && pnpm run build:chrome
+      - run: python tools/zip_extension.py apps/extension/.output/chrome-mv3 artifacts/chromium.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: social-video-extension
+          path: artifacts/chromium.zip
+
+  playback:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON((inputs.live_sites || contains(github.event.pull_request.labels.*.name, 'test-live-social') || contains(github.event.pull_request.body, '<!-- test-live-social -->')) && '["stream","youtube","tiktok","bluesky"]' || '["stream"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: social-video-extension
+          path: artifacts
+      - name: Install regular extension and Chrome for Testing
+        run: |
+          unzip -q artifacts/chromium.zip -d artifacts/chromium
+          python -m pip install -r tests/e2e/requirements.txt
+          python -m playwright install-deps chromium
+          python tests/e2e/prepare_browser.py chrome-for-testing "$RUNNER_TEMP/chrome" > "$RUNNER_TEMP/browser-path"
+      - name: Check the installed extension on playing video
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          args=()
+          if [[ "$TARGET" == stream ]]; then
+            command -v ffmpeg || sudo apt-get install -y ffmpeg
+          else
+            args+=(--live "$TARGET")
+          fi
+          python -u tests/e2e/social_video.py --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium "${args[@]}"

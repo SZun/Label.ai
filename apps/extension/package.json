@@ -1,0 +1,36 @@
+{
+  "name": "@label-ai/extension",
+  "version": "0.1.7",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build -b chrome",
+    "build:chrome": "wxt build -b chrome",
+    "build:chrome:test": "node build-local-test.mjs",
+    "build:safari": "wxt build -b safari",
+    "zip": "wxt zip -b chrome",
+    "zip:safari": "wxt zip -b safari",
+    "typecheck": "wxt prepare && svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "@label-ai/detector": "workspace:*",
+    "@label-ai/provenance": "workspace:*",
+    "@smui/button": "9.0.6",
+    "@smui/paper": "9.0.6",
+    "svelte": "5.59.1"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "7.3.2",
+    "@types/node": "24.10.1",
+    "@wxt-dev/module-svelte": "2.0.5",
+    "jsdom": "27.2.0",
+    "sass": "1.94.2",
+    "svelte-check": "4.3.3",
+    "typescript": "5.9.3",
+    "vitest": "5.1.1",
+    "wxt": "0.21.5"
+  }
+}

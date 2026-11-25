@@ -1,0 +1,251 @@
+name: Verify the browser extension
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      safari_interactive:
+        description: "Run strict native Safari installed-overlay and iOS Simulator verifier acceptance"
+        required: false
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: make bootstrap
+      - run: pip install -r ml/requirements.txt && python -m unittest discover -s ml -p "test_*.py" -v
+      - run: make verify
+      - run: make package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages/*.zip
+          if-no-files-found: error
+      - run: pnpm run build:chrome:test
+      - run: python3 tools/audit_packages.py apps/extension/.output/chrome-mv3-local-test
+      - run: python3 tools/zip_extension.py apps/extension/.output/chrome-mv3-local-test artifacts/local-test/label-ai-local-test.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: label-ai-local-test-extension
+          path: artifacts/local-test/label-ai-local-test.zip
+          if-no-files-found: error
+      - run: pnpm --dir packages/provenance exec vite build --config tests/browser/vite.config.mjs --outDir ../../../../artifacts/safari-verifier --base ./
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safari-verifier-harness
+          path: artifacts/safari-verifier
+  browser:
+    needs: extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, chrome-for-testing, brave, edge, opera]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - run: unzip -q artifacts/packages/label-ai-chromium.zip -d artifacts/chromium
+      - run: pip install -r tests/e2e/requirements.txt
+      - if: matrix.browser == 'chromium'
+        run: python -m playwright install --with-deps chromium
+      - if: matrix.browser != 'chromium'
+        run: python -m playwright install-deps chromium
+      - run: python tools/prepare_provenance_fixtures.py
+      - name: Install desktop schemas needed by Opera
+        if: matrix.browser == 'opera'
+        run: sudo apt-get install -y gsettings-desktop-schemas
+      - name: Install and exercise the packaged extension
+        env:
+          BRAND: ${{ matrix.browser }}
+        run: |
+          if [ "$BRAND" != chromium ]; then
+            LABEL_TEST_BROWSER="$(python tests/e2e/prepare_browser.py "$BRAND" "$RUNNER_TEMP/test-browser")"
+            export LABEL_TEST_BROWSER
+          fi
+          timeout --signal=TERM --kill-after=5s 120s python -u tests/e2e/browser_test.py --build artifacts/chromium --install-only
+          timeout --signal=TERM --kill-after=5s 240s python -u tests/e2e/browser_test.py --build artifacts/chromium --report artifacts/browser-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-verification-${{ matrix.browser }}
+          path: artifacts/browser-report.json
+  local-test-gallery:
+    needs: extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-local-test-extension
+          path: artifacts/local-test
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - run: unzip -q artifacts/local-test/label-ai-local-test.zip -d artifacts/local-test/unpacked
+      - run: unzip -q artifacts/packages/label-ai-chromium.zip -d artifacts/local-test/production
+      - run: pip install -r tests/e2e/requirements.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: python tools/prepare_provenance_fixtures.py
+      - run: python tools/prepare_smoke_media.py
+      - name: Test unsigned generated and genuine images through the local test build
+        run: timeout --signal=TERM --kill-after=5s 180s python -u tests/e2e/local_test_gallery.py --build artifacts/local-test/unpacked
+      - name: Test every gallery image with the standard all-sites package
+        run: timeout --signal=TERM --kill-after=5s 240s python -u tests/e2e/local_test_gallery.py --build artifacts/local-test/production --production
+      - name: Scan live Keras and Wikipedia pages with the regular package
+        run: timeout 150s python -u tests/e2e/ordinary_pages.py --build artifacts/local-test/production --live-only
+      - name: Scan ordinary HTTP and HTTPS feeds and playing video
+        if: "!cancelled()"
+        run: |
+          command -v ffmpeg || sudo apt-get install -y ffmpeg
+          timeout --signal=TERM --kill-after=5s 300s python -u tests/e2e/ordinary_pages.py --build artifacts/local-test/production
+  chrome-video:
+    needs: extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - name: Install Chrome for Testing and the regular build
+        run: |
+          unzip -q artifacts/packages/label-ai-chromium.zip -d artifacts/chromium
+          python -m pip install -r tests/e2e/requirements.txt
+          python -m playwright install-deps chromium
+          python tests/e2e/prepare_browser.py chrome-for-testing "$RUNNER_TEMP/video-chrome" > "$RUNNER_TEMP/video-browser-path"
+      - name: Detect a real generated video on the live VideoCrafter2 project page
+        run: python -u tests/e2e/generated_video.py --live --browser "$(cat "$RUNNER_TEMP/video-browser-path")" --build artifacts/chromium
+      - name: Compare generated, camera and CORS-protected videos on an HTTPS feed
+        if: "!cancelled()"
+        run: python -u tests/e2e/generated_video.py --browser "$(cat "$RUNNER_TEMP/video-browser-path")" --build artifacts/chromium
+      - name: Verify both windows of an uninterrupted 32-second video
+        if: "!cancelled()"
+        run: |
+          command -v ffmpeg || sudo apt-get install -y ffmpeg
+          python tools/prepare_smoke_media.py
+          python -u tests/e2e/long_video.py --build artifacts/chromium --browser "$(cat "$RUNNER_TEMP/video-browser-path")"
+  mac-chrome-columns:
+    needs: extension
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - name: Check the regular package in Chrome for Testing on Apple Silicon at 2x
+        run: |
+          unzip -q artifacts/packages/label-ai-chromium.zip -d artifacts/chromium
+          python -m pip install -r tests/e2e/requirements.txt
+          python tools/prepare_provenance_fixtures.py
+          python tools/prepare_smoke_media.py
+          exe="$(python tests/e2e/prepare_browser.py chrome-for-testing-mac-arm64 "$RUNNER_TEMP/test-browser")"
+          python -u tests/e2e/local_test_gallery.py --build artifacts/chromium --production --browser "$exe" --device-scale-factor 2
+  safari-package-and-verifier:
+    needs: extension
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: safari-verifier-harness
+          path: artifacts/safari-verifier
+      - name: Extract the packaged Safari target
+        run: unzip -q artifacts/packages/label-ai-safari.zip -d artifacts/safari-web
+      - name: Verify native credentials and install the unmodified extension in Safari
+        run: |
+          python3 tools/prepare_provenance_fixtures.py
+          sudo /usr/bin/safaridriver --enable
+          python3 -u tests/e2e/safari_verifier.py artifacts/safari-verifier --extension artifacts/safari-web --install-only
+      - name: Compile the unsigned macOS and iOS host apps
+        if: "!cancelled()"
+        run: |
+          tools/package_safari.sh artifacts/safari-web artifacts/xcode
+          python3 tools/build_apple_host.py artifacts/xcode
+      - uses: actions/upload-artifact@v4
+        if: "!cancelled() && hashFiles('artifacts/xcode/**/*.pbxproj') != ''"
+        with:
+          name: label-ai-safari-xcode
+          path: |
+            artifacts/xcode/**
+            !artifacts/xcode/build/**
+          if-no-files-found: error
+  safari-interactive-acceptance:
+    # Safari's native prompts and simulator automation interface require an
+    # appropriate interactive environment. The strict tests remain available
+    # but an unavailable hosted setup must never masquerade as overlay acceptance.
+    if: github.event_name == 'workflow_dispatch' && inputs.safari_interactive
+    needs: extension
+    runs-on: macos-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [desktop-installed-overlay, ios-simulator-verifier]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: safari-verifier-harness
+          path: artifacts/safari-verifier
+      - name: Extract the packaged Safari target
+        run: unzip -q artifacts/packages/label-ai-safari.zip -d artifacts/safari-web
+      - name: Boot an available iPhone simulator
+        if: matrix.platform == 'ios-simulator-verifier'
+        run: |
+          device=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; devices=json.load(sys.stdin)["devices"]; print(next(d["udid"] for runtime, group in reversed(list(devices.items())) if ".iOS-" in runtime for d in group if d["name"].startswith("iPhone") and d["isAvailable"]))')
+          xcrun simctl bootstatus "$device" -b
+          open -a Simulator --args -CurrentDeviceUDID "$device"
+          printf 'LABEL_AI_SIMULATOR_UDID=%s\n' "$device" >> "$GITHUB_ENV"
+      - name: Exercise strict desktop installed overlay or simulator native verifier
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          python3 tools/prepare_provenance_fixtures.py
+          sudo /usr/bin/safaridriver --enable
+          args=(artifacts/safari-verifier)
+          if [ "$PLATFORM" = ios-simulator-verifier ]; then
+            args+=(--ios-simulator --simulator-udid "$LABEL_AI_SIMULATOR_UDID")
+          else
+            args+=(--extension artifacts/safari-web)
+          fi
+          python3 -u tests/e2e/safari_verifier.py "${args[@]}"

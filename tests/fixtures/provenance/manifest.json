@@ -1,0 +1,55 @@
+{
+  "sourceRepository": "https://github.com/contentauth/example-assets",
+  "sourceCommit": "c37f93e115289ac1ef00f899a860e6e08ab9886f",
+  "license": "MIT",
+  "licenseFile": "LICENSE.txt",
+  "assets": [
+    {
+      "file": "firefly-generated.jpg",
+      "upstreamPath": "images/Firefly_tabby_cat.jpg",
+      "origin": "Adobe Firefly text-to-image; trusted active manifest generated assertion",
+      "expected": "verified-generated",
+      "sha256": "bdc5c19d4211d9c9f9f8dce5bf4e4dec29e9b32e308ff12a60979481e928154f",
+      "bytes": 1047024
+    },
+    {
+      "file": "firefly-tampered.jpg",
+      "upstreamPath": "images/Firefly_tabby_cat.jpg",
+      "transformation": "One top-level JPEG quantization coefficient altered; original C2PA signature retained",
+      "expected": "invalid",
+      "sha256": "a0882a441ca0a71c098dbde46c4eb8e84dcabe14aedc739e6eade09fed9248b9",
+      "bytes": 1047024
+    },
+    {
+      "file": "camera-edited.jpg",
+      "upstreamPath": "images/car-es-Ps-Cr.jpg",
+      "origin": "CAI photography/editing provenance example, not a whole-asset AI-generation assertion",
+      "expected": "verified-other",
+      "sha256": "17c9e5b9f40ef79bb8e8af4adf36fe2be54d9c4a7f96f29813e6c3850ab8caa8",
+      "bytes": 580124
+    },
+    {
+      "file": "chatgpt-expired.png",
+      "upstreamPath": "images/ChatGPT_Image.png",
+      "origin": "ChatGPT-generated example with expired signing credential; never override expiry",
+      "expected": "invalid",
+      "sha256": "7cd57b4a33f05e4ce7f63de18751f59f4b3ea8c55c281204e0cd6d1f621e466f",
+      "bytes": 2130441
+    },
+    {
+      "file": "sora.mp4",
+      "upstreamPath": "videos/sora.MP4",
+      "origin": "Sora-generated video with an active generation assertion but expired and untrusted signing credentials; actual packaged WASM refuses the label",
+      "expected": "invalid",
+      "sha256": "7d750b0c9cb9c1ab162a067cf128213590da2b858f2e1de336190427a77f75cf",
+      "bytes": 5278370
+    },
+    {
+      "file": "unsigned.png",
+      "origin": "Conventional one-pixel PNG test fixture without provenance",
+      "expected": "missing",
+      "sha256": "a33e6eb1df26ede1a3a11857faf380befa06e72d381942b9ecd0e4c9566a7812",
+      "bytes": 68
+    }
+  ]
+}
