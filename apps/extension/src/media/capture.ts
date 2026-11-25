@@ -156,7 +156,11 @@ export async function captureImage(
   return { frame, ...(original ? { original } : {}) };
 }
 
-export function captureVideoFrame(video: HTMLVideoElement, timestampMs: number): FramePayload {
+export function captureVideoFrame(
+  video: HTMLVideoElement,
+  timestampMs: number,
+  maxSide = VIDEO_MAX_SIDE,
+): FramePayload {
   if (video.readyState < 2 || video.mediaKeys) throw new Error('Video pixels are unavailable');
-  return pixels(video, video.videoWidth, video.videoHeight, VIDEO_MAX_SIDE, timestampMs);
+  return pixels(video, video.videoWidth, video.videoHeight, maxSide, timestampMs);
 }

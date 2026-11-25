@@ -45,3 +45,11 @@ test('VID-TEMP-05 repeated poster frames, invalid ordering, and unknown duration
   assert.throws(() => analyzeTemporalEvidence([frame(500), frame(500)], 1000), /timestamp/i);
   assert.throws(() => analyzeTemporalEvidence([frame(500)], NaN), /duration/i);
 });
+
+test('requires a strict majority of at least two positive frames in each third', () => {
+  const evidence = (logits: number[]) => analyzeTemporalEvidence(
+    logits.map((value, i) => frame(250 + i * 500, 50 + i * 4, value)), 6000);
+  assert.equal(evidence([1,1,1,-8, 1,1,1,-8, 1,1,1,-8]).sustainedFrameEvidence, true);
+  assert.equal(evidence([1,1,1,1, 1,1,1,1, 1,1,-8,-8]).sustainedFrameEvidence, false);
+  assert.equal(evidence([1,1,1,1, -8,-8,-8,-8, -8,-8,-8,-8]).sustainedFrameEvidence, false);
+});

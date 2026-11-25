@@ -32,6 +32,8 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     parser.add_argument("--asset", help="Only prepare the indicated SHA-256; other fixture files are not opened")
     parser.add_argument("--browser-sampling", action="store_true", help="Approximate the installed extension's bounded video acquisition")
+    parser.add_argument("--center-four-seconds", action="store_true",
+                        help="Match clip duration in the offline video calibration experiment")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     prepared = []
@@ -64,6 +66,11 @@ def main() -> None:
             ]))
             stream = metadata["streams"][0]
             duration = float(stream.get("duration") or metadata["format"]["duration"])
+            offset = 0.
+            if args.center_four_seconds:
+                if duration < 4 or not args.browser_sampling:
+                    raise ValueError("Matched experiment requires browser sampling and four seconds of footage")
+                offset, duration = (duration - 4) / 2, 4.
             scale = min(1, (480 if args.browser_sampling else 640) / max(stream["width"], stream["height"]))
             width, height = round(stream["width"] * scale), round(stream["height"] * scale)
             frames = []
@@ -73,9 +80,26 @@ def main() -> None:
                 timestamps = [index / 11 * max(0, duration - 0.1) for index in range(12)]
             for index, timestamp in enumerate(timestamps):
                 raw = subprocess.check_output([
-                    "ffmpeg", "-v", "error", "-ss", f"{timestamp:.6f}", "-i", str(path),
+                    "ffmpeg", "-v", "error", "-ss", f"{offset + timestamp:.6f}", "-i", str(path),
                     "-frames:v", "1", "-vf", f"scale={width}:{height}:flags=bilinear", "-pix_fmt", "rgba", "-f", "rawvideo", "pipe:1",
                 ])
+                if args.browser_sampling and not args.center_four_seconds and not raw and index == len(timestamps) - 1:
+                    # Low-frame-rate loops may end before the last ideal target.
+                    # Use the actual final presentation timestamp, never a made-up duplicate.
+                    times = subprocess.check_output([
+                        "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                        "frame=best_effort_timestamp_time", "-of", "json", str(path),
+                    ])
+                    last = max(float(f["best_effort_timestamp_time"]) for f in json.loads(times)["frames"]
+                               if "best_effort_timestamp_time" in f)
+                    if last <= timestamps[index - 1] or last >= timestamp:
+                        continue
+                    timestamp = last
+                    raw = subprocess.check_output([
+                        "ffmpeg", "-v", "error", "-ss", f"{offset + timestamp:.6f}", "-i", str(path),
+                        "-frames:v", "1", "-vf", f"scale={width}:{height}:flags=bilinear",
+                        "-pix_fmt", "rgba", "-f", "rawvideo", "pipe:1",
+                    ])
                 if len(raw) != width * height * 4:
                     raise ValueError(f"Video frame decode failed: {row['file']} at {timestamp}")
                 rgba_path = args.output / f"{checksum}-{index:02}.rgba"

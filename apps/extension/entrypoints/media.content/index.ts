@@ -28,7 +28,8 @@ import {
 import { RetryBudget, retryableReply } from '../../src/core/retry';
 import { backgroundLayoutKey } from '../../src/media/background-image';
 import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capture';
-import { MAX_SAMPLED_DURATION_MS, videoSampleSlot } from '../../src/media/video-sampling';
+import { videoSamplePlan, videoSampleSlot } from '../../src/media/video-sampling';
+import { canReadCorsVideo, readCorsVideoFrames } from '../../src/media/cors-video';
 import { acquireVideoOriginal } from '../../src/media/video-original';
 import { readSettings, SETTINGS_KEY } from '../../src/transport/settings';
 import '../../src/styles/label.scss';
@@ -329,17 +330,32 @@ export default defineContentScript({
       )
         return;
       const generation = entry.generation;
+      const durationMs = video.duration * 1000;
+      const plan = videoSamplePlan(durationMs);
+      if (!plan) {
+        if (video.readyState >= 1) {
+          markState(entry, 'unsupported');
+          entry.attempted = true;
+        }
+        return;
+      }
       const captureLease = `${entry.id}:${generation}:${newScanId()}`;
       if (!videoCaptures.acquire(captureLease)) return;
       entry.captureLease = captureLease;
       markState(entry, 'pending');
-      entry.captureTimer = setTimeout(() => {
-        if (entry.generation !== generation) return;
-        cancel(entry);
-        markState(entry, 'canceled');
-        entry.attempted = true;
-        schedule();
-      }, 30_000);
+      entry.captureTimer = setTimeout(
+        () => {
+          if (entry.generation !== generation) return;
+          cancel(entry);
+          markState(entry, 'canceled');
+          entry.attempted = true;
+          schedule();
+        },
+        Math.max(30_000, durationMs + 10_000),
+      );
+      const observedTimesMs: number[] = [];
+      let needsCors = false;
+      let previousFrame: VideoFrameCallbackMetadata | undefined;
       const sample = (_now: number, metadata: VideoFrameCallbackMetadata) => {
         entry.frameCallback = undefined;
         if (entry.generation !== generation || entry.captureLease !== captureLease) return;
@@ -354,47 +370,91 @@ export default defineContentScript({
           suspendEntry(entry);
           return;
         }
-        const durationMs = video.duration * 1000;
-        if (
-          !Number.isFinite(durationMs) ||
-          durationMs <= 0 ||
-          durationMs > MAX_SAMPLED_DURATION_MS
-        ) {
+        if (video.duration * 1000 !== durationMs) {
           cancel(entry);
           markState(entry, 'unsupported');
           entry.attempted = true;
           return;
         }
         const timestampMs = metadata.mediaTime * 1000;
-        const last = entry.frames.at(-1);
+        const last = observedTimesMs.at(-1);
         const slot = videoSampleSlot(timestampMs, durationMs);
-        const previousSlot = last ? videoSampleSlot(last.timestampMs, durationMs) : -1;
+        const previousSlot = last === undefined ? -1 : videoSampleSlot(last, durationMs);
+        const frameInterval = previousFrame
+          ? (timestampMs - previousFrame.mediaTime * 1000) /
+            Math.max(1, metadata.presentedFrames - previousFrame.presentedFrames)
+          : 0;
+        previousFrame = metadata;
+        // A two-second 8fps clip ends at 1875ms. Its nominal last slot can
+        // begin after the final displayable frame. Only credit real presentations.
+        const lastPresentation =
+          slot >= plan.frameLimit - 2 &&
+          frameInterval > 0 &&
+          frameInterval <= Math.min(250, durationMs / 8) &&
+          timestampMs + frameInterval + 0.01 >= durationMs;
         try {
-          if (slot > previousSlot) entry.frames.push(captureVideoFrame(video, timestampMs));
-          if (slot === 11 && entry.frames.length >= 3) {
+          if (
+            slot > previousSlot ||
+            (lastPresentation && last !== timestampMs && observedTimesMs.length < plan.frameLimit)
+          ) {
+            if (!needsCors) {
+              try {
+                entry.frames.push(captureVideoFrame(video, timestampMs, plan.maxSide));
+              } catch (error) {
+                if (
+                  !(error instanceof DOMException) ||
+                  error.name !== 'SecurityError' ||
+                  !canReadCorsVideo(video, entry.source)
+                )
+                  throw error;
+                // Decode every observed timestamp from the same representation.
+                needsCors = true;
+                entry.frames = [];
+              }
+            }
+            observedTimesMs.push(timestampMs);
+          }
+          if (
+            (slot === plan.frameLimit - 1 || lastPresentation) &&
+            observedTimesMs.length >= 8 * plan.segments
+          ) {
             entry.attempted = true;
             if (entry.captureTimer !== undefined) clearTimeout(entry.captureTimer);
             entry.captureTimer = undefined;
             const frames = entry.frames;
             entry.frames = [];
-            const coverage = Math.min(
-              1,
-              ((frames.at(-1)?.timestampMs ?? 0) - (frames[0]?.timestampMs ?? 0)) / durationMs,
-            );
+            const coverage = (observedTimesMs.at(-1)! - observedTimesMs[0]!) / durationMs;
             const queued = queue.enqueue(entry.id, async () => {
+              const current = () =>
+                entry.generation === generation &&
+                entry.captureLease === captureLease &&
+                active() &&
+                entry.visible &&
+                shown(video) &&
+                video.isConnected &&
+                video.duration * 1000 === durationMs &&
+                sourceFor(video) === entry.source;
+              const controller = new AbortController();
               try {
-                if (
-                  entry.generation === generation &&
-                  entry.captureLease === captureLease &&
-                  active() &&
-                  entry.visible &&
-                  shown(entry.element) &&
-                  sourceFor(entry.element) === entry.source
-                )
-                  await submit(entry, { kind: 'video', frames, durationMs, coverage });
+                if (!current()) return;
+                let captured: FramePayload[] | undefined = frames;
+                if (needsCors) {
+                  entry.captureAbort = controller;
+                  captured = await readCorsVideoFrames(
+                    video,
+                    entry.source,
+                    observedTimesMs,
+                    controller.signal,
+                  );
+                }
+                if (!current() || controller.signal.aborted) return;
+                if (captured)
+                  await submit(entry, { kind: 'video', frames: captured, durationMs, coverage });
+                else markState(entry, 'unsupported');
               } catch {
                 if (entry.generation === generation) markState(entry, 'failed');
               } finally {
+                if (entry.captureAbort === controller) entry.captureAbort = undefined;
                 videoCaptures.release(captureLease);
                 if (entry.captureLease === captureLease) entry.captureLease = undefined;
                 schedule();
@@ -704,7 +764,17 @@ export default defineContentScript({
         (ev) => {
           if (!(ev.target instanceof Element)) return;
           const entry = entries.get(ev.target);
-          if (entry) reset(entry);
+          if (!entry) return;
+          // Looping and scrubbing change playback time, while completed whole-clip
+          // evidence remains bound to the same loaded resource. Partial captures
+          // still reset on a seek. Source replacement always invalidates a verdict.
+          if (
+            event === 'seeking' &&
+            (entry.binding || entry.decision || (entry.attempted && queue.has(entry.id))) &&
+            matchesCurrentMedia(entry)
+          )
+            return;
+          reset(entry);
         },
         { capture: true },
       );

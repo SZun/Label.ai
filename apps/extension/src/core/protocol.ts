@@ -1,3 +1,5 @@
+import { videoSamplePlan } from '../media/video-sampling';
+
 /** Opaque per-document job identifiers also work on plain HTTP publisher pages. */
 export function newScanId(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
@@ -79,7 +81,7 @@ export interface AnalyzeRequest extends Binding {
 }
 
 export const MAX_SIDE = 1024;
-export const VIDEO_MAX_SIDE = 480;
+export { VIDEO_MAX_SIDE } from '../media/video-sampling';
 export const MAX_ORIGINAL_BYTES = 4 * 1024 * 1024;
 export const MAX_MESSAGE_CHARACTERS = 15 * 1024 * 1024;
 
@@ -126,13 +128,14 @@ export function isAnalyzeRequest(value: unknown): value is AnalyzeRequest {
     return false;
   if (item.kind === 'video') {
     if (!item.frames) return Boolean(item.original);
+    const plan = videoSamplePlan(item.durationMs!);
     if (
       !Array.isArray(item.frames) ||
       item.frames.length < 3 ||
-      item.frames.length > 12 ||
+      !plan ||
+      item.frames.length > plan.frameLimit ||
       !item.frames.every(
-        (frame) =>
-          validFrame(frame) && frame.width <= VIDEO_MAX_SIDE && frame.height <= VIDEO_MAX_SIDE,
+        (frame) => validFrame(frame) && frame.width <= plan.maxSide && frame.height <= plan.maxSide,
       ) ||
       !Number.isFinite(item.durationMs) ||
       (item.durationMs ?? 0) <= 0 ||

@@ -2,7 +2,7 @@
 
 Label.ai performs media analysis on the user's device. The extension uses the real, pinned Detectra ONNX image model through ONNX Runtime Web/WASM. The model is never queried through a hosted API. This directory contains developer provisioning, local calibration tools, license notices, and actual inference reports.
 
-The ordinary browser extension uses a versioned **preview** policy: a completed image raw score of at least 0.10 can trigger a badge. For video, the lower-quartile frame score must reach 0.65 and the whole-clip temporal checks must pass. A verified, applicable credential takes priority. The detector package’s separate calibrated release routes remain disabled. No held-out dataset establishes the target precision or false-positive bounds, and no fitted temporal calibration artifact is bundled.
+The ordinary browser extension uses a versioned **preview** policy: a completed image raw score of at least 0.10 can trigger a badge. Video can qualify through the existing 0.65 lower-quartile rule with eligible temporal evidence. A second preview rule accepts a lower-quartile score of 0.10, mean frame-to-frame motion of at least 0.01, and a strict majority of frames scoring at least 0.10 in each third of the timeline (at least two positive frames per third). Coverage, timing, frame density, motion and excessive scene-cut vetoes still apply. Clips over 21 seconds and up to 60 seconds must independently pass every consecutive analysis window. A verified, applicable credential takes priority. The detector package’s separate calibrated release routes remain disabled. No held-out dataset establishes the target precision or false-positive bounds, and no fitted temporal calibration artifact is bundled.
 
 ## What is implemented
 

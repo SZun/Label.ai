@@ -91,6 +91,7 @@ function eligibleOriginal(bytes: Uint8Array, mime: string, width: number, height
 export async function readBounded(
   response: Response,
   signal: AbortSignal,
+  maxBytes = MAX_ORIGINAL_BYTES,
 ): Promise<Uint8Array<ArrayBuffer> | undefined> {
   const reader = response.body?.getReader();
   if (!reader) return;
@@ -101,7 +102,7 @@ export async function readBounded(
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_ORIGINAL_BYTES || signal.aborted) {
+      if (size > maxBytes || signal.aborted) {
         await reader.cancel();
         return;
       }

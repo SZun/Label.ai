@@ -3,7 +3,7 @@ export type ScoredFrame = RgbaInput & { timestampMs: number; logit: number };
 export const TEMPORAL_FEATURE_VERSION = 'luma32-consecutive-difference2-logit-distribution-v1';
 export const MAX_VIDEO_FRAMES = 12;
 export type TemporalEvidence = {
-  coverage: number; denseTriplets: number; sceneCuts: number; motionEnergy: number;
+  sustainedFrameEvidence: boolean; coverage: number; denseTriplets: number; sceneCuts: number; motionEnergy: number;
   secondOrderResidual: number; scoreQuantile25: number; eligible: boolean; reasonCodes: string[];
   meanLogit: number; lowerQuartileLogit: number; logitStd: number; logitTemporalDelta: number;
   frameCount: number; sampleSpanMs: number;
@@ -82,6 +82,14 @@ export function analyzeTemporalEvidence(frames: ScoredFrame[], durationMs: numbe
       residualSum += Math.abs((b[p]! - a[p]!) - (a[p]! - previous[p]!) * ratio) / (1 + ratio) / b.length;
     }
   }
+  // Store only a summary; frame scores never leave the local inference engine.
+  const thirds = Array.from({ length: 3 }, () => ({ total: 0, positive: 0 }));
+  for (const frame of frames) {
+    const third = thirds[Math.min(2, Math.floor(3 * frame.timestampMs / durationMs))]!;
+    third.total++;
+    if (sigmoid(frame.logit) >= 0.10) third.positive++;
+  }
+  const sustainedFrameEvidence = thirds.every(({ positive, total }) => positive >= 2 && positive * 2 > total);
   const logits = frames.map(frame => frame.logit);
   const meanLogit = logits.reduce((sum, value) => sum + value, 0) / logits.length;
   const lowerQuartileLogit = quantile25(logits);
@@ -93,7 +101,7 @@ export function analyzeTemporalEvidence(frames: ScoredFrame[], durationMs: numbe
   if (Math.min(...logits) < 0 && Math.max(...logits) > 0) reasonCodes.push('MIXED_FRAME_EVIDENCE');
   if (sceneCuts > Math.max(1, Math.floor(densePairs / 4))) reasonCodes.push('EXCESSIVE_SCENE_DISCONTINUITY');
   return {
-    coverage, denseTriplets, sceneCuts, motionEnergy,
+    sustainedFrameEvidence, coverage, denseTriplets, sceneCuts, motionEnergy,
     secondOrderResidual: denseTriplets ? residualSum / denseTriplets : 0,
     scoreQuantile25: sigmoid(lowerQuartileLogit),
     eligible: reasonCodes.length === 0, reasonCodes,

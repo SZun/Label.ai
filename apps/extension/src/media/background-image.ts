@@ -1,5 +1,5 @@
 import { hasImageBadgeSpace } from '../core/label-bounds';
-import { eligiblePublicImageUrl } from './cors-image';
+import { eligiblePublicMediaUrl } from './public-media';
 
 function alignment(position: string) {
   const keywords: Record<string, number> = { left: 0, top: 0, center: 0.5, right: 1, bottom: 1 };
@@ -27,7 +27,7 @@ export function backgroundImageSource(element: Element): string {
   if (
     element === document.documentElement ||
     element === document.body ||
-    !eligiblePublicImageUrl(url) ||
+    !eligiblePublicMediaUrl(url) ||
     !['', 'auto', 'auto auto', 'cover', 'contain', '100% 100%'].includes(style.backgroundSize) ||
     !['', 'border-box', 'padding-box'].includes(style.backgroundClip) ||
     /round|space/.test(style.backgroundRepeat) ||

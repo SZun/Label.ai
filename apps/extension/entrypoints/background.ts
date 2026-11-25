@@ -1,3 +1,4 @@
+import { partitionVideoFrames, videoSamplePlan } from '../src/media/video-sampling';
 import { browser } from 'wxt/browser';
 import { createLocalDetector } from '@label-ai/detector';
 import { PROVENANCE_TRUST_EXPIRES_AT } from '@label-ai/provenance';
@@ -198,10 +199,12 @@ export default defineBackground(() => {
         pending.delete(key);
         resolve(result);
       };
+      const segmentCount =
+        input.kind === 'video' ? (videoSamplePlan(input.durationMs!)?.segments ?? 1) : 1;
       const timeout = setTimeout(() => {
         abort.abort();
         finish(noLabel(input, 'CANCELED'));
-      }, 45_000);
+      }, 45_000 * segmentCount);
       pending.set(key, { tabId, windowId: sender.tab!.windowId, documentId, abort, finish, input });
       const accepted = queue.enqueue(key, async () => {
         try {
@@ -245,31 +248,44 @@ export default defineBackground(() => {
               throw new Error('Invalid pixel buffer');
             return { ...frame, rgba };
           };
-          const result =
-            input.kind === 'image'
-              ? await engine.analyzeRgba({ ...decode(input.frame!), signal: abort.signal })
-              : await engine.analyzeVideoFrames({
-                  frames: input.frames!.map(decode),
-                  durationMs: input.durationMs!,
-                  coverage: input.coverage,
+          const parts =
+            input.kind === 'video'
+              ? partitionVideoFrames(input.frames!, input.durationMs!)
+              : undefined;
+          if (input.kind === 'video' && !parts) {
+            finish(noLabel(input, 'UNSUPPORTED'));
+            return;
+          }
+          let decision = noLabel(input);
+          for (let index = 0; index < segmentCount; index++) {
+            if (abort.signal.aborted) return finish(noLabel(input, 'CANCELED'));
+            const result = parts
+              ? await engine.analyzeVideoFrames({
+                  frames: parts[index]!.map(decode),
+                  durationMs: input.durationMs! / segmentCount,
                   signal: abort.signal,
-                });
-          const allowed =
-            !abort.signal.aborted && (await validSender(sender, await readSettings()));
-          const estimated = LOCAL_TEST_BUILD
-            ? localTestDecision(true, sender.url, input.kind, result)
-            : browsingModelLabel(input.kind, result);
-          const estimateVersion = LOCAL_TEST_BUILD
-            ? LOCAL_TEST_POLICY_VERSION
-            : BROWSING_MODEL_POLICY_VERSION;
-          finish({
-            ...noLabel(input, result.status),
-            shouldLabel:
-              allowed && result.status === 'COMPLETED' && (result.shouldLabel || estimated),
-            policyVersion:
-              result.shouldLabel || !estimated ? result.policyVersion : estimateVersion,
-            expiresAt: Date.now() + 60_000,
-          });
+                })
+              : await engine.analyzeRgba({ ...decode(input.frame!), signal: abort.signal });
+            const estimated = LOCAL_TEST_BUILD
+              ? localTestDecision(true, sender.url, input.kind, result)
+              : browsingModelLabel(input.kind, result);
+            const estimateVersion = LOCAL_TEST_BUILD
+              ? LOCAL_TEST_POLICY_VERSION
+              : BROWSING_MODEL_POLICY_VERSION;
+            // Existing calibrated policies apply to a single input. The long-clip
+            // preview requires an eligible, independently positive result in every window.
+            const approved = segmentCount === 1 && result.shouldLabel;
+            decision = {
+              ...noLabel(input, result.status),
+              shouldLabel: result.status === 'COMPLETED' && (approved || estimated),
+              policyVersion: approved || !estimated ? result.policyVersion : estimateVersion,
+              expiresAt: Date.now() + 60_000,
+            };
+            if (!decision.shouldLabel) break;
+          }
+          if (abort.signal.aborted || !(await validSender(sender, await readSettings())))
+            return finish(noLabel(input, 'CANCELED'));
+          finish(decision);
         } catch {
           detector = undefined;
           finish(noLabel(input));

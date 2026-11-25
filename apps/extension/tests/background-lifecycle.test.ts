@@ -155,7 +155,7 @@ it('keeps local-test decisions confined to the separate loopback build', async (
     policyVersion: 'local-v1-unvalidated',
     rawScore: 0.25,
   });
-  expect((await sendImage(loopback)).policyVersion).toBe('browsing-model-estimate-v2');
+  expect((await sendImage(loopback)).policyVersion).toBe('browsing-model-estimate-v3');
   vi.stubGlobal('__LABEL_AI_LOCAL_TEST__', true);
   await startWorker();
   const positive = await sendImage(loopback);
@@ -177,7 +177,7 @@ it('labels unsigned media on an ordinary website using the regular browsing poli
   });
   const result = await sendImage(url);
   expect(result.shouldLabel).toBe(true);
-  expect(result.policyVersion).toBe('browsing-model-estimate-v2');
+  expect(result.policyVersion).toBe('browsing-model-estimate-v3');
   state.hostAllowed = false;
   expect((await sendImage(url)).shouldLabel).toBe(false);
   expect(state.inference).toHaveBeenCalledTimes(1);
@@ -231,7 +231,7 @@ it('uses multiple eligible video frames in the regular browsing policy', async (
     },
   );
   expect(response.shouldLabel).toBe(true);
-  expect(response.policyVersion).toBe('browsing-model-estimate-v2');
+  expect(response.policyVersion).toBe('browsing-model-estimate-v3');
   expect(state.videoInference.mock.calls[0][0].frames).toHaveLength(8);
 });
 afterEach(() => {
@@ -481,3 +481,48 @@ it('restores a missing scanner when an already-open browser window gains focus',
   await flush();
   expect(state.inject).toHaveBeenCalledOnce();
 });
+
+it.each([true, false])(
+  'requires every portion of a 32s clip to be eligible and positive (second=%s)',
+  async (secondEligible) => {
+    const frames = Array.from({ length: 24 }, (_, i) => ({
+      width: 1,
+      height: 1,
+      rgba: 'AAAA/w==',
+      timestampMs: ((i + 0.5) * 32000) / 24,
+    }));
+    const positive = {
+      status: 'COMPLETED',
+      rawScore: 0.99,
+      shouldLabel: false,
+      temporal: { eligible: true },
+    };
+    state.videoInference
+      .mockResolvedValueOnce(positive)
+      .mockResolvedValueOnce({ ...positive, temporal: { eligible: secondEligible } });
+    const response = await state.hooks.message[0](
+      {
+        type: 'label-ai:analyze',
+        kind: 'video',
+        instanceId: 'long',
+        generation: 0,
+        requestId: 'long',
+        frames,
+        durationMs: 32000,
+        coverage: 1,
+      },
+      {
+        id: 'test',
+        url: 'https://film.example/long',
+        tab: { id: 1, windowId: 7, incognito: false },
+      },
+    );
+    expect(response?.shouldLabel).toBe(secondEligible);
+    expect(state.videoInference.mock.calls).toHaveLength(2);
+    for (const [part] of state.videoInference.mock.calls) {
+      expect(part.durationMs).toBe(16000);
+      expect(part.frames.length).toBe(12);
+      expect(part.frames[0].timestampMs).toBeCloseTo(32000 / 48);
+    }
+  },
+);

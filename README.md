@@ -2,7 +2,7 @@
 
 Label.ai is a WXT browser extension that automatically scans visible images and playing videos on eligible HTTP and HTTPS pages in the active tab. The regular **Label.ai** build displays **AI Slop Detected 🤮** when it verifies a signed generation credential or its on-device model flags the media. The badge animates once and honors reduced motion. It has no tooltip, score or click action.
 
-The 0.1.5 image policy caught 31 of 57 generated originals in a fresh comparison across 19 generators. Version 0.1.3 caught 15 of the same 57. The updated model cutoff also flagged one of 57 genuine photos, compared with zero previously. These counts measure image detection on this sample. Normal browsing also depends on whether the scanner can access the media. [Comparison and per-image results](ml/reports/frontier-browsing-sensitivity.json)
+The 0.1.6 image policy caught 31 of 57 generated originals in a fresh comparison across 19 generators. Version 0.1.3 caught 15 of the same 57. The updated model cutoff also flagged one of 57 genuine photos, compared with zero previously. These counts measure image detection on this sample. Normal browsing also depends on whether the scanner can access the media. [Comparison and per-image results](ml/reports/frontier-browsing-sensitivity.json)
 
 ## Use the extension on the web
 
@@ -14,12 +14,16 @@ npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:chrome
 ```
 
 1. In a desktop Chromium browser, open the extensions manager. In Chrome this is `chrome://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select `apps/extension/.output/chrome-mv3`. If you already loaded that directory, click **Reload** on its extension card. Disable **Label.ai (Local Test)** if installed.
-2. Check that the card says **Label.ai** version **0.1.5** or later, website access is **On all sites**, and scanning is active. Open or refresh a public webpage. The extension scans as you scroll or play a short clip. There is no site list, server to start, or file to upload. The toolbar opens global pause, resume and data controls.
+2. Check that the card says **Label.ai** version **0.1.6** or later, website access is **On all sites**, and scanning is active. Open or refresh a public webpage. The extension scans as you scroll or play a short clip. There is no site list, server to start, or file to upload. The toolbar opens global pause, resume and data controls.
 3. The badge appears over eligible positive media. The model needs readable pixels, enough visible space for the badge, and sufficient consistent playback for video. Browser-internal pages, private contexts, DRM and cross-origin media whose pixels the browser protects are outside coverage. An unlabeled item has no authenticity verdict.
 
 For Safari, run `npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:safari`. On macOS select the unpacked `apps/extension/.output/safari-mv3` in **Add Temporary Extension…** in Safari’s developer settings where available. For an Apple containing app use `make safari-xcode` on a Mac with Xcode. Enable the extension and grant **All Websites** access in Safari. See [Safari acceptance](docs/SAFARI_ACCEPTANCE.md) for the verification status.
 
-### Try a public example
+### Try a public video
+
+Open the [VideoCrafter2 project page](https://ailab-cvc.github.io/videocrafter2/#results-carousel) in a regular Chrome tab. Scroll to the sample videos and keep the looping little-boy clip in view. Press play if your browser paused it. The extension analyzes moving frames locally. A poster on a paused player provides no video verdict.
+
+### Try a public image
 
 With the regular extension active, open the public [Keras textual inversion tutorial](https://keras.io/examples/generative/fine_tune_via_textual_inversion/#taking-the-fine-tuned-model-for-a-spin). Scroll to the first row of generated samples in **Taking the Fine Tuned Model for a Spin**. Keep that row in view while the model runs. Each row of three pictures in this tutorial is a single PNG and receives one badge for that whole image.
 
@@ -42,7 +46,7 @@ Developers who want to test loopback-only operation with an exploratory video th
 | `packages/detector`, `ml` | Local ONNX Runtime Web image inference, temporal video features, checksummed model provisioning, policy gates and developer measurements. |
 | `tools`, `tests` | Evaluation, package auditing, reproducible ZIPs, browser acceptance tests, Apple packaging and generated test fixtures. |
 
-No account or backend is required. Media, frames, addresses, hashes and model outputs are never sent to an analysis service. A qualifying content-addressed image can be read from the publisher using a credential-free GET. The scanner can make an anonymous CORS GET for a visible public CDN image when the browser blocks its original pixels but the image server allows access. Visible photo cards that use a single supported CSS background can also be scanned using an anonymous read of the publisher’s image. These reads supply model estimates. An eligible same-origin JPEG or static PNG can be read from the browser cache after matching displayed pixels. Supported immutable same-origin Blob objects are read locally, including complete MP4 originals. The extension ignores remote credential references. See the [privacy description](docs/PRIVACY.md).
+No account or backend is required. Media, frames, addresses, hashes and model outputs are never sent to an analysis service. A qualifying content-addressed image can be read from the publisher using a credential-free GET. When a browser blocks direct pixel access, the scanner can read a public CDN image or a complete MP4/WebM using an anonymous GET if the publisher permits CORS. It analyzes only video times observed during visible playback. Visible photo cards that use a single supported CSS background can also be scanned using an anonymous read of the publisher’s image. These reads supply model estimates. An eligible same-origin JPEG or static PNG can be read from the browser cache after matching displayed pixels. Supported immutable same-origin Blob objects are read locally, including complete MP4 originals. The extension ignores remote credential references. See the [privacy description](docs/PRIVACY.md).
 
 ## Verify a build
 

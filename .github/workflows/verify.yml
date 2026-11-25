@@ -120,6 +120,36 @@ jobs:
         run: |
           command -v ffmpeg || sudo apt-get install -y ffmpeg
           timeout --signal=TERM --kill-after=5s 300s python -u tests/e2e/ordinary_pages.py --build artifacts/local-test/production
+  chrome-video:
+    needs: extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - name: Install Chrome for Testing and the regular build
+        run: |
+          unzip -q artifacts/packages/label-ai-chromium.zip -d artifacts/chromium
+          python -m pip install -r tests/e2e/requirements.txt
+          python -m playwright install-deps chromium
+          python tests/e2e/prepare_browser.py chrome-for-testing "$RUNNER_TEMP/video-chrome" > "$RUNNER_TEMP/video-browser-path"
+      - name: Detect a real generated video on the live VideoCrafter2 project page
+        run: python -u tests/e2e/generated_video.py --live --browser "$(cat "$RUNNER_TEMP/video-browser-path")" --build artifacts/chromium
+      - name: Compare generated, camera and CORS-protected videos on an HTTPS feed
+        if: "!cancelled()"
+        run: python -u tests/e2e/generated_video.py --browser "$(cat "$RUNNER_TEMP/video-browser-path")" --build artifacts/chromium
+      - name: Verify both windows of an uninterrupted 32-second video
+        if: "!cancelled()"
+        run: |
+          command -v ffmpeg || sudo apt-get install -y ffmpeg
+          python tools/prepare_smoke_media.py
+          python -u tests/e2e/long_video.py --build artifacts/chromium --browser "$(cat "$RUNNER_TEMP/video-browser-path")"
   mac-chrome-columns:
     needs: extension
     runs-on: macos-15

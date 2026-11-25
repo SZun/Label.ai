@@ -1,31 +1,7 @@
-import { eligiblePng, jpegDimensions, MAX_COMPARE_PIXELS, readBounded } from '../cached-original';
+import { eligiblePng, jpegDimensions, MAX_COMPARE_PIXELS } from '../cached-original';
 import { staticWebpDimensions } from './webp';
-import { DEFAULT_SETTINGS, isEligiblePage } from '../core/policy';
+import { eligiblePublicMediaUrl, readPublicMedia } from './public-media';
 import { MAX_ORIGINAL_BYTES } from '../core/protocol';
-
-export function eligiblePublicImageUrl(source: string): boolean {
-  try {
-    const url = new URL(source);
-    const host = url.hostname.replace(/\.$/, '');
-    return (
-      url.protocol === 'https:' &&
-      !url.hash &&
-      host.includes('.') &&
-      !/^\d+(?:\.\d+){3}$/.test(host) &&
-      !host.startsWith('[') &&
-      !host.endsWith('.localhost') &&
-      !host.endsWith('.local') &&
-      !Array.from(url.searchParams.keys()).some((key) =>
-        /token|^(?:x-amz-|x-goog-|signature$|sig$|auth(?:orization)?$|password$|api[_-]?key$|client[_-]?secret$|jwt$)/i.test(
-          key,
-        ),
-      ) &&
-      isEligiblePage(source, DEFAULT_SETTINGS)
-    );
-  } catch {
-    return false;
-  }
-}
 
 function encodedDimensions(bytes: Uint8Array, mime: string) {
   if (mime === 'image/jpeg') return jpegDimensions(bytes);
@@ -89,7 +65,7 @@ export async function readCorsBitmap(
     height < 1 ||
     width * height > MAX_COMPARE_PIXELS ||
     image.crossOrigin === 'use-credentials' ||
-    !eligiblePublicImageUrl(source) ||
+    !eligiblePublicMediaUrl(source) ||
     new URL(source).origin === location.origin
   )
     return;
@@ -107,38 +83,21 @@ export async function readPublicBitmap(
   current: () => boolean,
   matchesSize?: (width: number, height: number) => boolean,
 ): Promise<ImageBitmap | undefined> {
-  if (signal.aborted || !current() || !eligiblePublicImageUrl(source)) return;
-  const responseType = new URL(source).origin === location.origin ? 'basic' : 'cors';
+  if (signal.aborted || !current() || !eligiblePublicMediaUrl(source)) return;
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal.addEventListener('abort', abort, { once: true });
   const timeout = setTimeout(abort, 5000);
   try {
-    const response = await fetch(source, {
-      method: 'GET',
-      mode: 'cors',
-      credentials: 'omit',
-      redirect: 'error',
-      referrerPolicy: 'no-referrer',
-      cache: 'force-cache',
-      signal: controller.signal,
-    });
-    const mime = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-    const length = response.headers.get('content-length');
-    if (
-      controller.signal.aborted ||
-      !current() ||
-      !response.ok ||
-      response.type !== responseType ||
-      response.redirected ||
-      response.url !== source ||
-      (mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'image/webp') ||
-      /(?:^|,)\s*(?:private|no-store)\b/i.test(response.headers.get('cache-control') ?? '') ||
-      (length !== null && (!/^\d+$/.test(length) || Number(length) > MAX_ORIGINAL_BYTES))
-    )
-      return;
-    const bytes = await readBounded(response, controller.signal);
-    if (!bytes || !current()) return;
+    const file = await readPublicMedia(
+      source,
+      controller.signal,
+      current,
+      ['image/jpeg', 'image/png', 'image/webp'],
+      MAX_ORIGINAL_BYTES,
+    );
+    if (!file) return;
+    const { bytes, mime } = file;
     const size = encodedDimensions(bytes, mime);
     if (
       !size ||

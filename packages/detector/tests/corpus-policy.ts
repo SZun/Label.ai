@@ -33,7 +33,7 @@ export function candidatePolicy(artifact: unknown, manifestSha: string, artifact
   } else {
     const calibration = value.calibration as NonNullable<LocalPolicy['video']['calibration']>;
     scoreVideo({ meanLogit: 0, lowerQuartileLogit: 0, logitStd: 0, logitTemporalDelta: 0,
-      motionEnergy: 0, secondOrderResidual: 0, sceneCuts: 0, coverage: 1, eligible: true,
+      motionEnergy: 0, secondOrderResidual: 0, sceneCuts: 0, coverage: 1, eligible: true, sustainedFrameEvidence: false,
       denseTriplets: 10, scoreQuantile25: .5, reasonCodes: [], frameCount: 12, sampleSpanMs: 5000 }, calibration);
     if (calibration.featureVersion !== TEMPORAL_FEATURE_VERSION) throw new Error('Mismatched temporal feature version');
     policy.video = { enabled: false, threshold: value.threshold, calibration };

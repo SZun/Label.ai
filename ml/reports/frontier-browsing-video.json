@@ -1,0 +1,2460 @@
+{
+  "datasetRevision": "e6a8b83d15fab1da958848368fcd07e943afafd0",
+  "selectionSha256": "19a2e507823bd22eded8da781ec0b91ca691f345ce969ee91467f05f702a16de",
+  "seed": "label-ai-video-browsing-v1",
+  "modelSha256": "1414b9aafaa01a644ed706224973f09b53a1388282104409862df9893b1b962b",
+  "wasmSha256": "4b884c203b0fa48d057be3332c65513ff85aa3c5bddd6946acc0fab7ecda001d",
+  "reproduce": "python -m tools.evaluate_browsing_video",
+  "sampling": "12 ideal playback targets, four per timeline third, longest side at most 480. FFmpeg fixture decode, packaged WASM model and production temporal feature extraction.",
+  "policy": "Baseline: original eligibility and lower-quartile score >= 0.65. Candidate retains the baseline and adds a sustained-evidence route. Only the mixed-frame reason may be present, motion energy >= 0.01, lower-quartile score >= 0.10, and at least two passing frames and a strict majority scoring >= 0.10 in every timeline third.",
+  "scope": "Fresh evaluation uses one source per generator and unique genuine authors and URLs, disjoint from the development videos. These short, public clips do not validate long videos, live streams or deployed false-positive rates. Wilson 95% intervals are approximate. Both MDN encodings count as one genuine source.",
+  "metrics": {
+    "dev": {
+      "recall": {
+        "baseline": {
+          "hits": 0,
+          "n": 4,
+          "rate": 0.0,
+          "wilson95": [
+            0,
+            0.4899
+          ]
+        },
+        "candidate": {
+          "hits": 3,
+          "n": 4,
+          "rate": 0.75,
+          "wilson95": [
+            0.3006,
+            0.9544
+          ]
+        }
+      },
+      "false_positive_rate": {
+        "baseline": {
+          "hits": 0,
+          "n": 4,
+          "rate": 0.0,
+          "wilson95": [
+            0,
+            0.4899
+          ]
+        },
+        "candidate": {
+          "hits": 0,
+          "n": 4,
+          "rate": 0.0,
+          "wilson95": [
+            0,
+            0.4899
+          ]
+        }
+      }
+    },
+    "evaluation": {
+      "recall": {
+        "baseline": {
+          "hits": 1,
+          "n": 12,
+          "rate": 0.0833,
+          "wilson95": [
+            0.0149,
+            0.3539
+          ]
+        },
+        "candidate": {
+          "hits": 2,
+          "n": 12,
+          "rate": 0.1667,
+          "wilson95": [
+            0.047,
+            0.448
+          ]
+        }
+      },
+      "false_positive_rate": {
+        "baseline": {
+          "hits": 0,
+          "n": 12,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.2425
+          ]
+        },
+        "candidate": {
+          "hits": 0,
+          "n": 12,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.2425
+          ]
+        }
+      }
+    }
+  },
+  "rows": [
+    {
+      "file": "videos/vb1492ceb58c0.mp4",
+      "sha256": "b1492ceb58c09c0c37e003f36b74bb3234a420823000cfef950910e6689b43c4",
+      "group": "vb1492ceb58c0",
+      "origin": "generated",
+      "generator": "veo3-fast",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/vb1492ceb58c0.mp4",
+      "cohort": "dev",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 8000,
+      "timestampsMs": [
+        333.33333333333326,
+        999.9999999999999,
+        1666.6666666666665,
+        2333.333333333333,
+        3000,
+        3666.6666666666665,
+        4333.333333333333,
+        5000,
+        5666.666666666666,
+        6333.333333333333,
+        6999.999999999999,
+        7666.666666666666
+      ],
+      "logits": [
+        -5.425260543823242,
+        -5.5167999267578125,
+        -4.949176788330078,
+        -5.454901218414307,
+        -7.185805320739746,
+        -7.897539138793945,
+        -5.907843589782715,
+        -6.943582057952881,
+        -7.09121561050415,
+        -7.122899532318115,
+        -6.288848876953125,
+        -5.175796031951904
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.06160511650928542,
+        "secondOrderResidual": 0.05295095970272996,
+        "scoreQuantile25": 0.0008251362219112287,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -6.246639053026835,
+        "lowerQuartileLogit": -7.099136590957642,
+        "logitStd": 0.9289433807799323,
+        "logitTemporalDelta": 1.1944608905098657,
+        "frameCount": 12,
+        "sampleSpanMs": 7333.333333333333
+      }
+    },
+    {
+      "file": "videos/v3fae73976c72.mp4",
+      "sha256": "3fae73976c724425caa902f85d5e77e62c6e57883f5068cb8f77a8fd2e91d4f3",
+      "group": "v3fae73976c72",
+      "origin": "generated",
+      "generator": "luma-ray-3.2",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/v3fae73976c72.mp4",
+      "cohort": "dev",
+      "baseline": false,
+      "candidate": true,
+      "passingAndTotalByThird": [
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "durationMs": 5041.667,
+      "timestampsMs": [
+        210.06945833333336,
+        630.208375,
+        1050.3472916666667,
+        1470.4862083333335,
+        1890.625125,
+        2310.764041666667,
+        2730.9029583333336,
+        3151.0418750000003,
+        3571.180791666667,
+        3991.3197083333334,
+        4411.458625,
+        4831.597541666668
+      ],
+      "logits": [
+        -0.6175698637962341,
+        0.8511271476745605,
+        -0.5778236389160156,
+        1.4349322319030762,
+        1.116898775100708,
+        0.7404974699020386,
+        -1.2563772201538086,
+        0.7020946741104126,
+        3.3611419200897217,
+        2.93951416015625,
+        4.805521488189697,
+        8.524408340454102
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.041526015165965706,
+        "secondOrderResidual": 0.03670420230737363,
+        "scoreQuantile25": 0.5943831368779758,
+        "eligible": false,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ],
+        "meanLogit": 1.8353637903928757,
+        "lowerQuartileLogit": 0.38211509585380554,
+        "logitStd": 2.6242429157360014,
+        "logitTemporalDelta": 3.9436640593270273,
+        "frameCount": 12,
+        "sampleSpanMs": 4621.5280833333345
+      }
+    },
+    {
+      "file": "videos/v7b02eeabd651.mp4",
+      "sha256": "7b02eeabd651b7f868f41dbd009167a569cb5ca9286ca07ea3fe990901b0fb44",
+      "group": "v7b02eeabd651",
+      "origin": "generated",
+      "generator": "hunyuan-1.5",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/v7b02eeabd651.mp4",
+      "cohort": "dev",
+      "baseline": false,
+      "candidate": true,
+      "passingAndTotalByThird": [
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "durationMs": 5041.667,
+      "timestampsMs": [
+        210.06945833333336,
+        630.208375,
+        1050.3472916666667,
+        1470.4862083333335,
+        1890.625125,
+        2310.764041666667,
+        2730.9029583333336,
+        3151.0418750000003,
+        3571.180791666667,
+        3991.3197083333334,
+        4411.458625,
+        4831.597541666668
+      ],
+      "logits": [
+        1.1591466665267944,
+        -2.219721794128418,
+        1.6317838430404663,
+        -0.8950966596603394,
+        -0.03676795959472656,
+        -0.16936230659484863,
+        -1.5366268157958984,
+        -0.35590505599975586,
+        -0.4828588366508484,
+        -0.8623762130737305,
+        0.9377099871635437,
+        -0.48673415184020996
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.1105543824573529,
+        "secondOrderResidual": 0.09132098273275915,
+        "scoreQuantile25": 0.29513855558671515,
+        "eligible": false,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ],
+        "meanLogit": -0.27640077471733093,
+        "lowerQuartileLogit": -0.8705563247203827,
+        "logitStd": 1.0578640081345505,
+        "logitTemporalDelta": 3.684315037337558,
+        "frameCount": 12,
+        "sampleSpanMs": 4621.5280833333345
+      }
+    },
+    {
+      "file": "videos/v1211ff4c8481.mp4",
+      "sha256": "1211ff4c8481e14eff080eab31b36c73de79cd1c5d28f712268470feb05b17d0",
+      "group": "v1211ff4c8481",
+      "origin": "genuine",
+      "generator": "",
+      "license": "CC BY-SA 4.0",
+      "source": "https://commons.wikimedia.org/wiki/File:2022-09-06_Video_Vogelschwarm_Stromleitungen_in_Tauberbischofsheim_(Tauberbischofsheim).webm",
+      "cohort": "dev",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10006.671,
+      "timestampsMs": [
+        416.944625,
+        1250.833875,
+        2084.723125,
+        2918.612375,
+        3752.501625,
+        4586.390875,
+        5420.280124999999,
+        6254.169375,
+        7088.058625000001,
+        7921.947875000001,
+        8755.837125000002,
+        9589.726375000002
+      ],
+      "logits": [
+        -8.617036819458008,
+        -9.343362808227539,
+        -9.353017807006836,
+        -8.675122261047363,
+        -8.68445110321045,
+        -7.969941139221191,
+        -9.534616470336914,
+        -8.090170860290527,
+        -7.859879970550537,
+        -7.811913967132568,
+        -7.338221073150635,
+        -8.119403839111328
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.027729187807298415,
+        "secondOrderResidual": 0.023516128846131322,
+        "scoreQuantile25": 0.0001434789076383686,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -8.449761509895325,
+        "lowerQuartileLogit": -8.849179029464722,
+        "logitStd": 0.6698354450433199,
+        "logitTemporalDelta": 0.7282380651783565,
+        "frameCount": 12,
+        "sampleSpanMs": 9172.781750000002
+      }
+    },
+    {
+      "file": "videos/v6baca0df85f1.mp4",
+      "sha256": "6baca0df85f108e7ed9689504fbb1a223d7a83558f3b2799e6b6f68aad4d603c",
+      "group": "v6baca0df85f1",
+      "origin": "genuine",
+      "generator": "",
+      "license": "CC0",
+      "source": "https://commons.wikimedia.org/wiki/File:Flughafen_BER_20260623_Pushback_Airbus_A320-200_Austrian_Airlines_02.webm",
+      "cohort": "dev",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        -2.3800129890441895,
+        -5.186275005340576,
+        -4.191570281982422,
+        -4.641142845153809,
+        -6.017525672912598,
+        -2.8658506870269775,
+        -5.551300525665283,
+        -6.591685771942139,
+        -3.9921464920043945,
+        -6.490686893463135,
+        -6.401211738586426,
+        -3.8851678371429443
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.03162844436883461,
+        "secondOrderResidual": 0.027561536533539766,
+        "scoreQuantile25": 0.0022080231770158173,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -4.849548061688741,
+        "lowerQuartileLogit": -6.113447189331055,
+        "logitStd": 1.3626336876237983,
+        "logitTemporalDelta": 2.2045124660838735,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "videos/vfe2c2bc901c6.mp4",
+      "sha256": "fe2c2bc901c6959fb1a3029496a8c0085ba83d95548726c8ef4b918d777c8381",
+      "group": "vfe2c2bc901c6",
+      "origin": "genuine",
+      "generator": "",
+      "license": "Public domain",
+      "source": "https://commons.wikimedia.org/wiki/File:Deimos_transit_-_Perseverance_Sol_1037_-_realtime_(53481468181).webm",
+      "cohort": "dev",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        0.5478163957595825,
+        -0.0693865418434143,
+        -0.23239213228225708,
+        0.927434504032135,
+        0.5230131149291992,
+        0.9108588099479675,
+        1.3943862915039062,
+        1.7826378345489502,
+        1.6721410751342773,
+        0.8310918807983398,
+        -0.029068171977996826,
+        0.0815054178237915
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.0013896336784414002,
+        "secondOrderResidual": 0.0006332539390285774,
+        "scoreQuantile25": 0.5134622506200809,
+        "eligible": false,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ],
+        "meanLogit": 0.6950032065312067,
+        "lowerQuartileLogit": 0.05386202037334442,
+        "logitStd": 0.6546169059959289,
+        "logitTemporalDelta": 0.6028757312081077,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "kling.mp4",
+      "sha256": "14446dda8bbcfb8458337a7391c34237d4724482e43df3b82df0be4174fb0011",
+      "group": "kling-001",
+      "origin": "generated",
+      "generator": "Kling",
+      "license": "CC0-1.0 dataset declaration",
+      "source": "https://huggingface.co/datasets/nyuuzyou/klingai/resolve/4ae5e439e4e40b6f70c13bcd2f749d78f8416abe/resource_aa.zip",
+      "cohort": "dev",
+      "baseline": false,
+      "candidate": true,
+      "passingAndTotalByThird": [
+        [
+          4,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "durationMs": 5100,
+      "timestampsMs": [
+        212.50000000000003,
+        637.5,
+        1062.5,
+        1487.4999999999998,
+        1912.5,
+        2337.5,
+        2762.5,
+        3187.5,
+        3612.5,
+        4037.4999999999995,
+        4462.499999999999,
+        4887.499999999999
+      ],
+      "logits": [
+        0.5465486645698547,
+        -0.11166250705718994,
+        4.965533256530762,
+        1.3100659847259521,
+        -0.4709618091583252,
+        -2.4072704315185547,
+        2.7249016761779785,
+        2.5785648822784424,
+        2.790666341781616,
+        2.9308881759643555,
+        3.2942306995391846,
+        2.5875749588012695
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.09190400356631946,
+        "secondOrderResidual": 0.07493683894389278,
+        "scoreQuantile25": 0.5943543925770165,
+        "eligible": false,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ],
+        "meanLogit": 1.7282566577196121,
+        "lowerQuartileLogit": 0.38199587166309357,
+        "logitStd": 1.9334293931232884,
+        "logitTemporalDelta": 4.237228039114234,
+        "frameCount": 12,
+        "sampleSpanMs": 4674.999999999999
+      }
+    },
+    {
+      "file": "flower.webm",
+      "sha256": "c6f8a348953395598a9a73b9bab1676436410797bce9f398f4be1531d6e76dda",
+      "group": "mdn-flower",
+      "origin": "genuine",
+      "generator": "",
+      "license": "MDN public example, local evaluation only",
+      "source": "https://raw.githubusercontent.com/mdn/shared-assets/f160bcf2db52b60820a7728aa9b3fa88568cfc38/videos/flower.webm",
+      "cohort": "dev",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 5059,
+      "timestampsMs": [
+        210.7916666666667,
+        632.3750000000001,
+        1053.9583333333335,
+        1475.5416666666667,
+        1897.1250000000002,
+        2318.7083333333335,
+        2740.291666666667,
+        3161.875,
+        3583.4583333333335,
+        4005.041666666667,
+        4426.625000000001,
+        4848.208333333334
+      ],
+      "logits": [
+        -4.615998268127441,
+        -6.514525413513184,
+        -5.447198390960693,
+        -5.320235252380371,
+        -5.0567779541015625,
+        -5.572274208068848,
+        -5.8974409103393555,
+        -5.716060638427734,
+        -5.267719268798828,
+        -6.196857452392578,
+        -6.276738166809082,
+        -6.738759994506836
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.02073280410431008,
+        "secondOrderResidual": 0.012755393612542321,
+        "scoreQuantile25": 0.001991591505522559,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -5.718382159868876,
+        "lowerQuartileLogit": -6.216827630996704,
+        "logitStd": 0.6025818760865759,
+        "logitTemporalDelta": 1.3580189965570681,
+        "frameCount": 12,
+        "sampleSpanMs": 4637.416666666667
+      }
+    },
+    {
+      "file": "flower.mp4",
+      "sha256": "0cd83d944a6ca7822b4a8306cecc60a36e859b041f6702c6a1ad9ead78924451",
+      "group": "mdn-flower",
+      "origin": "genuine",
+      "generator": "",
+      "license": "MDN public example, local evaluation only",
+      "source": "https://raw.githubusercontent.com/mdn/shared-assets/f160bcf2db52b60820a7728aa9b3fa88568cfc38/videos/flower.mp4",
+      "cohort": "dev",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 5005,
+      "timestampsMs": [
+        208.54166666666663,
+        625.6249999999999,
+        1042.708333333333,
+        1459.7916666666665,
+        1876.8749999999998,
+        2293.9583333333335,
+        2711.0416666666665,
+        3128.125,
+        3545.208333333333,
+        3962.2916666666665,
+        4379.375,
+        4796.458333333333
+      ],
+      "logits": [
+        -4.64973258972168,
+        -5.202680587768555,
+        -5.040855407714844,
+        -5.2406535148620605,
+        -4.820858001708984,
+        -4.509757995605469,
+        -5.192359924316406,
+        -5.883090972900391,
+        -4.941254615783691,
+        -5.413787364959717,
+        -6.810338973999023,
+        -6.516816139221191
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.020473304255285093,
+        "secondOrderResidual": 0.012613280357504664,
+        "scoreQuantile25": 0.003945944182157277,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -5.351848840713501,
+        "lowerQuartileLogit": -5.531113266944885,
+        "logitStd": 0.6818962022217572,
+        "logitTemporalDelta": 1.3346457176080313,
+        "frameCount": 12,
+        "sampleSpanMs": 4587.916666666666
+      }
+    },
+    {
+      "file": "videos/v03a52c2b1adb.mp4",
+      "sha256": "03a52c2b1adb6b5c455b93a94e66339b83b1d86fd13a807f1412b074a01c7ac1",
+      "group": "v03a52c2b1adb",
+      "origin": "generated",
+      "generator": "grok-video-1.5",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/v03a52c2b1adb.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          3,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 5041.667,
+      "timestampsMs": [
+        210.06945833333336,
+        630.208375,
+        1050.3472916666667,
+        1470.4862083333335,
+        1890.625125,
+        2310.764041666667,
+        2730.9029583333336,
+        3151.0418750000003,
+        3571.180791666667,
+        3991.3197083333334,
+        4411.458625,
+        4831.597541666668
+      ],
+      "logits": [
+        -2.0252790451049805,
+        -0.9828168153762817,
+        -2.391007900238037,
+        -1.5584261417388916,
+        -5.174392223358154,
+        -2.3504490852355957,
+        -3.771284341812134,
+        -3.4737696647644043,
+        -5.359014511108398,
+        -5.1964640617370605,
+        -3.0625076293945312,
+        -2.842442750930786
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.04556574197198415,
+        "secondOrderResidual": 0.02784466281738105,
+        "scoreQuantile25": 0.015952457604197567,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -3.182321180899938,
+        "lowerQuartileLogit": -4.122061312198639,
+        "logitStd": 1.3981116384315775,
+        "logitTemporalDelta": 3.4281541834860207,
+        "frameCount": 12,
+        "sampleSpanMs": 4621.5280833333345
+      }
+    },
+    {
+      "file": "videos/v486d509f7f5d.mp4",
+      "sha256": "486d509f7f5d55ce5fef804255fcdb5df4f7d184ca979eddd5e4fdc3e64434c3",
+      "group": "v486d509f7f5d",
+      "origin": "generated",
+      "generator": "hailuo-02",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/v486d509f7f5d.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          1,
+          4
+        ]
+      ],
+      "durationMs": 5875,
+      "timestampsMs": [
+        244.79166666666663,
+        734.375,
+        1223.9583333333333,
+        1713.5416666666665,
+        2203.125,
+        2692.7083333333335,
+        3182.2916666666665,
+        3671.875,
+        4161.458333333333,
+        4651.041666666666,
+        5140.625,
+        5630.208333333333
+      ],
+      "logits": [
+        -5.70121955871582,
+        -4.952584743499756,
+        -4.632685661315918,
+        -4.779196739196777,
+        -6.042477607727051,
+        -4.898324966430664,
+        -4.279637336730957,
+        -7.185798168182373,
+        -4.073535919189453,
+        -2.6544408798217773,
+        -1.0241705179214478,
+        -4.02919864654541
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.13045152479047706,
+        "secondOrderResidual": 0.1121354665807928,
+        "scoreQuantile25": 0.005825062548185675,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -4.521105895439784,
+        "lowerQuartileLogit": -5.139743447303772,
+        "logitStd": 1.5118682760718951,
+        "logitTemporalDelta": 3.0292888619221854,
+        "frameCount": 12,
+        "sampleSpanMs": 5385.416666666666
+      }
+    },
+    {
+      "file": "videos/vae92c8e9e3e1.mp4",
+      "sha256": "ae92c8e9e3e10fd34490f7db14946d143878bd5cc4f6a4da0411d1326beab1a9",
+      "group": "vae92c8e9e3e1",
+      "origin": "generated",
+      "generator": "hunyuan-1.5",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/vae92c8e9e3e1.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 5041.667,
+      "timestampsMs": [
+        210.06945833333336,
+        630.208375,
+        1050.3472916666667,
+        1470.4862083333335,
+        1890.625125,
+        2310.764041666667,
+        2730.9029583333336,
+        3151.0418750000003,
+        3571.180791666667,
+        3991.3197083333334,
+        4411.458625,
+        4831.597541666668
+      ],
+      "logits": [
+        -6.179505825042725,
+        -7.3853349685668945,
+        -7.400578498840332,
+        -6.344139099121094,
+        -6.269988059997559,
+        -6.464086532592773,
+        -8.469734191894531,
+        -7.93885612487793,
+        -8.965377807617188,
+        -8.526922225952148,
+        -7.088146209716797,
+        -7.12561559677124
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.0367020295704027,
+        "secondOrderResidual": 0.02976940237222152,
+        "scoreQuantile25": 0.0003121933396489225,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -7.346523761749268,
+        "lowerQuartileLogit": -8.07157564163208,
+        "logitStd": 0.9151869714731999,
+        "logitTemporalDelta": 1.7361162443615383,
+        "frameCount": 12,
+        "sampleSpanMs": 4621.5280833333345
+      }
+    },
+    {
+      "file": "videos/vccaf8d634aa6.mp4",
+      "sha256": "ccaf8d634aa68fa7c171864549fb5f28dd9e22e6427bc3801fc5904ad9b68644",
+      "group": "vccaf8d634aa6",
+      "origin": "generated",
+      "generator": "kling-v3",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/vccaf8d634aa6.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 5041.667,
+      "timestampsMs": [
+        210.06945833333336,
+        630.208375,
+        1050.3472916666667,
+        1470.4862083333335,
+        1890.625125,
+        2310.764041666667,
+        2730.9029583333336,
+        3151.0418750000003,
+        3571.180791666667,
+        3991.3197083333334,
+        4411.458625,
+        4831.597541666668
+      ],
+      "logits": [
+        -6.9905314445495605,
+        -6.460725784301758,
+        -6.5020856857299805,
+        -6.649298667907715,
+        -6.0072784423828125,
+        -5.904780387878418,
+        -6.52905797958374,
+        -6.285828590393066,
+        -6.676814556121826,
+        -5.936073303222656,
+        -5.781335830688477,
+        -5.368809700012207
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.006730870410385912,
+        "secondOrderResidual": 0.006556460604315362,
+        "scoreQuantile25": 0.0014151294282609532,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -6.257718364397685,
+        "lowerQuartileLogit": -6.559118151664734,
+        "logitStd": 0.4424528582734191,
+        "logitTemporalDelta": 0.8718749629908515,
+        "frameCount": 12,
+        "sampleSpanMs": 4621.5280833333345
+      }
+    },
+    {
+      "file": "videos/vba0034338fa7.mp4",
+      "sha256": "ba0034338fa70056e4f5368439177a3cce8b0adc2112d5b4c7dc00ed4851f462",
+      "group": "vba0034338fa7",
+      "origin": "generated",
+      "generator": "ltx-2.3-fast",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/vba0034338fa7.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          1,
+          4
+        ]
+      ],
+      "durationMs": 6120,
+      "timestampsMs": [
+        255,
+        765,
+        1275,
+        1785.0000000000002,
+        2295,
+        2804.9999999999995,
+        3315,
+        3825,
+        4335,
+        4845,
+        5355,
+        5865
+      ],
+      "logits": [
+        -2.3181071281433105,
+        -3.2587289810180664,
+        -4.56696891784668,
+        -2.353017807006836,
+        -4.772096157073975,
+        -2.0923564434051514,
+        -1.5293731689453125,
+        -3.5275707244873047,
+        -3.882601737976074,
+        -3.7417688369750977,
+        -3.168682098388672,
+        -1.8536722660064697
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.1325209555652691,
+        "secondOrderResidual": 0.11171840883289405,
+        "scoreQuantile25": 0.0223794810626273,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -3.088745355606079,
+        "lowerQuartileLogit": -3.776977062225342,
+        "logitStd": 1.0160516220842113,
+        "logitTemporalDelta": 2.58587741171825,
+        "frameCount": 12,
+        "sampleSpanMs": 5610
+      }
+    },
+    {
+      "file": "videos/vf6ade01f1030.mp4",
+      "sha256": "f6ade01f1030816c6308e72e424f7d7bf49b602759056c41930ccac866d57986",
+      "group": "vf6ade01f1030",
+      "origin": "generated",
+      "generator": "luma-ray-3.2",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/vf6ade01f1030.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          1,
+          4
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          1,
+          4
+        ]
+      ],
+      "durationMs": 5041.667,
+      "timestampsMs": [
+        210.06945833333336,
+        630.208375,
+        1050.3472916666667,
+        1470.4862083333335,
+        1890.625125,
+        2310.764041666667,
+        2730.9029583333336,
+        3151.0418750000003,
+        3571.180791666667,
+        3991.3197083333334,
+        4411.458625,
+        4831.597541666668
+      ],
+      "logits": [
+        -3.1639561653137207,
+        -4.2575836181640625,
+        -3.758662700653076,
+        -1.509425163269043,
+        -3.431596040725708,
+        -1.9459445476531982,
+        -1.583119511604309,
+        -3.526258707046509,
+        -5.272180557250977,
+        -6.281867027282715,
+        -6.801369667053223,
+        -1.3041082620620728
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.08591069446978591,
+        "secondOrderResidual": 0.057338390581628575,
+        "scoreQuantile25": 0.010865551946998944,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -3.5696726640065513,
+        "lowerQuartileLogit": -4.511232852935791,
+        "logitStd": 1.7643029708340199,
+        "logitTemporalDelta": 3.9657759391011256,
+        "frameCount": 12,
+        "sampleSpanMs": 4621.5280833333345
+      }
+    },
+    {
+      "file": "videos/v185bdab9bfd5.mp4",
+      "sha256": "185bdab9bfd5c3e1707df2fc782d963fc7228919c4545c98cc1b9938408df9a0",
+      "group": "v185bdab9bfd5",
+      "origin": "generated",
+      "generator": "minimax-h3-turbo",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/v185bdab9bfd5.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 5166.667,
+      "timestampsMs": [
+        215.27779166666673,
+        645.833375,
+        1076.3889583333334,
+        1506.944541666667,
+        1937.500125,
+        2368.0557083333333,
+        2798.611291666667,
+        3229.1668750000003,
+        3659.722458333334,
+        4090.278041666667,
+        4520.833625000001,
+        4951.389208333334
+      ],
+      "logits": [
+        -3.007946014404297,
+        -2.613356590270996,
+        -3.9975745677948,
+        -5.454384803771973,
+        -5.616326808929443,
+        -4.815180778503418,
+        -5.505895614624023,
+        -3.711531639099121,
+        -5.630144119262695,
+        -5.6566853523254395,
+        -6.15451717376709,
+        -5.883637428283691
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.14119137321794864,
+        "secondOrderResidual": 0.11869359012261782,
+        "scoreQuantile25": 0.0035516698014285805,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -4.837265074253082,
+        "lowerQuartileLogit": -5.636779427528381,
+        "logitStd": 1.1485504093288021,
+        "logitTemporalDelta": 1.9842543678224585,
+        "frameCount": 12,
+        "sampleSpanMs": 4736.1114166666675
+      }
+    },
+    {
+      "file": "videos/vf68988d92148.mp4",
+      "sha256": "f68988d92148de11c16d9f3e386ee886d078322370f7931c16b75678de8cb67b",
+      "group": "vf68988d92148",
+      "origin": "generated",
+      "generator": "pixverse-v6",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/vf68988d92148.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "durationMs": 5041.667,
+      "timestampsMs": [
+        210.06945833333336,
+        630.208375,
+        1050.3472916666667,
+        1470.4862083333335,
+        1890.625125,
+        2310.764041666667,
+        2730.9029583333336,
+        3151.0418750000003,
+        3571.180791666667,
+        3991.3197083333334,
+        4411.458625,
+        4831.597541666668
+      ],
+      "logits": [
+        -6.719602584838867,
+        -3.5445992946624756,
+        -4.170151233673096,
+        -4.349046230316162,
+        0.5744580030441284,
+        -3.7711188793182373,
+        -1.9053043127059937,
+        -1.6140004396438599,
+        1.3200207948684692,
+        -1.7560946941375732,
+        -0.016786102205514908,
+        -4.4070868492126465
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.1563740945196266,
+        "secondOrderResidual": 0.13301759552196019,
+        "scoreQuantile25": 0.01455907051281044,
+        "eligible": false,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ],
+        "meanLogit": -2.529942651900152,
+        "lowerQuartileLogit": -4.214874982833862,
+        "logitStd": 2.2776053013705826,
+        "logitTemporalDelta": 5.960235521022131,
+        "frameCount": 12,
+        "sampleSpanMs": 4621.5280833333345
+      }
+    },
+    {
+      "file": "videos/ved9969ea9628.mp4",
+      "sha256": "ed9969ea9628aa4dc754a7547f0c9c35aa568ece8037afe57e6ce21515246e1c",
+      "group": "ved9969ea9628",
+      "origin": "generated",
+      "generator": "seedance-2.0-fast",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/ved9969ea9628.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          1,
+          4
+        ],
+        [
+          1,
+          4
+        ],
+        [
+          1,
+          4
+        ]
+      ],
+      "durationMs": 5041.667,
+      "timestampsMs": [
+        210.06945833333336,
+        630.208375,
+        1050.3472916666667,
+        1470.4862083333335,
+        1890.625125,
+        2310.764041666667,
+        2730.9029583333336,
+        3151.0418750000003,
+        3571.180791666667,
+        3991.3197083333334,
+        4411.458625,
+        4831.597541666668
+      ],
+      "logits": [
+        -4.616522789001465,
+        -3.893394947052002,
+        -1.0173850059509277,
+        -3.344132900238037,
+        -4.977383613586426,
+        -1.7063720226287842,
+        -3.4896631240844727,
+        -2.867828607559204,
+        -4.62773323059082,
+        -2.423119068145752,
+        -2.904808521270752,
+        -1.6062355041503906
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.04490931462499826,
+        "secondOrderResidual": 0.03654430409742417,
+        "scoreQuantile25": 0.016721831674139393,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -3.122881611188253,
+        "lowerQuartileLogit": -4.074176907539368,
+        "logitStd": 1.226580543632742,
+        "logitTemporalDelta": 4.106878615277629,
+        "frameCount": 12,
+        "sampleSpanMs": 4621.5280833333345
+      }
+    },
+    {
+      "file": "videos/v81d61a43b51a.mp4",
+      "sha256": "81d61a43b51acef9cef786ac6f49915b4debf453c9c01fefc3057f5dab03ef35",
+      "group": "v81d61a43b51a",
+      "origin": "generated",
+      "generator": "veo3-fast",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/v81d61a43b51a.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          1,
+          4
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 8000,
+      "timestampsMs": [
+        333.33333333333326,
+        999.9999999999999,
+        1666.6666666666665,
+        2333.333333333333,
+        3000,
+        3666.6666666666665,
+        4333.333333333333,
+        5000,
+        5666.666666666666,
+        6333.333333333333,
+        6999.999999999999,
+        7666.666666666666
+      ],
+      "logits": [
+        -3.9604270458221436,
+        -1.5700310468673706,
+        -2.917603015899658,
+        -4.102171897888184,
+        -0.8512961268424988,
+        -2.0861973762512207,
+        -1.5720574855804443,
+        -4.7251296043396,
+        -3.6268961429595947,
+        -4.7943925857543945,
+        -2.7119967937469482,
+        -2.3348145484924316
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.11615054131674572,
+        "secondOrderResidual": 0.10349966269640731,
+        "scoreQuantile25": 0.01805942188360405,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -2.9377511392037072,
+        "lowerQuartileLogit": -3.9958632588386536,
+        "logitStd": 1.2499206984256104,
+        "logitTemporalDelta": 2.4273864301768215,
+        "frameCount": 12,
+        "sampleSpanMs": 7333.333333333333
+      }
+    },
+    {
+      "file": "videos/v9f64a83ceaa8.mp4",
+      "sha256": "9f64a83ceaa8841e0a77d2ca9b4acea9c68de8e32a7201f5ede13fa0f0c9b14f",
+      "group": "v9f64a83ceaa8",
+      "origin": "generated",
+      "generator": "vidu-q3",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/v9f64a83ceaa8.mp4",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": true,
+      "passingAndTotalByThird": [
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "durationMs": 5041.667,
+      "timestampsMs": [
+        210.06945833333336,
+        630.208375,
+        1050.3472916666667,
+        1470.4862083333335,
+        1890.625125,
+        2310.764041666667,
+        2730.9029583333336,
+        3151.0418750000003,
+        3571.180791666667,
+        3991.3197083333334,
+        4411.458625,
+        4831.597541666668
+      ],
+      "logits": [
+        -0.4538688063621521,
+        1.264931559562683,
+        -1.2928988933563232,
+        0.8220210075378418,
+        -1.428848385810852,
+        3.3393149375915527,
+        2.5685484409332275,
+        1.5597965717315674,
+        1.7549359798431396,
+        1.5675039291381836,
+        -0.5441288352012634,
+        4.281281471252441
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.03454983872300297,
+        "secondOrderResidual": 0.029864733870272175,
+        "scoreQuantile25": 0.3830945810884219,
+        "eligible": false,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ],
+        "meanLogit": 1.1198824147383373,
+        "lowerQuartileLogit": -0.47643381357192993,
+        "logitStd": 1.7197158157241368,
+        "logitTemporalDelta": 4.870621994732822,
+        "frameCount": 12,
+        "sampleSpanMs": 4621.5280833333345
+      }
+    },
+    {
+      "file": "videos/v96beadf24c0d.mp4",
+      "sha256": "96beadf24c0d31b4588b4e2231c2e661920216984e3d23c2083cd1004542e8fd",
+      "group": "v96beadf24c0d",
+      "origin": "generated",
+      "generator": "wan-2.6-flash",
+      "license": "CC BY 4.0 (WasItAIGenerated)",
+      "source": "https://huggingface.co/datasets/wasitaigeneratedcom/frontier-image-video-bench-2026-10/resolve/e6a8b83d15fab1da958848368fcd07e943afafd0/videos/v96beadf24c0d.mp4",
+      "cohort": "evaluation",
+      "baseline": true,
+      "candidate": true,
+      "passingAndTotalByThird": [
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "durationMs": 5000,
+      "timestampsMs": [
+        208.33333333333337,
+        625,
+        1041.6666666666667,
+        1458.3333333333335,
+        1875,
+        2291.6666666666665,
+        2708.3333333333335,
+        3125,
+        3541.666666666667,
+        3958.3333333333335,
+        4375,
+        4791.666666666667
+      ],
+      "logits": [
+        3.1504805088043213,
+        7.486958980560303,
+        5.5897064208984375,
+        6.055471420288086,
+        6.320779800415039,
+        7.122089385986328,
+        6.368435859680176,
+        6.2518696784973145,
+        4.96521520614624,
+        5.6479926109313965,
+        5.437473297119141,
+        3.519054651260376
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 1,
+        "motionEnergy": 0.11165105979480669,
+        "secondOrderResidual": 0.10399753204814602,
+        "scoreQuantile25": 0.9951282032964789,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": 5.659627318382263,
+        "lowerQuartileLogit": 5.3194087743759155,
+        "logitStd": 1.2362364244611113,
+        "logitTemporalDelta": 2.778480772538618,
+        "frameCount": 12,
+        "sampleSpanMs": 4583.333333333334
+      }
+    },
+    {
+      "file": "videos/v76000e2c2c6d.mp4",
+      "sha256": "76000e2c2c6d3a492d3e1d6e840982a8c2eb11504e7ea68383ac55c7b60a168e",
+      "group": "v76000e2c2c6d",
+      "origin": "genuine",
+      "generator": "",
+      "license": "Public domain",
+      "source": "https://commons.wikimedia.org/wiki/File:Gila_Gordon_recounts_Berlin_Airlift_experience_%E2%80%93_extended_version_(917260).webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "durationMs": 10010,
+      "timestampsMs": [
+        417.08333333333326,
+        1251.2499999999998,
+        2085.416666666666,
+        2919.583333333333,
+        3753.7499999999995,
+        4587.916666666667,
+        5422.083333333333,
+        6256.25,
+        7090.416666666666,
+        7924.583333333333,
+        8758.75,
+        9592.916666666666
+      ],
+      "logits": [
+        -5.367630958557129,
+        -6.00533390045166,
+        -2.3558242321014404,
+        -3.9342141151428223,
+        -3.6327199935913086,
+        -3.729325294494629,
+        -2.687779426574707,
+        -3.845798969268799,
+        -4.356563091278076,
+        0.7591649293899536,
+        -0.3942944407463074,
+        -0.24562585353851318
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 2,
+        "motionEnergy": 0.07008933669005107,
+        "secondOrderResidual": 0.06747015768269193,
+        "scoreQuantile25": 0.017296532616280485,
+        "eligible": false,
+        "reasonCodes": [
+          "MIXED_FRAME_EVIDENCE"
+        ],
+        "meanLogit": -2.9829954455296197,
+        "lowerQuartileLogit": -4.039801359176636,
+        "logitStd": 2.000310957682361,
+        "logitTemporalDelta": 1.6774375544139146,
+        "frameCount": 12,
+        "sampleSpanMs": 9175.833333333332
+      }
+    },
+    {
+      "file": "videos/v2d53a2d4a983.mp4",
+      "sha256": "2d53a2d4a9836d012f2e1985c9ac0f164d44ddc0e06df73ffeb24d013f12bc7c",
+      "group": "v2d53a2d4a983",
+      "origin": "genuine",
+      "generator": "",
+      "license": "CC BY 3.0",
+      "source": "https://commons.wikimedia.org/wiki/File:Barco_de_fogo.webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        -8.844512939453125,
+        -7.644759178161621,
+        -5.713658332824707,
+        -7.526526927947998,
+        -8.01406478881836,
+        -5.994829177856445,
+        -6.696581840515137,
+        -7.10053825378418,
+        -7.952518463134766,
+        -7.5230393409729,
+        -7.899231910705566,
+        -6.966183662414551
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 2,
+        "motionEnergy": 0.16352319992550043,
+        "secondOrderResidual": 0.13864859812072156,
+        "scoreQuantile25": 0.0003659844908116343,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -7.323037068049113,
+        "lowerQuartileLogit": -7.912553548812866,
+        "logitStd": 0.8479928237962917,
+        "logitTemporalDelta": 1.2160260980779474,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "videos/v2968c7689ec0.mp4",
+      "sha256": "2968c7689ec0a6756214f3f7b52f392e272a0beac0e2d64e948d45e1d62896c7",
+      "group": "v2968c7689ec0",
+      "origin": "genuine",
+      "generator": "",
+      "license": "CC BY 4.0",
+      "source": "https://commons.wikimedia.org/wiki/File:Huliaipole_after_Russian_shelling_(2023-01-17)_01.webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        -4.449426174163818,
+        -4.408982276916504,
+        -6.048550605773926,
+        -4.721536159515381,
+        -5.193040370941162,
+        -4.44771146774292,
+        -6.280027389526367,
+        -6.197049140930176,
+        -5.9647674560546875,
+        -7.0364580154418945,
+        -4.789680004119873,
+        -6.349151611328125
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.16191295067131828,
+        "secondOrderResidual": 0.1385166070566811,
+        "scoreQuantile25": 0.001989672239964079,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -5.49053172270457,
+        "lowerQuartileLogit": -6.217793703079224,
+        "logitStd": 0.8802482393061087,
+        "logitTemporalDelta": 1.2272046349265358,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "videos/vc739a66b0721.mp4",
+      "sha256": "c739a66b0721d7e7a90fadb54df134e4e4ac7fc371167cc67514d3f19e55f654",
+      "group": "vc739a66b0721",
+      "origin": "genuine",
+      "generator": "",
+      "license": "CC BY 3.0",
+      "source": "https://commons.wikimedia.org/wiki/File:Giro_d%27Italia._Il_passaggio_a_Vercelli,_06-05-2024.webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        -9.417993545532227,
+        -8.542945861816406,
+        -8.931381225585938,
+        -9.526517868041992,
+        -9.716835021972656,
+        -9.048992156982422,
+        -8.808818817138672,
+        -8.75200366973877,
+        -9.060846328735352,
+        -9.536155700683594,
+        -8.502622604370117,
+        -8.625492095947266
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.05738762457359185,
+        "secondOrderResidual": 0.04852795885429373,
+        "scoreQuantile25": 7.906789081255033e-05,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -9.039217074712118,
+        "lowerQuartileLogit": -9.445124626159668,
+        "logitStd": 0.4020988376809506,
+        "logitTemporalDelta": 0.5404715798117897,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "videos/v57c66951d4f0.mp4",
+      "sha256": "57c66951d4f0bfa58feb910fd6c1e92638e578e0b8797cd853637f49bb7f2ed7",
+      "group": "v57c66951d4f0",
+      "origin": "genuine",
+      "generator": "",
+      "license": "Public domain",
+      "source": "https://commons.wikimedia.org/wiki/File:U_S_,_Djiboutian_Forces_Conduct_Sea_Sisters_(961075).webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10010,
+      "timestampsMs": [
+        417.08333333333326,
+        1251.2499999999998,
+        2085.416666666666,
+        2919.583333333333,
+        3753.7499999999995,
+        4587.916666666667,
+        5422.083333333333,
+        6256.25,
+        7090.416666666666,
+        7924.583333333333,
+        8758.75,
+        9592.916666666666
+      ],
+      "logits": [
+        -9.077062606811523,
+        -8.927181243896484,
+        -7.562828063964844,
+        -8.107321739196777,
+        -7.439175605773926,
+        -8.768104553222656,
+        -8.662369728088379,
+        -4.466477394104004,
+        -9.520578384399414,
+        -9.402824401855469,
+        -8.678108215332031,
+        -7.579821586608887
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 6,
+        "motionEnergy": 0.20511172031274327,
+        "secondOrderResidual": 0.18471382426946548,
+        "scoreQuantile25": 0.00012783381899985626,
+        "eligible": false,
+        "reasonCodes": [
+          "EXCESSIVE_SCENE_DISCONTINUITY"
+        ],
+        "meanLogit": -8.1826544602712,
+        "lowerQuartileLogit": -8.964651584625244,
+        "logitStd": 1.3091821301335849,
+        "logitTemporalDelta": 1.6731219594392648,
+        "frameCount": 12,
+        "sampleSpanMs": 9175.833333333332
+      }
+    },
+    {
+      "file": "videos/va5c67f9e25be.mp4",
+      "sha256": "a5c67f9e25be8948d31be397e2146782ed6665b83bb31ec0e633dc33abec3793",
+      "group": "va5c67f9e25be",
+      "origin": "genuine",
+      "generator": "",
+      "license": "CC BY 4.0",
+      "source": "https://commons.wikimedia.org/wiki/File:Khabarovsk_LM-99_2022-08_1660500000.webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        -9.717191696166992,
+        -8.838769912719727,
+        -9.631340026855469,
+        -9.891502380371094,
+        -9.76249885559082,
+        -9.999454498291016,
+        -8.91640853881836,
+        -10.161006927490234,
+        -10.795516967773438,
+        -9.815779685974121,
+        -10.821772575378418,
+        -9.517719268798828
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 2,
+        "motionEnergy": 0.15426385322503353,
+        "secondOrderResidual": 0.13257325546696846,
+        "scoreQuantile25": 4.3624735902176586e-05,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -9.822413444519043,
+        "lowerQuartileLogit": -10.03984260559082,
+        "logitStd": 0.5794296018064858,
+        "logitTemporalDelta": 0.9326237765225497,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "videos/v891efe3631cd.mp4",
+      "sha256": "891efe3631cddefd262605b3f4ab6bd0c676ff7eadac1ad499358420478d9b7d",
+      "group": "v891efe3631cd",
+      "origin": "genuine",
+      "generator": "",
+      "license": "CC BY 4.0",
+      "source": "https://commons.wikimedia.org/wiki/File:Destructions_in_Kramatorsk_after_Russian_attack,_2024-08-25_(001).webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          3,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        -1.7929974794387817,
+        -2.070855140686035,
+        -1.8617910146713257,
+        -2.458498239517212,
+        -4.111128330230713,
+        -2.745776653289795,
+        -6.018051624298096,
+        -3.0378189086914062,
+        -2.593555450439453,
+        -3.7518763542175293,
+        -5.244726657867432,
+        -4.678179740905762
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.08543983988982456,
+        "secondOrderResidual": 0.07681013364453974,
+        "scoreQuantile25": 0.014023594630255138,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -3.363771299521128,
+        "lowerQuartileLogit": -4.252891182899475,
+        "logitStd": 1.3327870607965056,
+        "logitTemporalDelta": 1.5290290962566027,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "videos/vedd928ce4613.mp4",
+      "sha256": "edd928ce4613aae18fa94e12c8248ce813b2de91e86a8cd9e79eaf580388460c",
+      "group": "vedd928ce4613",
+      "origin": "genuine",
+      "generator": "",
+      "license": "CC BY 4.0",
+      "source": "https://commons.wikimedia.org/wiki/File:Kherson_after_Russian_shelling,_2023-03-23_(001).webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        -9.860671997070312,
+        -9.158642768859863,
+        -9.617565155029297,
+        -10.943845748901367,
+        -10.475079536437988,
+        -11.284820556640625,
+        -4.8055315017700195,
+        -6.372807502746582,
+        -6.811179161071777,
+        -6.483163833618164,
+        -9.113860130310059,
+        -7.967315673828125
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 0,
+        "motionEnergy": 0.14755410764213261,
+        "secondOrderResidual": 0.128550627742743,
+        "scoreQuantile25": 4.475449651942529e-05,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -8.574540297190348,
+        "lowerQuartileLogit": -10.014273881912231,
+        "logitStd": 1.9759054536584324,
+        "logitTemporalDelta": 1.7842835166237565,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "videos/v0956a0555e68.mp4",
+      "sha256": "0956a0555e686994410d08c50946cf0d3dae377371519e434dbca25c429989e7",
+      "group": "v0956a0555e68",
+      "origin": "genuine",
+      "generator": "",
+      "license": "Public domain",
+      "source": "https://commons.wikimedia.org/wiki/File:CBRN_Live-Agent_Training_With_U_S_Army_and_Slovakian_Armed_Forces_(978252).webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        -5.280019760131836,
+        -6.224893569946289,
+        -6.71953010559082,
+        -7.5531005859375,
+        -8.528362274169922,
+        -7.051074028015137,
+        -6.850890159606934,
+        -7.127052307128906,
+        -6.621740818023682,
+        -4.381018161773682,
+        -3.447455644607544,
+        -5.213990688323975
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 2,
+        "motionEnergy": 0.13797773304511132,
+        "secondOrderResidual": 0.1255252446488157,
+        "scoreQuantile25": 0.0008494526038652084,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -6.249927341938019,
+        "lowerQuartileLogit": -7.070068597793579,
+        "logitStd": 1.365705558848649,
+        "logitTemporalDelta": 1.1616118344393644,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "videos/v51f390ab5041.mp4",
+      "sha256": "51f390ab5041e36a5b361a6b0ad8002b6e8477eda2146a45a31dc5d7d2f4433b",
+      "group": "v51f390ab5041",
+      "origin": "genuine",
+      "generator": "",
+      "license": "CC BY 4.0",
+      "source": "https://commons.wikimedia.org/wiki/File:2022-06-19_soir%C3%A9e-%C3%A9lectorale-Belfort.webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        -4.181947231292725,
+        -7.793182373046875,
+        -10.335723876953125,
+        -9.564122200012207,
+        -9.294264793395996,
+        -10.010932922363281,
+        -9.299287796020508,
+        -8.696516036987305,
+        -7.815145969390869,
+        -9.934911727905273,
+        -8.289470672607422,
+        -7.011512756347656
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 1,
+        "motionEnergy": 0.17255002811604278,
+        "secondOrderResidual": 0.14896289579763788,
+        "scoreQuantile25": 6.398361214393405e-05,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -8.51891819636027,
+        "lowerQuartileLogit": -9.656819581985474,
+        "logitStd": 1.633561606739103,
+        "logitTemporalDelta": 1.652820604497736,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "videos/v12846518448a.mp4",
+      "sha256": "12846518448a02367e47dbf09fa84fb3b19746bd1a396f5e31f1287fba24cdfe",
+      "group": "v12846518448a",
+      "origin": "genuine",
+      "generator": "",
+      "license": "CC BY 3.0",
+      "source": "https://commons.wikimedia.org/wiki/File:%D0%9C%D0%B0%D1%80%D0%B8%D1%83%D0%BF%D0%BE%D0%BB%D1%8C_%D0%A1%D0%BE%D0%B2%D1%81%D0%B5%D0%BC_%D0%B4%D1%80%D1%83%D0%B3%D0%BE%D0%B5_%D0%B4%D0%B5%D0%BB%D0%BE%D0%94%D0%BE%D0%BC%D0%B0_%D0%BA%D0%B0%D0%BA_%D0%9D%D0%BE%D0%B2%D1%8B%D0%B5%D0%96%D0%B8%D0%B7%D0%BD%D1%8C_%D0%B3%D0%BE%D1%80%D0%BE%D0%B4%D0%B0_8.11.22.webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10000,
+      "timestampsMs": [
+        416.66666666666674,
+        1250,
+        2083.3333333333335,
+        2916.666666666667,
+        3750,
+        4583.333333333333,
+        5416.666666666667,
+        6250,
+        7083.333333333334,
+        7916.666666666667,
+        8750,
+        9583.333333333334
+      ],
+      "logits": [
+        -5.54628324508667,
+        -5.099824905395508,
+        -3.7115821838378906,
+        -6.780864238739014,
+        -3.860313892364502,
+        -6.142699718475342,
+        -9.290453910827637,
+        -8.555811882019043,
+        -7.849408149719238,
+        -8.89344310760498,
+        -8.4713134765625,
+        -8.41786003112793
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 1,
+        "motionEnergy": 0.12606841495918078,
+        "secondOrderResidual": 0.10801228966920462,
+        "scoreQuantile25": 0.00020497079144619806,
+        "eligible": true,
+        "reasonCodes": [],
+        "meanLogit": -6.8849882284800215,
+        "lowerQuartileLogit": -8.492438077926636,
+        "logitStd": 1.8966631069657227,
+        "logitTemporalDelta": 1.7689458847045894,
+        "frameCount": 12,
+        "sampleSpanMs": 9166.666666666668
+      }
+    },
+    {
+      "file": "videos/v11b1d026b53a.mp4",
+      "sha256": "11b1d026b53a2517dcd043a17f19373cd9bee6c2d3aabbf043a55c5753b17f19",
+      "group": "v11b1d026b53a",
+      "origin": "genuine",
+      "generator": "",
+      "license": "Public domain",
+      "source": "https://commons.wikimedia.org/wiki/File:Exercise_Bull_Shark_26-1_(987040).webm",
+      "cohort": "evaluation",
+      "baseline": false,
+      "candidate": false,
+      "passingAndTotalByThird": [
+        [
+          1,
+          4
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ],
+      "durationMs": 10010,
+      "timestampsMs": [
+        417.08333333333326,
+        1251.2499999999998,
+        2085.416666666666,
+        2919.583333333333,
+        3753.7499999999995,
+        4587.916666666667,
+        5422.083333333333,
+        6256.25,
+        7090.416666666666,
+        7924.583333333333,
+        8758.75,
+        9592.916666666666
+      ],
+      "logits": [
+        -5.45858097076416,
+        -2.0500993728637695,
+        -6.335322380065918,
+        -5.144611835479736,
+        -6.54808235168457,
+        -7.869243621826172,
+        -7.136163711547852,
+        -7.445467472076416,
+        -8.563066482543945,
+        -5.922950267791748,
+        -10.17684555053711,
+        -6.897012710571289
+      ],
+      "temporal": {
+        "coverage": 1,
+        "denseTriplets": 10,
+        "sceneCuts": 5,
+        "motionEnergy": 0.21885954626329027,
+        "secondOrderResidual": 0.18562699725300433,
+        "scoreQuantile25": 0.0005250921748724216,
+        "eligible": false,
+        "reasonCodes": [
+          "EXCESSIVE_SCENE_DISCONTINUITY"
+        ],
+        "meanLogit": -6.62895389397939,
+        "lowerQuartileLogit": -7.551411509513855,
+        "logitStd": 1.9146934201154102,
+        "logitTemporalDelta": 2.6093405454298018,
+        "frameCount": 12,
+        "sampleSpanMs": 9175.833333333332
+      }
+    }
+  ]
+}
