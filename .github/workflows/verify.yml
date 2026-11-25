@@ -117,6 +117,27 @@ jobs:
         run: |
           command -v ffmpeg || sudo apt-get install -y ffmpeg
           timeout --signal=TERM --kill-after=5s 300s python -u tests/e2e/ordinary_pages.py --build artifacts/local-test/production --live
+  mac-chrome-columns:
+    needs: extension
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: label-ai-browser-extensions
+          path: artifacts/packages
+      - name: Check the regular package in Chrome for Testing on Apple Silicon at 2x
+        run: |
+          unzip -q artifacts/packages/label-ai-chromium.zip -d artifacts/chromium
+          python -m pip install -r tests/e2e/requirements.txt
+          python tools/prepare_provenance_fixtures.py
+          python tools/prepare_smoke_media.py
+          exe="$(python tests/e2e/prepare_browser.py chrome-for-testing-mac-arm64 "$RUNNER_TEMP/test-browser")"
+          python -u tests/e2e/local_test_gallery.py --build artifacts/chromium --production --browser "$exe" --device-scale-factor 2
   safari-package-and-verifier:
     needs: extension
     runs-on: macos-latest

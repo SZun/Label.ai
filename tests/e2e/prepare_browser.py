@@ -27,7 +27,7 @@ def provision(name, dest):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("browser",choices=["brave","edge","opera","chrome-for-testing"])
+    parser.add_argument("browser",choices=["brave","edge","opera","chrome-for-testing","chrome-for-testing-mac-arm64"])
     parser.add_argument("destination",type=Path)
     args = parser.parse_args()
     provision(args.browser,args.destination)

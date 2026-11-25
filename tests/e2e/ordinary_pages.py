@@ -49,6 +49,8 @@ def run(build, live=False):
     shell = '<!doctype html><meta charset="utf-8"><link rel="icon" href="data:,"><title>Photos</title>'
     denied = []
     anonymous_reads = []
+    article_status = None
+    article_labels = 0
     with TemporaryDirectory() as profile, TemporaryDirectory() as generation, sync_playwright() as pw:
         clip = make_video(samples[0].content, Path(generation))
         resources = {
@@ -90,10 +92,15 @@ def run(build, live=False):
                     wait_for_label(site, selector, True)
                     print("Labeled public Keras output", selector, flush=True)
                 response = site.goto(PUBLIC_ARTICLE, wait_until="domcontentloaded", timeout=45_000)
-                assert response and response.ok, "Public Wikipedia article unavailable"
-                for selector in PUBLIC_CDN_OUTPUTS:
-                    wait_for_label(site, selector, True)
-                    print("Labeled Wikimedia-hosted image in live article", selector, flush=True)
+                article_status = response.status if response else None
+                if article_status in (403, 429):
+                    print(f"::warning::Live Wikipedia check blocked by publisher (HTTP {article_status}); no detection result.", flush=True)
+                else:
+                    assert response and response.ok, f"Public Wikipedia article returned {article_status}"
+                    for selector in PUBLIC_CDN_OUTPUTS:
+                        wait_for_label(site, selector, True)
+                        article_labels += 1
+                        print("Labeled Wikimedia-hosted image in live article", selector, flush=True)
                 site.close()
                 site = context.new_page()
                 site.bring_to_front()
@@ -132,13 +139,13 @@ def run(build, live=False):
             site.get_by_text(TEXT, exact=True).wait_for(state="visible", timeout=75_000)
             assert not denied, denied
     return {"same_origin_unsigned_image": True, "dynamic_cors_cdn_image_on_second_origin": True,
-            "video_pan_of_generated_still": True, "public_keras_tutorial_images_labeled": 4 if live else 0, "public_wikipedia_images_labeled": 2 if live else 0,
+            "video_pan_of_generated_still": True, "public_keras_tutorial_images_labeled": 4 if live else 0, "public_wikipedia_http_status": article_status, "public_wikipedia_images_labeled": article_labels,
             "plain_cdn_image_labeled": True, "unexpected_http_requests": denied}
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", required=True, type=Path)
-    parser.add_argument("--live", action="store_true", help="Also visit the public Keras tutorial and check its first sample output")
+    parser.add_argument("--live", action="store_true", help="Also check public Keras outputs and Wikimedia-hosted thumbnails")
     args = parser.parse_args()
     print(json.dumps(run(args.build, args.live)))

@@ -94,7 +94,7 @@ def actual_decision(worker, selector):
     )
 
 
-def run(build, production=False):
+def run(build, production=False, browser=None, device_scale_factor=1):
     build = build.resolve()
     manifest = json.loads((build / "manifest.json").read_text())
     expected_name = "Label.ai" if production else "Label.ai (Local Test)"
@@ -105,12 +105,13 @@ def run(build, production=False):
     assert set(manifest.get("host_permissions", [])) == expected_hosts
     assert not manifest.get("optional_host_permissions")
     with gallery() as (origin, requests), TemporaryDirectory() as profile, sync_playwright() as pw:
-        args = argparse.Namespace(browser=None)
+        args = argparse.Namespace(browser=browser, device_scale_factor=device_scale_factor)
         launch = ["--disable-extensions-except=" + str(build), "--load-extension=" + str(build),
                   "--disable-background-networking", "--disable-component-update", "--disable-sync",
                   "--no-first-run", "--no-default-browser-check", "--disable-dev-shm-usage"]
         forbidden = []
         with browser_session(pw, profile, launch, args) as context:
+            print("Installed browser", context.browser.version if context.browser else (browser or "Chromium"), "at DPR", device_scale_factor, flush=True)
             def record_request(request):
                 if request.url.startswith(("http://", "https://", "ws://", "wss://")):
                     path = request.url.removeprefix(origin)
@@ -163,5 +164,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--production", action="store_true", help="Exercise the regular all-sites package")
+    parser.add_argument("--browser", help="Path to an installed Chromium-family executable")
+    parser.add_argument("--device-scale-factor", type=float, default=1)
     args = parser.parse_args()
-    print(json.dumps(run(args.build, args.production)))
+    print(json.dumps(run(args.build, args.production, args.browser, args.device_scale_factor)))
