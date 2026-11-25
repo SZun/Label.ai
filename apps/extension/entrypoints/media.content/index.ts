@@ -38,6 +38,7 @@ interface MediaEntry {
   element: Element;
   id: string;
   source: string;
+  videoDuration?: number;
   backgroundLayout?: string;
   generation: number;
   binding?: Binding;
@@ -125,6 +126,8 @@ export default defineContentScript({
     function matchesCurrentMedia(entry: MediaEntry) {
       return (
         sourceFor(entry.element) === entry.source &&
+        (!(entry.element instanceof HTMLVideoElement) ||
+          Object.is(entry.element.duration, entry.videoDuration)) &&
         (entry.backgroundLayout === undefined ||
           entry.backgroundLayout === backgroundLayoutKey(entry.element, entry.source))
       );
@@ -208,6 +211,7 @@ export default defineContentScript({
       cancel(entry);
       if (gallery()) entry.element.removeAttribute(galleryAttribute);
       entry.source = sourceFor(entry.element);
+      if (entry.element instanceof HTMLVideoElement) entry.videoDuration = entry.element.duration;
       entry.backgroundLayout = undefined;
       entry.generation += 1;
       entry.attempted = false;
@@ -377,6 +381,13 @@ export default defineContentScript({
           return;
         }
         const timestampMs = metadata.mediaTime * 1000;
+        if (previousFrame && metadata.mediaTime < previousFrame.mediaTime) {
+          // A looping player may present its next lap before delivering seeking.
+          // Discard the partial lap instead of stitching two intervals together.
+          observedTimesMs.length = 0;
+          entry.frames = [];
+          previousFrame = undefined;
+        }
         const last = observedTimesMs.at(-1);
         const slot = videoSampleSlot(timestampMs, durationMs);
         const previousSlot = last === undefined ? -1 : videoSampleSlot(last, durationMs);
@@ -691,6 +702,7 @@ export default defineContentScript({
         element,
         id: newScanId(),
         source,
+        ...(element instanceof HTMLVideoElement && { videoDuration: element.duration }),
         generation: 0,
         visible: true,
         animated: animatedSources.get(element) === source,
@@ -757,7 +769,7 @@ export default defineContentScript({
     mutation.observe(document.body, observerOptions);
     roots.add(document.body);
 
-    for (const event of ['load', 'loadedmetadata', 'emptied', 'seeking'])
+    for (const event of ['load', 'loadedmetadata', 'durationchange', 'emptied', 'seeking'])
       ctx.addEventListener(
         document,
         event,
@@ -765,6 +777,7 @@ export default defineContentScript({
           if (!(ev.target instanceof Element)) return;
           const entry = entries.get(ev.target);
           if (!entry) return;
+          if (event === 'durationchange' && matchesCurrentMedia(entry)) return;
           // Looping and scrubbing change playback time, while completed whole-clip
           // evidence remains bound to the same loaded resource. Partial captures
           // still reset on a seek. Source replacement always invalidates a verdict.

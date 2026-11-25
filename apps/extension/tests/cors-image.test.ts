@@ -304,3 +304,17 @@ it('does not classify a small auto-sized CSS texture repeated across a card', as
     card.remove();
   }
 });
+
+it('still accepts a decodable displayed CDN image returned from the publisher range cache', async () => {
+  const ranged = new Response(bytes, {
+    status: 206,
+    headers: {
+      'content-type': 'image/jpeg',
+      'content-range': `bytes 0-${bytes.length - 1}/${bytes.length}`,
+    },
+  });
+  Object.defineProperties(ranged, { url: { value: source }, type: { value: 'cors' } });
+  fetchImage.mockResolvedValue(ranged);
+  const { frame } = await captureImage(image, source, cancel.signal);
+  expect(frame).toMatchObject({ width: 30, height: 20 });
+});

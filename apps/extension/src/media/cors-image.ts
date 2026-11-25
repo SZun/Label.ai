@@ -89,13 +89,10 @@ export async function readPublicBitmap(
   signal.addEventListener('abort', abort, { once: true });
   const timeout = setTimeout(abort, 5000);
   try {
-    const file = await readPublicMedia(
-      source,
-      controller.signal,
-      current,
-      ['image/jpeg', 'image/png', 'image/webp'],
-      MAX_ORIGINAL_BYTES,
-    );
+    const file = await readPublicMedia(source, controller.signal, current, {
+      allowedTypes: ['image/jpeg', 'image/png', 'image/webp'],
+      maxBytes: MAX_ORIGINAL_BYTES,
+    });
     if (!file) return;
     const { bytes, mime } = file;
     const size = encodedDimensions(bytes, mime);

@@ -30,8 +30,7 @@ export async function readPublicMedia(
   source: string,
   signal: AbortSignal,
   current: () => boolean,
-  allowedTypes: readonly string[],
-  maxBytes: number,
+  limits: { allowedTypes: readonly string[]; maxBytes: number; requireWholeFile?: boolean },
 ) {
   if (signal.aborted || !current() || !eligiblePublicMediaUrl(source)) return;
   const responseType = new URL(source).origin === location.origin ? 'basic' : 'cors';
@@ -49,18 +48,24 @@ export async function readPublicMedia(
   if (
     signal.aborted ||
     !current() ||
-    response.status !== 200 ||
-    response.headers.has('content-range') ||
+    !response.ok ||
+    (limits.requireWholeFile &&
+      (response.status !== 200 || response.headers.has('content-range'))) ||
     response.type !== responseType ||
     response.redirected ||
     response.url !== source ||
     !mime ||
-    !allowedTypes.includes(mime) ||
+    !limits.allowedTypes.includes(mime) ||
     /(?:^|,)\s*(?:private|no-store)\b/i.test(response.headers.get('cache-control') ?? '') ||
-    (length !== null && (!/^\d+$/.test(length) || Number(length) > maxBytes))
+    (length !== null && (!/^\d+$/.test(length) || Number(length) > limits.maxBytes))
   )
     return;
-  const bytes = await readBounded(response, signal, maxBytes);
-  if (!bytes || !current()) return;
-  return { bytes, mime, contentLength: length === null ? undefined : Number(length) };
+  const bytes = await readBounded(response, signal, limits.maxBytes);
+  if (
+    !bytes ||
+    !current() ||
+    (limits.requireWholeFile && length !== null && Number(length) !== bytes.byteLength)
+  )
+    return;
+  return { bytes, mime };
 }

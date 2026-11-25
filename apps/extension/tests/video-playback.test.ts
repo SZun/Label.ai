@@ -37,18 +37,23 @@ afterEach(() => {
 it.each([
   'natural end',
   '8fps end',
+  'loop without seeking event',
   'loop rewind',
   'source replacement',
+  'duration change',
+  'same duration',
   'delayed renewal',
   'denied renewal',
 ])('binds the delayed inference result to the original clip after %s', async (outcome) => {
-  const duration = outcome === '8fps end' ? 2 : 4;
-  const fps = outcome === '8fps end' ? 8 : 24;
+  const lowFps = outcome === '8fps end' || outcome === 'loop without seeking event';
+  const duration = lowFps ? 2 : 4;
+  let currentDuration = duration;
+  const fps = lowFps ? 8 : 24;
   const video = document.body.appendChild(document.createElement('video'));
   video.src = '/actual-clip.webm';
   Object.defineProperties(video, {
     readyState: { value: 4 },
-    duration: { value: duration },
+    duration: { get: () => currentDuration },
     currentSrc: { get: () => video.src },
   });
   let clock = 1000;
@@ -113,7 +118,7 @@ it.each([
   mocks.send.mockImplementation(async (msg) => {
     if (msg.type === 'label-ai:can-scan') return nextRenewal ?? { allowed: true };
     if (msg.type === 'label-ai:analyze') {
-      if (outcome === '8fps end') {
+      if (lowFps) {
         expect(msg.frames.length).toBeGreaterThanOrEqual(8);
         expect(msg.frames.at(-1).timestampMs).toBe(1875);
       } else expect(msg.frames).toHaveLength(12);
@@ -135,6 +140,18 @@ it.each([
     await tick();
     intersect([{ target: video, isIntersecting: true }]);
     await tick();
+    if (outcome === 'loop without seeking event') {
+      // First admitted near EOF. The next cycle arrives directly as presented frames.
+      for (let frame = 12; frame < 16; frame++) {
+        const callback = present;
+        present = undefined;
+        callback?.(0, {
+          mediaTime: frame / fps,
+          presentedFrames: frame + 1,
+        } as VideoFrameCallbackMetadata);
+      }
+      expect(completeInference).toBeUndefined();
+    }
     for (let frame = 0; frame < fps * duration; frame++) {
       const callback = present;
       present = undefined;
@@ -152,6 +169,10 @@ it.each([
       video.loop = true;
       video.dispatchEvent(new Event('seeking'));
       expect(mocks.send.mock.calls.some(([m]) => m.type === 'label-ai:cancel')).toBe(false);
+    }
+    if (outcome === 'duration change' || outcome === 'same duration') {
+      if (outcome === 'duration change') currentDuration += 30;
+      video.dispatchEvent(new Event('durationchange'));
     }
     if (outcome === 'source replacement') {
       video.src = '/different-clip.webm';
@@ -183,7 +204,8 @@ it.each([
     const latestLabels = mocks.setLabels.mock.calls.at(-1)![0];
     expect(latestLabels).toHaveLength(
       outcome === 'natural end' ||
-        outcome === '8fps end' ||
+        lowFps ||
+        outcome === 'same duration' ||
         outcome === 'loop rewind' ||
         outcome === 'delayed renewal'
         ? 1

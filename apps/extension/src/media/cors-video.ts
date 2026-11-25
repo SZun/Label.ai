@@ -116,20 +116,12 @@ export async function readCorsVideoFrames(
   let decoder: HTMLVideoElement | undefined;
   let url: string | undefined;
   try {
-    const file = await readPublicMedia(
-      source,
-      controller.signal,
-      current,
-      ['video/mp4', 'video/webm'],
-      MAX_CLIP_BYTES,
-    );
-    if (
-      !file ||
-      !current() ||
-      (file.contentLength !== undefined && file.contentLength !== file.bytes.byteLength) ||
-      !matchesContainer(file.bytes, file.mime)
-    )
-      return;
+    const file = await readPublicMedia(source, controller.signal, current, {
+      allowedTypes: ['video/mp4', 'video/webm'],
+      maxBytes: MAX_CLIP_BYTES,
+      requireWholeFile: true,
+    });
+    if (!file || !current() || !matchesContainer(file.bytes, file.mime)) return;
     const local = document.createElement('video');
     decoder = local;
     local.preload = 'metadata';

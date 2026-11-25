@@ -19,7 +19,7 @@ The IDs and short descriptions come from the preserved original proposal. Status
 | UX-05 | Noninterference and accessibility | Partial | Isolated styling, pointer-events, reduced-motion rule and test. Full native accessibility and controls review pending. |
 | UX-06 | Fail closed on all nonpositive states | Implemented | Core protocol, detector/provenance policy tests and binding.test.ts exercise the default no-label path. |
 | DISC-01 | Generic image discovery | Partial | Content script discovers img/currentSrc, embedded backgrounds and eligible single-image public HTTPS photo cards. CORS-denied cards remain inaccessible. The ordinary-page browser regression includes a 120×68 feed thumbnail and a dynamic CDN-backed CSS card. |
-| DISC-02 | Generic video discovery | Partial | Video elements and source events, MP4/WebM developer inputs and temporal analyzer. Platform fixtures pending. |
+| DISC-02 | Generic video discovery | Partial | HTML video playback, low-frame-rate loops, same-origin and eligible CORS-permitted CDN MP4/WebM files, and up to four consecutive analysis windows. Installed Chrome regressions cover generated video, camera footage and a 32-second pan. Cross-origin player frames, DRM and live streams remain outside the scanner. |
 | DISC-03 | Dynamic lifecycle | Partial | Mutation, visibility and resize observers, registered frames and accessible open roots. Feed/site trials pending. |
 | DISC-04 | Correct source binding | Partial | Generation, request and source checks plus binding tests and the browser source-change acceptance. |
 | DISC-05 | Visibility scheduling and dedup | Partial | Bounded queues, retries and visibility checks are tested. The 240-item browser fixture passed on the five Chromium targets. |
