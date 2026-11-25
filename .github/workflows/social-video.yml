@@ -38,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON((inputs.live_sites || contains(github.event.pull_request.labels.*.name, 'test-live-social') || contains(github.event.pull_request.body, '<!-- test-live-social -->')) && '["stream","youtube","tiktok","bluesky"]' || '["stream"]') }}
+        target: ${{ fromJSON((inputs.live_sites || contains(github.event.pull_request.labels.*.name, 'test-live-social') || contains(github.event.pull_request.body, '<!-- test-live-social -->')) && '["stream","canvas","video-check","public-clip","youtube","tiktok","bluesky"]' || '["stream","canvas","video-check"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,8 +58,17 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
+          if [[ "$TARGET" == video-check ]]; then
+            python -u tests/e2e/generated_video.py --video-check --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium
+            exit
+          fi
+          if [[ "$TARGET" == public-clip ]]; then
+            python -u tests/e2e/generated_video.py --direct --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium
+            exit
+          fi
           args=()
-          if [[ "$TARGET" == stream ]]; then
+          if [[ "$TARGET" == stream || "$TARGET" == canvas ]]; then
+            if [[ "$TARGET" == canvas ]]; then args+=(--canvas-player); fi
             command -v ffmpeg || sudo apt-get install -y ffmpeg
           else
             args+=(--live "$TARGET")

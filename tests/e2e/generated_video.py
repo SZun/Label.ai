@@ -167,6 +167,55 @@ def feed(context, worker):
     assert not forbidden, forbidden
 
 
+def video_check(site):
+    from tools.test_gallery import gallery
+    with gallery(video_check=True) as (origin, requests):
+        site.goto(origin)
+        site.locator('label-ai-overlay[data-label-ai-scanner-state="active"]').wait_for(
+            state="attached", timeout=30_000)
+        for player_id in ['generated-video','genuine-video']:
+            target = site.locator('#' + player_id)
+            target.scroll_into_view_if_needed()
+            assert target.evaluate("v => v.loop")
+            target.evaluate("v => { v.muted = true; return v.play(); }")
+            if player_id == 'generated-video':
+                site.locator('#generated-video[data-label-ai-test-state="labeled"]').wait_for(timeout=100_000)
+                badge = site.locator('label-ai-overlay [aria-label="Video analysis"] .slop-label')
+                badge.wait_for(state="visible")
+                player_box, badge_box = target.bounding_box(), badge.bounding_box()
+                assert player_box and badge_box
+                assert abs(badge_box["x"] - max(0, player_box["x"]) - 8) < 3
+                assert abs(badge_box["y"] - max(0, player_box["y"]) - 8) < 3
+                print("Video check: production extension displayed a Luma video badge", flush=True)
+            else:
+                site.locator('#genuine-video[data-label-ai-test-state="completed-no-label"]').wait_for(timeout=100_000)
+                assert target.evaluate("""v => {
+                  const t=v.getBoundingClientRect();
+                  return [...document.querySelector('label-ai-overlay').shadowRoot.querySelectorAll('.slop-label')]
+                    .every(b=>!b.checkVisibility() || Math.abs(b.getBoundingClientRect().left-t.left-8)>3 ||
+                      Math.abs(b.getBoundingClientRect().top-Math.max(t.top,0)-8)>3);
+                }""")
+                print("Video check: production extension analyzed camera footage without a badge", flush=True)
+            target.evaluate("v => v.pause()")
+        assert all(method in ('GET','HEAD') for method,_ in requests)
+
+
+def direct_public_clip(site):
+    url = SHOWCASE + "video/a_little_boy.mp4"
+    response = site.goto(url, wait_until="domcontentloaded", timeout=45_000)
+    assert response and response.ok and response.headers.get("content-type", "").startswith("video/mp4")
+    player = site.locator("video").first
+    player.wait_for(state="visible")
+    site.locator("label-ai-overlay").wait_for(state="attached")
+    site.wait_for_function("document.querySelector('video').readyState >= 2")
+    # Same actions as enabling Loop in Chrome's native context menu and pressing Play.
+    player.evaluate("v => { v.loop = true; v.muted = true; return v.play() }")
+    site.wait_for_function("document.querySelector('video').getVideoPlaybackQuality().totalVideoFrames >= 3")
+    assert player.evaluate("v => v.currentSrc") == url
+    wait_for_video_badge(site, "video")
+    print(f"Video-specific badge on Chrome's native standalone MP4 player: {url}", flush=True)
+
+
 def showcase(site):
     site.goto(SHOWCASE, wait_until="domcontentloaded", timeout=50_000)
     # The publisher rotates slides every 4s and clones them for looping. Hover
@@ -198,6 +247,8 @@ if __name__ == "__main__":
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--browser")
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--direct", action="store_true")
+    parser.add_argument("--video-check", action="store_true")
     args = parser.parse_args()
     build = args.build.resolve()
     with TemporaryDirectory() as profile, sync_playwright() as pw:
@@ -205,7 +256,15 @@ if __name__ == "__main__":
                   "--disable-background-networking", "--disable-component-update", "--disable-sync"]
         with browser_session(pw, profile, launch, args) as context:
             worker = wait_for_registration(context, build)
-            if args.live:
+            if args.video_check:
+                site = context.new_page()
+                site.bring_to_front()
+                video_check(site)
+            elif args.direct:
+                site = context.new_page()
+                site.bring_to_front()
+                direct_public_clip(site)
+            elif args.live:
                 site = context.new_page()
                 site.bring_to_front()
                 showcase(site)

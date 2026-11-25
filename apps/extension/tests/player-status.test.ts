@@ -11,3 +11,8 @@ it('separates an unavailable player, an in-progress scan and a completed negativ
   Object.defineProperty(video, 'mediaKeys', { value: {} });
   expect(playerStatus(video, 'pending', true)).toBe('protected');
 });
+
+it('explains when the site is decoding behind an invisible playback surface', () => {
+  const video = document.createElement('video');
+  expect(playerStatus(video, undefined, false, false)).toBe('hidden-player');
+});

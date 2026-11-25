@@ -8,6 +8,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import re
+from tempfile import NamedTemporaryFile
+from urllib.request import urlopen
 import subprocess
 import sys
 from threading import Event, Thread
@@ -15,13 +17,25 @@ from threading import Event, Thread
 if __package__:
     from .demo_page import ramp_png
     from .prepare_smoke_media import PHOTOS
-    from .prepare_video_smoke import FILES as VIDEO_DIGESTS
+    from .prepare_video_smoke import FILES as VIDEO_DIGESTS, MDN
+    from .prepare_frontier_dev import BASE as FRONTIER_BASE
 else:
     from demo_page import ramp_png
     from prepare_smoke_media import PHOTOS
-    from prepare_video_smoke import FILES as VIDEO_DIGESTS
+    from prepare_video_smoke import FILES as VIDEO_DIGESTS, MDN
+    from prepare_frontier_dev import BASE as FRONTIER_BASE
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+LUMA_FILE = 'videos/v3fae73976c72.mp4'
+VIDEO_CHECK_CLIPS = [
+    ('generated-video', 'artifacts/frontier-dev/' + LUMA_FILE, FRONTIER_BASE + LUMA_FILE,
+     '3fae73976c724425caa902f85d5e77e62c6e57883f5068cb8f77a8fd2e91d4f3',
+     'Generated video • Luma Ray 3.2', 'WasItAIGenerated, CC BY 4.0. Five-second generated clip.'),
+    ('genuine-video', 'artifacts/video-smoke/flower.mp4', MDN + 'flower.mp4', VIDEO_DIGESTS['flower.mp4'],
+     'Camera control • flowers', 'MDN public camera footage. Five-second comparison clip.'),
+]
 
 
 class FixtureError(ValueError):
@@ -96,6 +110,32 @@ def video_assets(root):
     ]
 
 
+def video_check_assets(root, *, prepare=False):
+    samples = []
+    for element_id, relative, url, digest, title, description in VIDEO_CHECK_CLIPS:
+        path = root / relative
+        try:
+            data = verified(path, digest)
+        except FixtureError:
+            if not prepare:
+                raise
+            print(f'Preparing {title}…', flush=True)
+            try:
+                with urlopen(url, timeout=45) as response:
+                    data = response.read(16 * 1024 * 1024 + 1)
+            except OSError as error:
+                raise FixtureError(f'Could not download {path.name} ({error})') from error
+            if len(data) > 16 * 1024 * 1024 or hashlib.sha256(data).hexdigest() != digest:
+                raise FixtureError(f'Fixture digest mismatch: {path.name}')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with NamedTemporaryFile(dir=path.parent, delete=False) as output:
+                output.write(data)
+            Path(output.name).replace(path)
+        samples.append(Asset(element_id, title, description, '.mp4', data))
+    return samples
+
+
+
 def ensure_fixtures(root=ROOT, *, prepare=False, include_videos=False):
     """Verify cached public inputs first; only download when explicitly requested."""
     required = [(signed_asset, 'prepare_provenance_fixtures.py'),
@@ -123,11 +163,12 @@ def build_assets(root=ROOT, include_videos=False):
     return samples
 
 
-def sample_card(asset):
+def sample_card(asset, *, loop=False):
     title = escape(asset.title)
     attrs = f'id="{asset.element_id}" src="{asset.path}"'
     if asset.mime.startswith('video/'):
-        media = f'<video {attrs} controls playsinline preload="metadata" aria-label="{title}"></video>'
+        playback = 'controls playsinline loop' if loop else 'controls playsinline'
+        media = f'<video {attrs} {playback} preload="metadata" aria-label="{title}"></video>'
     else:
         media = f'<img {attrs} loading="eager" alt="{title}">'
     return (f'<figure>{media}<figcaption><strong>{title}</strong><small>{escape(asset.description)}</small>'
@@ -161,6 +202,26 @@ Keep the images visible while Label.ai scans them. Each copy should receive its 
 <div class="column-samples">{samples}</div>
 <p><a href="/">Return to the test gallery</a></p>
 </main></body></html>'''.encode()
+
+
+def video_check_page(samples, expected_version):
+    cards = ''.join(sample_card(sample, loop=True) for sample in samples)
+    return f'''<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="label-ai-test-gallery" content="1"><title>Label.ai video check</title>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="/gallery.css">
+<script src="/gallery.js" defer></script></head><body><main>
+<h1>Test video detection</h1>
+<p>With the regular Label.ai extension enabled, press Play on the Luma clip and watch from the beginning.
+Keep this tab in the foreground while the local analysis finishes. Expect a badge on the Luma video.
+Pause the Luma clip, then play the camera control from the beginning. It should finish scanning without a badge.</p>
+{scanner_status(expected_version)}
+<div class="grid">{cards}</div>
+<p><a href="{VIDEO_CHECK_CLIPS[0][2]}">Original generated clip</a> ·
+<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0 license</a> ·
+<a href="{VIDEO_CHECK_CLIPS[1][2]}">Original camera footage</a></p>
+</main></body></html>'''.encode()
+
 
 
 def page(samples, port, expected_version):
@@ -379,13 +440,14 @@ def byte_range(value, size):
 
 
 @contextmanager
-def gallery(port=0, root=ROOT, include_videos=False):
+def gallery(port=0, root=ROOT, include_videos=False, *, video_check=False):
     """Return a loopback-only, GET-only publisher of an explicit asset allowlist."""
     expected_version = json.loads((ROOT / 'apps/extension/package.json').read_text())['version']
-    samples = build_assets(root, include_videos)
+    samples = video_check_assets(root, prepare=True) if video_check else build_assets(root, include_videos)
     resources = {sample.path: (sample.mime, sample.content) for sample in samples}
-    generated = next(sample for sample in samples if sample.element_id == 'generated-1')
-    resources['/columns'] = ('text/html; charset=utf-8', columns_page(generated, expected_version))
+    if not video_check:
+        generated = next(sample for sample in samples if sample.element_id == 'generated-1')
+        resources['/columns'] = ('text/html; charset=utf-8', columns_page(generated, expected_version))
     resources['/gallery.css'] = ('text/css; charset=utf-8', STYLE)
     resources['/gallery.js'] = ('text/javascript; charset=utf-8', SCRIPT)
     requests = []
@@ -401,7 +463,9 @@ def gallery(port=0, root=ROOT, include_videos=False):
                 self.send_error(403)
                 return
             if self.path == '/':
-                mime, data = 'text/html; charset=utf-8', page(samples, self.server.server_port, expected_version)
+                mime = 'text/html; charset=utf-8'
+                data = (video_check_page(samples, expected_version) if video_check
+                        else page(samples, self.server.server_port, expected_version))
             elif self.path in resources:
                 mime, data = resources[self.path]
             else:
@@ -461,17 +525,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--prepare', action='store_true', help='Download missing or invalid pinned public test fixtures')
-    parser.add_argument('--videos', action='store_true', help='Include two public video samples')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--video-check', action='store_true',
+                       help='Prepare just the pinned Luma and camera clips and serve a video-only check')
+    modes.add_argument('--videos', action='store_true', help='Include two public video samples')
     args = parser.parse_args()
     try:
-        ensure_fixtures(prepare=args.prepare, include_videos=args.videos)
-        with gallery(args.port, include_videos=args.videos) as (origin, _requests):
-            print(f'Open {origin} with the regular Label.ai extension enabled. Test column placement at {origin}/columns. Keep this terminal running.', flush=True)
+        if not args.video_check:
+            ensure_fixtures(prepare=args.prepare, include_videos=args.videos)
+        with gallery(args.port, include_videos=args.videos, video_check=args.video_check) as (origin, _requests):
+            if args.video_check:
+                print(f'Open {origin}/ in the regular Label.ai extension and play the Luma clip. Keep this terminal running.', flush=True)
+            else:
+                print(f'Open {origin} with the regular Label.ai extension enabled. Test column placement at {origin}/columns. Keep this terminal running.', flush=True)
             try:
                 Event().wait()
             except KeyboardInterrupt:
                 pass
     except FixtureError as error:
+        if args.video_check:
+            raise SystemExit(str(error)) from error
         raise SystemExit(f'{error}. Run python3 tools/test_gallery.py --prepare (add --videos for videos).') from error
 
 

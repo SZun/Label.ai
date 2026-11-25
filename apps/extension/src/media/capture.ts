@@ -179,21 +179,28 @@ export function captureVideoFrame(
   video: HTMLVideoElement,
   timestampMs: number,
   maxSide = VIDEO_MAX_SIDE,
+  display?: HTMLCanvasElement,
 ): FramePayload {
   if (video.readyState < 2 || video.mediaKeys) throw new Error('Video pixels are unavailable');
-  return pixels(video, video.videoWidth, video.videoHeight, maxSide, timestampMs);
+  return pixels(
+    display ?? video,
+    display?.width ?? video.videoWidth,
+    display?.height ?? video.videoHeight,
+    maxSide,
+    timestampMs,
+  );
 }
 
 // A tiny color grid lets the scanner retire a segment verdict on a cut while
 // inference is running. Keep this canvas private to one observed window.
-export function createVideoSceneReader(video: HTMLVideoElement) {
+export function createVideoSceneReader(video: HTMLVideoElement, display?: HTMLCanvasElement) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 8;
   const context = canvas.getContext('2d', { willReadFrequently: true });
   return () => {
     if (!context || video.mediaKeys || video.readyState < 2)
       throw new Error('Current video scene is unavailable');
-    context.drawImage(video, 0, 0, 8, 8);
+    context.drawImage(display ?? video, 0, 0, 8, 8);
     return context.getImageData(0, 0, 8, 8).data;
   };
 }
