@@ -465,7 +465,7 @@ export default defineContentScript({
         return;
       const generation = entry.generation;
       const durationMs = video.duration * 1000;
-      if (needsPlaybackWindow(durationMs, video.currentTime * 1000)) {
+      if (needsPlaybackWindow(durationMs, video.currentTime * 1000, entry.source)) {
         startPlaybackWindow(entry, video);
         return;
       }

@@ -49,7 +49,7 @@ export function browsingModelLabel(kind: 'image' | 'video', result: ModelEvidenc
 
 export function playbackWindowLabel(result: ModelEvidence): boolean {
   return (
-    meetsModelThreshold('video', result, BROWSING_VIDEO_THRESHOLD) &&
+    browsingModelLabel('video', result) &&
     result.temporal?.sustainedFrameEvidence === true &&
     result.temporal.sceneCuts === 0 &&
     (result.temporal.motionEnergy ?? 0) >= 0.01

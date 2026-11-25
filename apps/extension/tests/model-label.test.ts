@@ -74,3 +74,28 @@ it('requires strong, moving, distributed evidence for the current playback windo
     expect(playbackWindowLabel({ ...result, temporal: { ...temporal, ...change } })).toBe(false);
   }
 });
+
+it('retains the browsing video operating point for sustained distributed evidence in one moving scene', () => {
+  const result = {
+    status: 'COMPLETED' as const,
+    rawScore: 0.1,
+    temporal: {
+      eligible: false,
+      sceneCuts: 0,
+      sustainedFrameEvidence: true,
+      motionEnergy: 0.012,
+      reasonCodes: ['MIXED_FRAME_EVIDENCE'],
+    },
+  };
+  expect(playbackWindowLabel(result)).toBe(true);
+  expect(playbackWindowLabel({ ...result, rawScore: 0.099 })).toBe(false);
+  for (const changed of [
+    { sustainedFrameEvidence: false },
+    { sceneCuts: 1 },
+    { motionEnergy: 0.009 },
+    { reasonCodes: ['MIXED_FRAME_EVIDENCE', 'INSUFFICIENT_TEMPORAL_COVERAGE'] },
+  ])
+    expect(playbackWindowLabel({ ...result, temporal: { ...result.temporal, ...changed } })).toBe(
+      false,
+    );
+});

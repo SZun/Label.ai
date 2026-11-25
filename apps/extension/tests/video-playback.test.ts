@@ -242,6 +242,7 @@ it.each([
 
 it.each([
   ['long clip', 300],
+  ['buffered short from the start', 25],
   ['source change during inference', 300],
   ['seek without an event', 300],
   ['negative retry', 300],
@@ -255,9 +256,14 @@ it.each([
   ['pause after verdict', 300],
   ['insufficient watch time', 300],
 ] as const)('samples only the observed scene on %s', async (scenario, duration) => {
-  const start = duration === 22 ? 9 : 72;
+  const start = scenario === 'buffered short from the start' ? 0 : duration === 22 ? 9 : 72;
   let currentDuration: number = duration;
   const h = await playbackHarness(() => currentDuration, start);
+  if (scenario === 'buffered short from the start') {
+    class Handle {}
+    vi.stubGlobal('MediaSourceHandle', Handle);
+    Object.defineProperty(h.video, 'srcObject', { value: new Handle() });
+  }
   let finish: (() => void) | undefined;
   let color = 30;
   mocks.scene.mockImplementation(() => new Uint8Array(8 * 8 * 4).fill(color));
@@ -314,19 +320,33 @@ it.each([
     await h.tick();
     const labels = () => mocks.setLabels.mock.calls.at(-1)![0];
     expect(labels()).toHaveLength(
-      ['seek during inference', 'cut during inference', 'source change during inference', 'seek without an event', 'DVR rewind', 'negative retry'].includes(scenario) ? 0 : 1,
+      [
+        'seek during inference',
+        'cut during inference',
+        'source change during inference',
+        'seek without an event',
+        'DVR rewind',
+        'negative retry',
+      ].includes(scenario)
+        ? 0
+        : 1,
     );
     if (scenario === 'negative retry') {
-      const submissions = () => mocks.send.mock.calls.filter(([m]) => m.type === 'label-ai:analyze').length;
+      const submissions = () =>
+        mocks.send.mock.calls.filter(([m]) => m.type === 'label-ai:analyze').length;
       expect(submissions()).toBe(1);
-      h.renew(); await h.tick();
+      h.renew();
+      await h.tick();
       for (let n = 39; n < 74; n++) present(n);
       expect(submissions()).toBe(1);
       h.advanceClock(8000);
-      h.renew(); await h.tick(); await h.tick();
+      h.renew();
+      await h.tick();
+      await h.tick();
       for (let n = 74; n <= 112; n++) present(n);
       expect(submissions()).toBe(2);
-      finish!(); await h.tick();
+      finish!();
+      await h.tick();
     }
     if (scenario === 'cut after verdict' || scenario === 'pause after verdict') {
       if (scenario === 'cut after verdict') {

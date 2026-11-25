@@ -134,6 +134,8 @@ export function isAnalyzeRequest(value: unknown): value is AnalyzeRequest {
       item.original ||
       !Array.isArray(item.frames) ||
       item.frames.length < 8 ||
+      item.frames.length > 12 ||
+      item.coverage !== 1 ||
       !item.frames.every(validFrame) ||
       !(item.durationMs! >= 4000 && item.durationMs! <= 4500) ||
       item.frames[0]!.timestampMs !== 0 ||

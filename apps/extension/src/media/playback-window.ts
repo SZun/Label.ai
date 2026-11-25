@@ -7,8 +7,12 @@ const SAMPLE_INTERVAL_MS = 440;
 const SCENE_INTERVAL_MS = 240;
 const MAX_PRESENTATION_GAP_MS = 650;
 
-export function needsPlaybackWindow(durationMs: number, currentMs: number) {
+export function needsPlaybackWindow(durationMs: number, currentMs: number, source: string) {
   if (durationMs === Infinity || durationMs > MAX_SAMPLED_DURATION_MS) return true;
+  // Buffer-backed players are frequently recycled by feeds. A viewer shouldn't
+  // need to stay until the end of a 45-second Short before its first analysis.
+  if (durationMs >= 10_000 && (source.startsWith('blob:') || source.startsWith('media-source:')))
+    return true;
   // A whole-clip sample cannot recover an opening third the viewer missed.
   return currentMs > durationMs * 0.2 && durationMs - currentMs >= PLAYBACK_WINDOW_MS;
 }
@@ -68,7 +72,6 @@ export function observePlaybackWindow(
     const time = mediaTime * 1000;
     if (stopped) return;
     if (
-      !current() ||
       video.paused ||
       video.seeking ||
       video.ended ||
@@ -82,7 +85,14 @@ export function observePlaybackWindow(
     const elapsed = time - start;
     if (elapsed > 32_000) return retire();
     try {
-      if (time - sceneTime >= SCENE_INTERVAL_MS || (frames && elapsed >= PLAYBACK_WINDOW_MS)) {
+      const needsFrame =
+        frames !== undefined &&
+        (elapsed - lastSample >= SAMPLE_INTERVAL_MS || elapsed >= PLAYBACK_WINDOW_MS);
+      const needsGrid =
+        time - sceneTime >= SCENE_INTERVAL_MS ||
+        (frames !== undefined && elapsed >= PLAYBACK_WINDOW_MS);
+      if ((needsFrame || needsGrid) && !current()) return retire();
+      if (needsGrid) {
         const grid = readScene();
         if (
           (previousGrid && colorDifference(previousGrid, grid) > 0.2) ||
@@ -93,7 +103,7 @@ export function observePlaybackWindow(
         sceneTime = time;
         armTimeout();
       }
-      if (frames && (elapsed - lastSample >= SAMPLE_INTERVAL_MS || elapsed >= PLAYBACK_WINDOW_MS)) {
+      if (frames && needsFrame) {
         frames.push(captureVideoFrame(video, elapsed, 384));
         lastSample = elapsed;
         if (elapsed >= PLAYBACK_WINDOW_MS) {
