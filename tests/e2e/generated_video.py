@@ -167,6 +167,35 @@ def feed(context, worker):
     assert not forbidden, forbidden
 
 
+def video_check(site):
+    from tools.test_gallery import gallery
+    with gallery(video_check=True) as (origin, requests):
+        site.goto(origin)
+        site.wait_for_function("""document.querySelector('label-ai-overlay')
+          ?.getAttribute('data-label-ai-scanner-state') === 'active'""", timeout=30_000)
+        for player_id in ['generated-video','genuine-video']:
+            target = site.locator('#' + player_id)
+            target.scroll_into_view_if_needed()
+            assert target.evaluate("v => v.loop")
+            target.evaluate("v => { v.muted = true; return v.play(); }")
+            if player_id == 'generated-video':
+                wait_for_video_badge(site, '#' + player_id)
+                assert target.get_attribute('data-label-ai-test-state') == 'labeled'
+                print("Video check: production extension displayed a Luma video badge", flush=True)
+            else:
+                site.wait_for_function("""document.querySelector('#genuine-video')
+                  ?.getAttribute('data-label-ai-test-state') === 'completed-no-label'""", timeout=100_000)
+                assert target.evaluate("""v => {
+                  const t=v.getBoundingClientRect();
+                  return [...document.querySelector('label-ai-overlay').shadowRoot.querySelectorAll('.slop-label')]
+                    .every(b=>!b.checkVisibility() || Math.abs(b.getBoundingClientRect().left-t.left-8)>3 ||
+                      Math.abs(b.getBoundingClientRect().top-Math.max(t.top,0)-8)>3);
+                }""")
+                print("Video check: production extension analyzed camera footage without a badge", flush=True)
+            target.evaluate("v => v.pause()")
+        assert all(method in ('GET','HEAD') for method,_ in requests)
+
+
 def direct_public_clip(site):
     url = SHOWCASE + "video/a_little_boy.mp4"
     response = site.goto(url, wait_until="domcontentloaded", timeout=45_000)
@@ -215,6 +244,7 @@ if __name__ == "__main__":
     parser.add_argument("--browser")
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--direct", action="store_true")
+    parser.add_argument("--video-check", action="store_true")
     args = parser.parse_args()
     build = args.build.resolve()
     with TemporaryDirectory() as profile, sync_playwright() as pw:
@@ -222,7 +252,11 @@ if __name__ == "__main__":
                   "--disable-background-networking", "--disable-component-update", "--disable-sync"]
         with browser_session(pw, profile, launch, args) as context:
             worker = wait_for_registration(context, build)
-            if args.direct:
+            if args.video_check:
+                site = context.new_page()
+                site.bring_to_front()
+                video_check(site)
+            elif args.direct:
                 site = context.new_page()
                 site.bring_to_front()
                 direct_public_clip(site)

@@ -21,6 +21,8 @@ For Safari, run `npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:safari`
 
 ### Try a public video
 
+Open [this exact two-second VideoCrafter2 MP4](https://ailab-cvc.github.io/videocrafter2/video/a_little_boy.mp4) in a regular Chrome tab. Right-click the player, enable **Loop**, and press Play. Keep the video visible. Chrome for Testing displayed a video-specific badge on this exact URL using the regular 0.1.8 extension. [Installed browser result](https://github.com/SZun/Label.ai/actions/runs/45529232468/job/138920279513)
+
 The installed-Chrome [streaming playback test](https://github.com/SZun/Label.ai/actions/runs/45527174384/job/138913458066) joined an actively playing stream at 70 seconds, verified a badge from a video decision, and switched the same player to genuine camera footage. The badge cleared. The separate [social checks](https://github.com/SZun/Label.ai/actions/runs/45527174384) require a video-specific badge on each publisher’s actual player. A cover-image badge cannot pass.
 
 Open the [VideoCrafter2 project page](https://ailab-cvc.github.io/videocrafter2/#results-carousel) in a regular Chrome tab. Scroll to the sample carousel and hover over the playing video to hold that slide in view. Press play if your browser paused it. The extension analyzes moving frames locally. Leave the player visible for a complete pass and allow time for inference. For ordinary short files watched from the start, the extension samples across the timeline. For buffered players of at least ten seconds, longer videos, readable live streams and clips joined partway through, it samples four seconds of visible playback and checks that the scene is still playing while inference runs. A positive window labels that scene. Skipping ahead or changing scenes retires its evidence. DRM-protected playback, unreadable frames and third-party iframe players remain coverage limits.
@@ -34,6 +36,8 @@ With the regular extension active, open the public [Keras textual inversion tuto
 On Wikipedia, scroll to the three forest-and-shrine images under [Text to image generation](https://en.wikipedia.org/wiki/Stable_Diffusion#Text_to_image_generation). Their 250×125 thumbnails were previously too short for the detector. The [Image modification](https://en.wikipedia.org/wiki/Stable_Diffusion#Image_modification) section also has two generated city-sphere images.
 
 ### Optional repeatable check
+
+To check video detection on a known sample, run `python3 tools/test_gallery.py --video-check` and open [the local video check](http://127.0.0.1:8765/). Play the five-second Luma Ray 3.2 clip from the beginning and keep the tab in front. It loops while the extension analyzes it. After the badge appears, pause Luma and play the MDN flower footage. Its scan should complete without a badge. The captions identify the source of each clip, and the status beneath each player reports the scanner's actual result.
 
 Run `python3 tools/test_gallery.py --prepare` and open [the local gallery](http://127.0.0.1:8765) in the regular extension. Scroll through the signed Firefly cat, four unsigned Stable Diffusion images and four genuine photographs. The gallery reports the detected build and each item’s actual scanner state separately from its known origin. Add `--videos` to download the two optional clips. The local file picker displays files as browser object URLs.
 
