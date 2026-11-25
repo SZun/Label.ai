@@ -119,12 +119,28 @@ def feed(context, worker):
 
 def showcase(site):
     site.goto(SHOWCASE, wait_until="domcontentloaded", timeout=50_000)
-    # Select the visible copy even if the publisher's carousel cloned a slide.
-    target = site.locator('video:has(source[src$="a_little_boy.mp4"])').first
-    target.scroll_into_view_if_needed()
-    target.evaluate("v => {v.dataset.testSelected='1';return v.play()}")
+    # The publisher rotates slides every 4s and clones them for looping. Hover
+    # uses its own pause-on-hover control. Hit-test the slide actually on screen.
+    carousel = site.locator("#results-carousel")
+    carousel.scroll_into_view_if_needed()
+    carousel.hover()
+    site.wait_for_function("""() => {
+        const carousel = document.querySelector('#results-carousel');
+        const player = [...carousel.querySelectorAll('video')].find(v => {
+            const r=v.getBoundingClientRect();
+            const x=Math.max(0,r.left) + Math.min(innerWidth - Math.max(0,r.left),r.width) / 2;
+            const y=Math.max(0,r.top) + Math.min(innerHeight - Math.max(0,r.top),r.height) / 2;
+            return r.width >= 128 && document.elementFromPoint(x,y) === v;
+        });
+        if (!player) return false;
+        player.dataset.testSelected = '1';
+        return true;
+    }""")
+    target = site.locator('video[data-test-selected="1"]')
+    print("Watching visible publisher slide", target.evaluate("v => v.currentSrc"), flush=True)
+    target.evaluate("v => v.play()")
     wait_for_video_badge(site, 'video[data-test-selected="1"]')
-    print("Labeled the actual looping little-boy clip on the live VideoCrafter2 project page", flush=True)
+    print("Labeled a real looping generated video on the live VideoCrafter2 project page", flush=True)
 
 
 if __name__ == "__main__":

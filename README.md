@@ -21,7 +21,7 @@ For Safari, run `npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:safari`
 
 ### Try a public video
 
-Open the [VideoCrafter2 project page](https://ailab-cvc.github.io/videocrafter2/#results-carousel) in a regular Chrome tab. Scroll to the sample videos and keep the looping little-boy clip in view. Press play if your browser paused it. The extension analyzes moving frames locally. Leave the player visible for a complete pass and allow time for inference. The preview supports readable, finite clips up to 60 seconds. A poster on a paused player provides no video verdict. Live streams, DRM-protected playback and players inside a cross-origin iframe are outside the current video scanner’s coverage.
+Open the [VideoCrafter2 project page](https://ailab-cvc.github.io/videocrafter2/#results-carousel) in a regular Chrome tab. Scroll to the sample carousel and hover over the playing video to hold that slide in view. Press play if your browser paused it. The extension analyzes moving frames locally. Leave the player visible for a complete pass and allow time for inference. The preview supports readable, finite clips up to 60 seconds. A poster on a paused player provides no video verdict. Live streams, DRM-protected playback and players inside a cross-origin iframe are outside the current video scanner’s coverage.
 
 ### Try a public image
 
