@@ -94,7 +94,8 @@ def wait_on_player(page, selector, popup, worker):
         print("Player at check:", page.locator(selector).evaluate("""v => ({
           duration: Number.isFinite(v.duration) ? v.duration : 'stream',
           sourceType: v.srcObject?.constructor?.name || v.currentSrc.split(':')[0],
-          pixels: (() => {try { const c=document.createElement('canvas'); c.width=c.height=1;
+          pixels: (() => {try { if (!v.checkVisibility({opacityProperty:true,visibilityProperty:true}))
+              return 'not tested (hidden element)'; const c=document.createElement('canvas'); c.width=c.height=1;
             const g=c.getContext('2d'); g.drawImage(v,0,0,1,1); g.getImageData(0,0,1,1);
             return 'readable'; } catch(e) {return e.name;} })(),
           chain: (() => {const chain=[];for(let e=v;e;e=e.parentElement){const s=getComputedStyle(e);
@@ -111,7 +112,7 @@ def wait_on_player(page, selector, popup, worker):
         })"""), flush=True)
 
 
-def stream_test(context, worker, folder):
+def stream_test(context, worker, folder, canvas_player=False):
     generated = fixture(ROOT / "artifacts/social-video" / GENERATED,
                         SHOWCASE + "video/" + GENERATED, GENERATED_HASH)
     camera = fixture(ROOT / "artifacts/video-smoke/flower.mp4", MDN + "flower.mp4", FILES["flower.mp4"])
@@ -136,6 +137,27 @@ def stream_test(context, worker, folder):
     page.locator("label-ai-overlay").wait_for(state="attached")
     observe_decisions(worker)
     video = page.locator("video")
+    if canvas_player:
+        page.evaluate("""() => {
+          const v = document.querySelector('video'), card = document.createElement('section');
+          card.style.cssText = 'position:relative;width:500px;height:320px';
+          v.before(card);
+          card.append(v);
+          v.style.opacity = '0';
+          const screen = document.createElement('canvas');
+          screen.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
+          card.append(screen);
+          function draw() {
+            if (v.videoWidth && v.readyState >= 2) {
+              if(screen.width !== v.videoWidth || screen.height !== v.videoHeight) {
+                screen.width=v.videoWidth; screen.height=v.videoHeight;
+              }
+              screen.getContext('2d').drawImage(v,0,0);
+            }
+            v.requestVideoFrameCallback(draw);
+          }
+          v.requestVideoFrameCallback(draw);
+        }""")
     popup = watch_status(context, worker)
     page.bring_to_front()
     for index in (1, 2):
@@ -181,6 +203,65 @@ SELECT_PLAYER = """platform => {
 }"""
 
 
+def play_tiktok(page, target):
+    # A decoder can advance underneath the cover. Use a real user gesture over
+    # this permalink's player and let the site switch its own rendering layers.
+    point = target.evaluate("""v => {
+      const r=v.getBoundingClientRect();
+      const x=(Math.max(0,r.left)+Math.min(innerWidth,r.right))/2;
+      const y=(Math.max(0,r.top)+Math.min(innerHeight,r.bottom))/2;
+      const hit=document.elementFromPoint(x,y);
+      if (!hit || hit.closest('a[href], input, dialog, [role=dialog]')) return null;
+      for (let box=v;box && box!==document.body;box=box.parentElement) {
+        const b=box.getBoundingClientRect();
+        if (!box.contains(hit) || b.width>1.8*r.width || b.height>1.8*r.height ||
+            b.width<1 || b.height<1) continue;
+        // Prefer an unobscured actual play control, otherwise click the image
+        // area that a viewer uses to start/pause the focused post.
+        for (const c of box.querySelectorAll('[data-e2e="video-play"],button[aria-label="Play"],[role=button][aria-label="Play video"]')) {
+          const a=c.getBoundingClientRect(), px=a.left+a.width/2, py=a.top+a.height/2;
+          if (a.width && a.height && px>=r.left && px<r.right && py>=r.top && py<r.bottom &&
+              c.contains(document.elementFromPoint(px,py))) return [px,py];
+        }
+        return [x,y];
+      }
+      return null;
+    }""")
+    try:
+        if point is None:
+            raise RuntimeError("TikTok's player is covered or has no visible playback control")
+        for _ in range(2):
+            page.mouse.click(*point)
+            # Clicking an autoplaying clip can pause it. Click again only if its
+            # own decoder reports a pause and the page is still on this post.
+            try:
+                page.wait_for_function("""() => {
+                  const v=document.querySelector('video[data-label-test-playback="1"]');
+                  return v && !v.paused && v.checkVisibility({opacityProperty:true,visibilityProperty:true});
+                }""", timeout=3500)
+                break
+            except BrowserError:
+                if not target.evaluate("v => location.pathname.endsWith('/7508418787968830742') && v.paused"):
+                    break
+    finally:
+        surface = target.evaluate("""v => {
+          const r=v.getBoundingClientRect();
+          const visible=e=>e.checkVisibility({opacityProperty:true,visibilityProperty:true});
+          const overlaps=e=>{const b=e.getBoundingClientRect();return (
+            Math.max(0,Math.min(b.right,r.right)-Math.max(b.left,r.left))*
+            Math.max(0,Math.min(b.bottom,r.bottom)-Math.max(b.top,r.top)) > .7*r.width*r.height)};
+          const canvases=[...document.querySelectorAll('canvas')];
+          const layers=[...document.elementsFromPoint((r.left+r.right)/2,(r.top+r.bottom)/2)]
+            .filter(e=>visible(e)&&overlaps(e)).slice(0,8).map(e=>e.tagName);
+          return {visibleVideo:visible(v), canvasCount:canvases.length,
+            matchingCanvases:canvases.filter(e=>visible(e)&&overlaps(e)).map(c=>[c.width,c.height]).slice(0,6),layers};
+        }""")
+        print("TikTok render surface after viewer click:", surface, flush=True)
+    if not surface["visibleVideo"] and not surface["matchingCanvases"]:
+        raise RuntimeError("TikTok did not expose a visible video or overlapping canvas after the viewer click")
+
+
+
 def live_test(context, worker, platform):
     url = PERMALINKS[platform]
     page = context.new_page()
@@ -199,7 +280,10 @@ def live_test(context, worker, platform):
                 play.click()
         page.wait_for_function(SELECT_PLAYER, arg=platform, timeout=35_000)
         target = page.locator(selector)
-        target.evaluate("v => { v.muted = true; return v.play(); }", timeout=10_000)
+        if platform == "tiktok":
+            play_tiktok(page, target)
+        else:
+            target.evaluate("v => { v.muted = true; return v.play(); }", timeout=10_000)
         first = target.evaluate("v => v.getVideoPlaybackQuality().totalVideoFrames")
         page.wait_for_function("""start => {
           const v = document.querySelector('video[data-label-test-playback="1"]');
@@ -221,6 +305,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", required=True, type=Path)
     parser.add_argument("--browser")
+    parser.add_argument("--canvas-player", action="store_true")
     parser.add_argument("--live", choices=PERMALINKS)
     args = parser.parse_args()
     build = args.build.resolve()
@@ -233,4 +318,4 @@ if __name__ == "__main__":
             if args.live:
                 live_test(context, worker, args.live)
             else:
-                stream_test(context, worker, Path(folder))
+                stream_test(context, worker, Path(folder), args.canvas_player)

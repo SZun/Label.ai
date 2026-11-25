@@ -32,6 +32,7 @@ import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capt
 import { needsPlaybackWindow, observePlaybackWindow } from '../../src/media/playback-window';
 import { videoSamplePlan, videoSampleSlot } from '../../src/media/video-sampling';
 import { canReadCorsVideo, readCorsVideoFrames } from '../../src/media/cors-video';
+import { playbackSurfaceFor } from '../../src/media/playback-surface';
 import { playingVideoCovers } from '../../src/media/video-cover';
 import { visiblePlaybackArea } from '../../src/media/playback-order';
 import { acquireVideoOriginal } from '../../src/media/video-original';
@@ -43,6 +44,7 @@ interface MediaEntry {
   id: string;
   source: string;
   videoDuration?: number;
+  playbackCanvas?: HTMLCanvasElement;
   backgroundLayout?: string;
   generation: number;
   binding?: Binding;
@@ -148,9 +150,17 @@ export default defineContentScript({
     const eligible = () => !ended && !document.hidden && eligibleDocumentChain(window, settings);
     const active = () => eligible() && permission.allowed;
 
+    function currentCanvas(video: HTMLVideoElement): HTMLCanvasElement | undefined {
+      if (getComputedStyle(video).opacity !== '0') return;
+      const surface = playbackSurfaceFor(video);
+      return surface instanceof HTMLCanvasElement ? surface : undefined;
+    }
+
     function matchesCurrentMedia(entry: MediaEntry) {
       return (
         sourceFor(entry.element) === entry.source &&
+        (!(entry.element instanceof HTMLVideoElement) ||
+          currentCanvas(entry.element) === entry.playbackCanvas) &&
         (!(entry.element instanceof HTMLVideoElement) ||
           Object.is(entry.element.duration, entry.videoDuration) ||
           (entry.stopWindow !== undefined &&
@@ -166,12 +176,20 @@ export default defineContentScript({
       let result: PlayerStatus = 'missing';
       for (const entry of entries.values()) {
         const video = entry.element;
-        if (!(video instanceof HTMLVideoElement) || !matchesVisibleMedia(entry)) continue;
+        if (!(video instanceof HTMLVideoElement) || !entry.visible || !video.isConnected) continue;
         const rect = video.getBoundingClientRect();
         const area = visiblePlaybackArea(rect);
         if (area <= largest) continue;
+        if (!shown(video)) {
+          if (result === 'missing') result = playerStatus(video, undefined, false, false);
+          continue;
+        }
         largest = area;
-        result = playerStatus(video, entry.lastState, Boolean(entry.binding));
+        result = playerStatus(
+          video,
+          matchesCurrentMedia(entry) ? entry.lastState : undefined,
+          Boolean(entry.binding),
+        );
       }
       return result;
     }
@@ -288,7 +306,10 @@ export default defineContentScript({
       entry.lastState = undefined;
       entry.nextWindowAt = undefined;
       entry.source = sourceFor(entry.element);
-      if (entry.element instanceof HTMLVideoElement) entry.videoDuration = entry.element.duration;
+      if (entry.element instanceof HTMLVideoElement) {
+        entry.videoDuration = entry.element.duration;
+        entry.playbackCanvas = currentCanvas(entry.element);
+      }
       entry.backgroundLayout = undefined;
       entry.generation += 1;
       entry.attempted = false;
@@ -301,6 +322,7 @@ export default defineContentScript({
 
     function shown(element: Element): boolean {
       // IntersectionObserver alone may report transparent or hidden media as intersecting.
+      if (element instanceof HTMLVideoElement) element = currentCanvas(element) ?? element;
       let insidePlayer = !fullscreen;
       for (let current: Element | null = element; current; ) {
         if (current === fullscreen) insidePlayer = true;
@@ -331,7 +353,7 @@ export default defineContentScript({
       )
         return null;
       if (entry.decision.expiresAt <= Date.now() || !matchesCurrentMedia(entry)) return null;
-      const bounds = badgeBounds(entry.element);
+      const bounds = badgeBounds(entry.playbackCanvas ?? entry.element);
       if (!bounds || !shown(entry.element)) return null;
       if (
         !(entry.element instanceof HTMLVideoElement) &&
@@ -484,6 +506,7 @@ export default defineContentScript({
             schedule();
           },
         },
+        entry.playbackCanvas,
       );
       entry.stopWindow = stop;
     }
@@ -501,7 +524,10 @@ export default defineContentScript({
         return;
       const generation = entry.generation;
       const durationMs = video.duration * 1000;
-      if (needsPlaybackWindow(durationMs, video.currentTime * 1000, entry.source)) {
+      if (
+        entry.playbackCanvas ||
+        needsPlaybackWindow(durationMs, video.currentTime * 1000, entry.source)
+      ) {
         startPlaybackWindow(entry, video);
         return;
       }
@@ -726,7 +752,7 @@ export default defineContentScript({
         if (!hasImageBadgeSpace(rect.width, rect.height)) continue;
         if (entry.element instanceof HTMLVideoElement) {
           if (rect.width < 128 || rect.height < 90) continue;
-          if (!entry.originalAttempted) {
+          if (!entry.originalAttempted && !entry.playbackCanvas) {
             if (entry.element.readyState < 1) continue;
             entry.originalAttempted = true;
             if (
@@ -900,7 +926,10 @@ export default defineContentScript({
         element,
         id: newScanId(),
         source,
-        ...(element instanceof HTMLVideoElement && { videoDuration: element.duration }),
+        ...(element instanceof HTMLVideoElement && {
+          videoDuration: element.duration,
+          playbackCanvas: currentCanvas(element),
+        }),
         generation: 0,
         visible: true,
         animated: animatedSources.get(element) === source,

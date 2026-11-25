@@ -38,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON((inputs.live_sites || contains(github.event.pull_request.labels.*.name, 'test-live-social') || contains(github.event.pull_request.body, '<!-- test-live-social -->')) && '["stream","youtube","tiktok","bluesky"]' || '["stream"]') }}
+        target: ${{ fromJSON((inputs.live_sites || contains(github.event.pull_request.labels.*.name, 'test-live-social') || contains(github.event.pull_request.body, '<!-- test-live-social -->')) && '["stream","canvas","youtube","tiktok","bluesky"]' || '["stream","canvas"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -59,7 +59,8 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           args=()
-          if [[ "$TARGET" == stream ]]; then
+          if [[ "$TARGET" == stream || "$TARGET" == canvas ]]; then
+            if [[ "$TARGET" == canvas ]]; then args+=(--canvas-player); fi
             command -v ffmpeg || sudo apt-get install -y ffmpeg
           else
             args+=(--live "$TARGET")

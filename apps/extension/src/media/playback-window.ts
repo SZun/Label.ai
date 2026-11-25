@@ -41,8 +41,9 @@ export function observePlaybackWindow(
   ready: (sample: PlaybackSample) => void,
   invalid: (unreadable: boolean) => void,
   renewal: { pending: () => boolean; setSceneConfirmed: (confirmed: boolean) => void },
+  display?: HTMLCanvasElement,
 ) {
-  const readScene = createVideoSceneReader(video);
+  const readScene = createVideoSceneReader(video, display);
   let previousGrid: Uint8ClampedArray | undefined;
   let referenceGrid: Uint8ClampedArray | undefined;
   let previousTime = -1;
@@ -115,7 +116,7 @@ export function observePlaybackWindow(
         armTimeout();
       }
       if (frames && needsFrame) {
-        frames.push(captureVideoFrame(video, elapsed, 384));
+        frames.push(captureVideoFrame(video, elapsed, 384, display));
         lastSample = elapsed;
         if (elapsed >= PLAYBACK_WINDOW_MS) {
           if (elapsed > 4500 || frames.length < 8) return retire();
