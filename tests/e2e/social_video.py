@@ -206,32 +206,50 @@ SELECT_PLAYER = """platform => {
 def play_tiktok(page, target):
     # A decoder can advance underneath the cover. Use a real user gesture over
     # this permalink's player and let the site switch its own rendering layers.
-    point = target.evaluate("""v => {
-      const r=v.getBoundingClientRect();
-      const x=(Math.max(0,r.left)+Math.min(innerWidth,r.right))/2;
-      const y=(Math.max(0,r.top)+Math.min(innerHeight,r.bottom))/2;
-      const hit=document.elementFromPoint(x,y);
-      if (!hit || hit.closest('a[href], input, dialog, [role=dialog]')) return null;
-      for (let box=v;box && box!==document.body;box=box.parentElement) {
-        const b=box.getBoundingClientRect();
-        if (!box.contains(hit) || b.width>1.8*r.width || b.height>1.8*r.height ||
-            b.width<1 || b.height<1) continue;
-        // Prefer an unobscured actual play control, otherwise click the image
-        // area that a viewer uses to start/pause the focused post.
-        for (const c of box.querySelectorAll('[data-e2e="video-play"],button[aria-label="Play"],[role=button][aria-label="Play video"]')) {
-          const a=c.getBoundingClientRect(), px=a.left+a.width/2, py=a.top+a.height/2;
-          if (a.width && a.height && px>=r.left && px<r.right && py>=r.top && py<r.bottom &&
-              c.contains(document.elementFromPoint(px,py))) return [px,py];
-        }
-        return [x,y];
-      }
-      return null;
-    }""")
+    target.scroll_into_view_if_needed(timeout=12_000)
+    clicked = False
     try:
-        if point is None:
-            raise RuntimeError("TikTok's player is covered or has no visible playback control")
+        # The decoder can obtain metadata during hydration, while hit tests
+        # still return only the page body. Wait for this post's real controls.
+        handle = page.wait_for_function("""() => {
+          const v=document.querySelector('video[data-label-test-playback="1"]');
+          if (!v || !location.pathname.endsWith('/7508418787968830742')) return false;
+          const r=v.getBoundingClientRect();
+          const left=Math.max(0,r.left), right=Math.min(innerWidth,r.right);
+          const top=Math.max(0,r.top), bottom=Math.min(innerHeight,r.bottom);
+          if (right-left<160 || bottom-top<90) return false;
+          const article=v.closest('article');
+          const control='[data-e2e="video-play"],button[aria-label="Play" i],[role=button][aria-label="Play video" i],button[aria-label="Play video" i]';
+          const blocked='a[href], input, dialog, [role=dialog], [aria-modal=true]';
+          const containers=[];
+          for (let box=v.parentElement;box && box!==document.body;box=box.parentElement) {
+            const b=box.getBoundingClientRect();
+            if (b.width>=.75*r.width && b.height>=.75*r.height &&
+                b.width<1.8*r.width && b.height<1.8*r.height) containers.push(box);
+            if (box===article) break;
+          }
+          if (!containers.length) return false;
+          const region=article ?? containers[containers.length-1];
+          for (const c of region.querySelectorAll(control)) {
+            const b=c.getBoundingClientRect(), x=b.left+b.width/2, y=b.top+b.height/2;
+            if (!b.width || !b.height || x<left || x>=right || y<top || y>=bottom) continue;
+            const hit=document.elementFromPoint(x,y);
+            if (hit && !hit.closest(blocked) && c.contains(hit)) return [x,y];
+          }
+          for (const [fx,fy] of [[.5,.5],[.35,.4],[.65,.4],[.35,.65],[.65,.65]]) {
+            const x=left+(right-left)*fx, y=top+(bottom-top)*fy;
+            const hit=document.elementFromPoint(x,y);
+            if (!hit || !region.contains(hit) || hit.closest(blocked) ||
+                hit.closest('button,[role=button]') || hit===region) continue;
+            if (containers.some(box=>box!==article && box.contains(hit))) return [x,y];
+          }
+          return false;
+        }""", timeout=25_000)
+        point = handle.json_value()
+        handle.dispose()
         for _ in range(2):
             page.mouse.click(*point)
+            clicked = True
             # Clicking an autoplaying clip can pause it. Click again only if its
             # own decoder reports a pause and the page is still on this post.
             try:
@@ -256,7 +274,7 @@ def play_tiktok(page, target):
           return {visibleVideo:visible(v), canvasCount:canvases.length,
             matchingCanvases:canvases.filter(e=>visible(e)&&overlaps(e)).map(c=>[c.width,c.height]).slice(0,6),layers};
         }""")
-        print("TikTok render surface after viewer click:", surface, flush=True)
+        print("TikTok viewer control and render surface:", {"clicked": clicked, **surface}, flush=True)
     if not surface["visibleVideo"]:
         if len(surface["matchingCanvases"]) != 1:
             raise RuntimeError("TikTok did not expose one visible playback surface after the viewer click")
