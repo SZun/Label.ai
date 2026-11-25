@@ -20,6 +20,7 @@ it('an explicitly denied or failed renewal cancels the previous admission', asyn
   request.mockResolvedValue({ allowed: false });
   await permission.refresh();
   expect(permission.allowed).toBe(false);
+  expect(permission.lastAdmission).toBe(false);
   request.mockRejectedValue(new Error('permission check failed'));
   await permission.refresh();
   expect(permission.allowed).toBe(false);
@@ -38,6 +39,7 @@ it('discards a late reply after invalidation and avoids duplicate in-flight chec
   await permission.refresh();
   expect(request).toHaveBeenCalledOnce();
   permission.invalidate();
+  expect(permission.lastAdmission).toBe(false);
   complete({ allowed: true });
   await pending;
   expect(permission.allowed).toBe(false);
@@ -59,6 +61,7 @@ it('keeps a current grant while a slow background check is pending but fails clo
     await vi.advanceTimersByTimeAsync(3_000);
     await pending;
     expect(permission.allowed).toBe(false);
+    expect(permission.lastAdmission).toBe(true);
   } finally {
     vi.useRealTimers();
   }
