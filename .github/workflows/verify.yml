@@ -113,10 +113,13 @@ jobs:
         run: timeout --signal=TERM --kill-after=5s 180s python -u tests/e2e/local_test_gallery.py --build artifacts/local-test/unpacked
       - name: Test every gallery image with the standard all-sites package
         run: timeout --signal=TERM --kill-after=5s 240s python -u tests/e2e/local_test_gallery.py --build artifacts/local-test/production --production
-      - name: Scan ordinary HTTP and HTTPS pages and live Keras and Wikipedia pages
+      - name: Scan live Keras and Wikipedia pages with the regular package
+        run: timeout 150s python -u tests/e2e/ordinary_pages.py --build artifacts/local-test/production --live-only
+      - name: Scan ordinary HTTP and HTTPS feeds and playing video
+        if: "!cancelled()"
         run: |
           command -v ffmpeg || sudo apt-get install -y ffmpeg
-          timeout --signal=TERM --kill-after=5s 300s python -u tests/e2e/ordinary_pages.py --build artifacts/local-test/production --live
+          timeout --signal=TERM --kill-after=5s 300s python -u tests/e2e/ordinary_pages.py --build artifacts/local-test/production
   mac-chrome-columns:
     needs: extension
     runs-on: macos-15

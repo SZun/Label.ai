@@ -2,7 +2,7 @@
 
 Label.ai is a WXT browser extension that automatically scans visible images and playing videos on eligible HTTP and HTTPS pages in the active tab. The regular **Label.ai** build displays **AI Slop Detected 🤮** when it verifies a signed generation credential or its on-device model flags the media. The badge animates once and honors reduced motion. It has no tooltip, score or click action.
 
-Version 0.1.4 caught 31 of 57 generated originals in a fresh comparison across 19 generators. Version 0.1.3 caught 15 of the same 57. The updated model cutoff also flagged one of 57 genuine photos, compared with zero previously. These counts measure image detection on this sample. Normal browsing also depends on whether the scanner can access the media. [Comparison and per-image results](ml/reports/frontier-browsing-sensitivity.json)
+The 0.1.5 image policy caught 31 of 57 generated originals in a fresh comparison across 19 generators. Version 0.1.3 caught 15 of the same 57. The updated model cutoff also flagged one of 57 genuine photos, compared with zero previously. These counts measure image detection on this sample. Normal browsing also depends on whether the scanner can access the media. [Comparison and per-image results](ml/reports/frontier-browsing-sensitivity.json)
 
 ## Use the extension on the web
 
@@ -14,7 +14,7 @@ npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:chrome
 ```
 
 1. In a desktop Chromium browser, open the extensions manager. In Chrome this is `chrome://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select `apps/extension/.output/chrome-mv3`. If you already loaded that directory, click **Reload** on its extension card. Disable **Label.ai (Local Test)** if installed.
-2. Check that the card says **Label.ai** version **0.1.4** or later, website access is **On all sites**, and scanning is active. Open or refresh a public webpage. The extension scans as you scroll or play a short clip. There is no site list, server to start, or file to upload. The toolbar opens global pause, resume and data controls.
+2. Check that the card says **Label.ai** version **0.1.5** or later, website access is **On all sites**, and scanning is active. Open or refresh a public webpage. The extension scans as you scroll or play a short clip. There is no site list, server to start, or file to upload. The toolbar opens global pause, resume and data controls.
 3. The badge appears over eligible positive media. The model needs readable pixels, enough visible space for the badge, and sufficient consistent playback for video. Browser-internal pages, private contexts, DRM and cross-origin media whose pixels the browser protects are outside coverage. An unlabeled item has no authenticity verdict.
 
 For Safari, run `npm exec --yes --package=pnpm@11.25.0 -- pnpm run build:safari`. On macOS select the unpacked `apps/extension/.output/safari-mv3` in **Add Temporary Extension…** in Safari’s developer settings where available. For an Apple containing app use `make safari-xcode` on a Mac with Xcode. Enable the extension and grant **All Websites** access in Safari. See [Safari acceptance](docs/SAFARI_ACCEPTANCE.md) for the verification status.

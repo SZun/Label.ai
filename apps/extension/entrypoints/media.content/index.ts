@@ -140,7 +140,7 @@ export default defineContentScript({
         return;
       }
       void permission.refresh().then(() => {
-        if (!active()) suspend();
+        if (!active()) suspend(true);
         schedule();
       });
     }
@@ -182,8 +182,23 @@ export default defineContentScript({
       }
     }
 
-    function suspend() {
-      for (const entry of entries.values()) suspendEntry(entry);
+    function matchesVisibleMedia(entry: MediaEntry) {
+      return (
+        entry.visible &&
+        entry.element.isConnected &&
+        shown(entry.element) &&
+        matchesCurrentMedia(entry)
+      );
+    }
+
+    function suspend(awaitingPermission = false) {
+      const mayFinish = awaitingPermission && eligible() && permission.lastAdmission;
+      for (const entry of entries.values()) {
+        // A blocked renewal can outlast the capture grant during WASM inference.
+        // The worker owns already submitted pixels and independently rechecks the sender.
+        if (mayFinish && entry.binding && matchesVisibleMedia(entry)) continue;
+        suspendEntry(entry);
+      }
       queue.clear();
       render();
     }
@@ -284,13 +299,7 @@ export default defineContentScript({
       }
       if (entry.binding?.requestId !== binding.requestId) return;
       entry.binding = undefined;
-      if (
-        !active() ||
-        !entry.visible ||
-        !shown(entry.element) ||
-        !entry.element.isConnected ||
-        !matchesCurrentMedia(entry)
-      ) {
+      if (!eligible() || !permission.lastAdmission || !matchesVisibleMedia(entry)) {
         markState(entry, 'canceled');
         entry.attempted = false;
         entry.originalAttempted = false;
@@ -416,7 +425,7 @@ export default defineContentScript({
       scheduled = false;
       if (ended) return;
       if (!active()) {
-        suspend();
+        suspend(true);
         return;
       }
       for (const entry of entries.values()) {

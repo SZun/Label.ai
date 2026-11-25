@@ -34,7 +34,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it.each(['natural end', 'source replacement'])(
+it.each(['natural end', 'source replacement', 'delayed renewal', 'denied renewal'])(
   'binds the delayed inference result to the original clip after %s',
   async (outcome) => {
     const video = document.body.appendChild(document.createElement('video'));
@@ -44,6 +44,8 @@ it.each(['natural end', 'source replacement'])(
       duration: { value: 4 },
       currentSrc: { get: () => video.src },
     });
+    let clock = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
     const paused = vi.spyOn(video, 'paused', 'get').mockReturnValue(false);
     vi.spyOn(video, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 480, 480));
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
@@ -69,10 +71,13 @@ it.each(['natural end', 'source replacement'])(
     const animationTasks: (() => void)[] = [];
     const dispose: (() => void)[] = [];
     const listeners = new AbortController();
+    let renew!: () => void;
     const ctx = {
       requestAnimationFrame: (f: () => void) => animationTasks.push(f),
       onInvalidated: (f: () => void) => dispose.push(f),
-      setInterval: vi.fn(),
+      setInterval: (callback: () => void) => {
+        renew = callback;
+      },
       addEventListener(t: EventTarget, name: string, cb: EventListener, options = {}) {
         t.addEventListener(name, cb, { ...options, signal: listeners.signal });
       },
@@ -97,8 +102,9 @@ it.each(['natural end', 'source replacement'])(
       mounted: { setLabels: mocks.setLabels },
     });
     let completeInference: (() => void) | undefined;
+    let nextRenewal: Promise<{ allowed: boolean }> | undefined;
     mocks.send.mockImplementation(async (msg) => {
-      if (msg.type === 'label-ai:can-scan') return { allowed: true };
+      if (msg.type === 'label-ai:can-scan') return nextRenewal ?? { allowed: true };
       if (msg.type === 'label-ai:analyze') {
         expect(msg.frames).toHaveLength(12);
         await new Promise<void>((resolve) => {
@@ -133,10 +139,33 @@ it.each(['natural end', 'source replacement'])(
         video.src = '/different-clip.webm';
         video.dispatchEvent(new Event('emptied'));
       }
+      let finishRenewal: (() => void) | undefined;
+      if (outcome === 'delayed renewal') {
+        nextRenewal = new Promise((resolve) => {
+          finishRenewal = () => resolve({ allowed: true });
+        });
+        // The grant expires on the content side while the worker is evaluating the 12 frames.
+        clock += 11_000;
+        renew();
+        await tick();
+        expect(mocks.send.mock.calls.some(([m]) => m.type === 'label-ai:cancel')).toBe(false);
+      } else if (outcome === 'denied renewal') {
+        nextRenewal = Promise.resolve({ allowed: false });
+        renew();
+        await tick();
+        expect(mocks.send.mock.calls.some(([m]) => m.type === 'label-ai:cancel')).toBe(true);
+      }
       completeInference!();
       await tick();
+      if (finishRenewal) {
+        expect(mocks.setLabels.mock.calls.at(-1)![0]).toHaveLength(0);
+        finishRenewal();
+        await tick();
+      }
       const latestLabels = mocks.setLabels.mock.calls.at(-1)![0];
-      expect(latestLabels).toHaveLength(outcome === 'natural end' ? 1 : 0);
+      expect(latestLabels).toHaveLength(
+        outcome === 'natural end' || outcome === 'delayed renewal' ? 1 : 0,
+      );
     } finally {
       listeners.abort();
       for (const cleanup of dispose) cleanup();

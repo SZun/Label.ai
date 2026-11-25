@@ -5,6 +5,7 @@
  */
 export class ScanningPermission {
   private validUntil = 0;
+  private admitted = false;
   private pending = false;
   private generation = 0;
 
@@ -17,7 +18,14 @@ export class ScanningPermission {
     return this.validUntil > this.now();
   }
 
+  /** Already-submitted work remains under the worker's own permission checks while
+   * a renewal is delayed. Only allowed authorizes new capture or badge display. */
+  get lastAdmission(): boolean {
+    return this.admitted;
+  }
+
   invalidate(): void {
+    this.admitted = false;
     this.validUntil = 0;
     this.generation++;
   }
@@ -40,6 +48,7 @@ export class ScanningPermission {
           reply !== null &&
           'allowed' in reply &&
           reply.allowed === true;
+        if (reply !== undefined) this.admitted = allowed;
         this.validUntil = allowed ? this.now() + 10_000 : 0;
       }
     } catch {

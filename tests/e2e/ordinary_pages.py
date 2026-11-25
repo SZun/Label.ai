@@ -64,14 +64,12 @@ def make_video(image, directory):
     return clip.read_bytes()
 
 
-def run(build, live=False):
+def run(build):
     build = build.resolve()
     samples = smoke_assets(ROOT)
     shell = '<!doctype html><meta charset="utf-8"><link rel="icon" href="data:,"><title>Photos</title>'
     denied = []
     anonymous_reads = []
-    article_status = None
-    article_labels = 0
     with TemporaryDirectory() as profile, TemporaryDirectory() as generation, sync_playwright() as pw:
         clip = make_video(samples[0].content, Path(generation))
         resources = {
@@ -161,19 +159,35 @@ def run(build, live=False):
             site.locator("#cover").evaluate("(image) => image.remove()")
             site.get_by_text(TEXT, exact=True).wait_for(state="detached")
             site.wait_for_function("document.querySelector('video').readyState >= 3")
-            # Keep failures actionable without changing the packaged scanner or
-            # capturing pixels. Observe messages on this controlled test page only.
-            worker.evaluate("""() => {
-                globalThis.videoTestEvents = [];
-                chrome.runtime.onMessage.addListener((message, sender) => {
-                    if (sender.url !== 'https://art.example.test/short') return;
-                    if (message.type === 'label-ai:analyze' && message.kind === 'video') {
-                        videoTestEvents.push({type:'submitted', duration:message.durationMs,
-                            samples:message.frames?.map(frame => Math.round(frame.timestampMs))});
-                    } else if (message.type === 'label-ai:cancel') {
-                        videoTestEvents.push({type:'canceled'});
-                    }
-                });
+            # Record only control messages and timings, only in the isolated
+            # extension world on this fixture. Forward each original promise.
+            worker.evaluate("""async () => {
+                const [tab] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
+                await chrome.scripting.executeScript({target:{tabId:tab.id}, func:() => {
+                    if (location.href !== 'https://art.example.test/short') return;
+                    const runtime = globalThis.browser?.runtime ?? chrome.runtime;
+                    const original = runtime.sendMessage.bind(runtime);
+                    const events = globalThis.videoTestEvents = [];
+                    runtime.sendMessage = (...args) => {
+                        const msg = args[0];
+                        const time = Math.round(performance.now());
+                        const reply = original(...args);
+                        if (msg?.type === 'label-ai:analyze' && msg.kind === 'video') {
+                            events.push({type:'submit', time, id:msg.requestId,
+                                samples:msg.frames?.map(f => Math.round(f.timestampMs))});
+                            reply.then(r => events.push({type:'result', at:Math.round(performance.now()),
+                                status:r?.status, label:r?.shouldLabel}), () => events.push({type:'disconnected'}));
+                        } else if (msg?.type === 'label-ai:cancel') {
+                            events.push({type:'cancel', time, id:msg.requestId, stack:new Error().stack});
+                        } else if (msg?.type === 'label-ai:can-scan') {
+                            reply.then(r => {
+                                const ms = Math.round(performance.now()) - time;
+                                if (ms > 1000 || !r?.allowed) events.push({type:'renew', time, ms, allowed:r?.allowed});
+                            }, () => events.push({type:'renew-failed', time}));
+                        }
+                        return reply;
+                    };
+                }});
             }""")
             site.locator("video").evaluate("(video) => video.play()")
             try:
@@ -185,39 +199,57 @@ def run(build, live=False):
                     presented:v.getVideoPlaybackQuality().totalVideoFrames,
                     dropped:v.getVideoPlaybackQuality().droppedVideoFrames,
                 })""")
-                messages = worker.evaluate("() => globalThis.videoTestEvents")
+                messages = worker.evaluate("""async () => {
+                    const [tab] = await chrome.tabs.query({active:true,lastFocusedWindow:true});
+                    const [frame] = await chrome.scripting.executeScript({target:{tabId:tab.id},
+                        func:() => globalThis.videoTestEvents});
+                    return frame.result;
+                }""")
                 raise AssertionError(f"Video badge missing. Playback {state}. Scanner {messages}") from error
             assert not denied, denied
             print("Labeled video on the ordinary HTTPS page", flush=True)
-            context.unroute_all(behavior="wait")
-            site.close()
-            site = context.new_page()
-            site.bring_to_front()
-            if live:
-                response = site.goto(PUBLIC_TUTORIAL, wait_until="domcontentloaded", timeout=45_000)
-                assert response and response.ok, "Public tutorial unavailable"
-                for selector in PUBLIC_OUTPUTS:
-                    wait_for_label(site, selector, True)
-                    print("Labeled public Keras output", selector, flush=True)
-                response = site.goto(PUBLIC_ARTICLE, wait_until="domcontentloaded", timeout=45_000)
-                article_status = response.status if response else None
-                if article_status in (403, 429):
-                    print(f"::warning::Live Wikipedia check blocked by publisher (HTTP {article_status}); no detection result.", flush=True)
-                else:
-                    assert response and response.ok, f"Public Wikipedia article returned {article_status}"
-                    for selector in PUBLIC_CDN_OUTPUTS:
-                        wait_for_label(site, selector, True)
-                        article_labels += 1
-                        print("Labeled Wikimedia-hosted image in live article", selector, flush=True)
     return {"same_origin_unsigned_image": True, "dynamic_cors_cdn_image_on_second_origin": True,
-            "video_pan_of_generated_still": True, "public_keras_tutorial_images_labeled": 4 if live else 0, "public_wikipedia_http_status": article_status, "public_wikipedia_images_labeled": article_labels,
+            "video_pan_of_generated_still": True,
             "previously_missed_hidream_labeled": True, "css_cdn_card_labeled": True,
             "plain_cdn_image_labeled": True, "unexpected_http_requests": denied}
+
+
+def check_public_pages(build):
+    article_labels = 0
+    build = build.resolve()
+    launch = ["--disable-extensions-except=" + str(build), "--load-extension=" + str(build)]
+    with TemporaryDirectory() as profile, sync_playwright() as pw:
+        with browser_session(pw, profile, launch, argparse.Namespace(browser=None)) as context:
+            wait_for_registration(context, build)
+            site = context.new_page()
+            site.bring_to_front()
+            response = site.goto(PUBLIC_TUTORIAL, wait_until="domcontentloaded", timeout=45_000)
+            assert response and response.ok, "Public tutorial unavailable"
+            for selector in PUBLIC_OUTPUTS:
+                wait_for_label(site, selector, True)
+                print("Labeled public Keras output", selector, flush=True)
+            response = site.goto(PUBLIC_ARTICLE, wait_until="domcontentloaded", timeout=45_000)
+            article_status = response.status if response else None
+            if article_status in (403, 429):
+                print(f"::warning::Live Wikipedia check blocked by publisher (HTTP {article_status}); no detection result.", flush=True)
+            else:
+                assert response and response.ok, f"Public Wikipedia article returned {article_status}"
+                for selector in PUBLIC_CDN_OUTPUTS:
+                    wait_for_label(site, selector, True)
+                    article_labels += 1
+                    print("Labeled Wikimedia-hosted image in live article", selector, flush=True)
+    return {"public_keras_tutorial_images_labeled": len(PUBLIC_OUTPUTS),
+            "public_wikipedia_http_status": article_status,
+            "public_wikipedia_images_labeled": article_labels}
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", required=True, type=Path)
     parser.add_argument("--live", action="store_true", help="Also check public Keras outputs and Wikimedia-hosted thumbnails")
+    parser.add_argument("--live-only", action="store_true", help="Run only the live publisher checks")
     args = parser.parse_args()
-    print(json.dumps(run(args.build, args.live)))
+    if args.live or args.live_only:
+        print(json.dumps(check_public_pages(args.build)), flush=True)
+    if not args.live_only:
+        print(json.dumps(run(args.build)), flush=True)
