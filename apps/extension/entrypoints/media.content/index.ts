@@ -449,6 +449,8 @@ export default defineContentScript({
       const lease = `${entry.id}:${entry.generation}:${newScanId()}`;
       if (!videoCaptures.acquire(lease)) return;
       entry.captureLease = lease;
+      // Even an interrupted first scene must permit a whole-file replay.
+      entry.sampledWindow = true;
       markState(entry, 'pending');
       const current = () => active() && matchesVisibleMedia(entry);
       const stop = observePlaybackWindow(
@@ -456,7 +458,6 @@ export default defineContentScript({
         current,
         (sample) => {
           entry.attempted = true;
-          entry.sampledWindow = true;
           // Avoid resubmitting continuously on long feeds where the detector abstains.
           entry.nextWindowAt = performance.now() + 8000;
           const queued = enqueuePlayback(entry.id, async () => {
@@ -681,6 +682,11 @@ export default defineContentScript({
               : 'failed',
           );
           entry.attempted = true;
+          if (!(error instanceof DOMException) || error.name !== 'SecurityError') {
+            retry(entry);
+            schedule();
+          }
+          return;
         }
         if (!entry.attempted) entry.frameCallback = video.requestVideoFrameCallback(sample);
       };
