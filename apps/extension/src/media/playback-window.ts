@@ -3,15 +3,23 @@ import { captureVideoFrame, createVideoSceneReader } from './capture';
 import { MAX_SAMPLED_DURATION_MS } from './video-sampling';
 
 export const PLAYBACK_WINDOW_MS = 4000;
-const SAMPLE_INTERVAL_MS = 440;
+const WINDOW_INTERVALS = 9;
 const SCENE_INTERVAL_MS = 240;
 const MAX_PRESENTATION_GAP_MS = 650;
 
-export function needsPlaybackWindow(durationMs: number, currentMs: number, source: string) {
+export function needsPlaybackWindow(
+  durationMs: number,
+  currentMs: number,
+  source: string,
+  autoPlayback: boolean,
+) {
   if (durationMs === Infinity || durationMs > MAX_SAMPLED_DURATION_MS) return true;
-  // Buffer-backed players are frequently recycled by feeds. A viewer shouldn't
-  // need to stay until the end of a 45-second Short before its first analysis.
-  if (durationMs >= 10_000 && (source.startsWith('blob:') || source.startsWith('media-source:')))
+  // Feed players may point directly at a file or attach a MediaSource. In either
+  // case a viewer can scroll on long before an autoplaying clip reaches its end.
+  if (
+    durationMs >= 10_000 &&
+    (autoPlayback || source.startsWith('blob:') || source.startsWith('media-source:'))
+  )
     return true;
   // A whole-clip sample cannot recover an opening third the viewer missed.
   return currentMs > durationMs * 0.2 && durationMs - currentMs >= PLAYBACK_WINDOW_MS;
@@ -49,7 +57,7 @@ export function observePlaybackWindow(
   let previousTime = -1;
   let sceneTime = -Infinity;
   let start: number | undefined;
-  let lastSample = -Infinity;
+  let lastSlot = -1;
   let frames: FramePayload[] | undefined = [];
   let callback: number | undefined;
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -87,9 +95,13 @@ export function observePlaybackWindow(
     const elapsed = time - start;
     if (elapsed > 32_000) return retire();
     try {
-      const needsFrame =
-        frames !== undefined &&
-        (elapsed - lastSample >= SAMPLE_INTERVAL_MS || elapsed >= PLAYBACK_WINDOW_MS);
+      // Anchor slots to the start. Restarting the interval at each callback can
+      // discard every other presentation of a low-frame-rate or busy player.
+      const slot = Math.min(
+        WINDOW_INTERVALS,
+        Math.floor((elapsed * WINDOW_INTERVALS) / PLAYBACK_WINDOW_MS),
+      );
+      const needsFrame = frames !== undefined && slot > lastSlot;
       const needsGrid =
         time - sceneTime >= SCENE_INTERVAL_MS ||
         (frames !== undefined && elapsed >= PLAYBACK_WINDOW_MS);
@@ -117,7 +129,7 @@ export function observePlaybackWindow(
       }
       if (frames && needsFrame) {
         frames.push(captureVideoFrame(video, elapsed, 384, display));
-        lastSample = elapsed;
+        lastSlot = slot;
         if (elapsed >= PLAYBACK_WINDOW_MS) {
           if (elapsed > 4500 || frames.length < 8) return retire();
           referenceGrid = previousGrid;

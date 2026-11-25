@@ -31,7 +31,7 @@ def fixture(path, source, digest):
     return data
 
 
-def wait_for_video_badge(site, target):
+def wait_for_video_badge(site, target, timeout=100_000):
     site.wait_for_function("""selector => {
       const video = document.querySelector(selector);
       if (!video || !video.videoWidth) return false;
@@ -42,7 +42,7 @@ def wait_for_video_badge(site, target):
           return b.width > 0 && Math.abs(b.left - Math.max(0,r.left) - 8) < 3 &&
                   Math.abs(b.top - Math.max(0,r.top) - 8) < 3;
         }));
-    }""", arg=target, timeout=100_000)
+    }""", arg=target, timeout=timeout)
 
 
 def check_fullscreen_badge(site):
@@ -121,17 +121,24 @@ def feed(context, worker):
     def publisher(route):
         req = route.request
         if req.method == "GET":
-            if req.url in (PAGE + "/1", PAGE + "/2", PAGE + "/3"):
+            if req.url in (PAGE + "/1", PAGE + "/2", PAGE + "/3", PAGE + "/4"):
                 index = req.url[-1]
                 url = (PAGE if index == "2" else CDN) + "/clip" + index + ".mp4"
                 html = ('<!doctype html><meta charset="utf-8"><link rel="icon" href="data:,"><title>Watch</title>'
                         f'<section id="player"><video id="film" width="384" height="320" controls playsinline muted preload="auto" src="{url}"></video></section>')
                 return route.fulfill(content_type="text/html", body=html)
-            if req.url in (CDN + "/clip1.mp4", PAGE + "/clip2.mp4", CDN + "/clip3.mp4"):
-                headers = {"Access-Control-Allow-Origin": PAGE} if req.url.endswith("clip1.mp4") else {}
+            if req.url in (CDN + "/clip1.mp4", PAGE + "/clip2.mp4", CDN + "/clip3.mp4", CDN + "/clip4.mp4"):
+                headers = {"Access-Control-Allow-Origin": PAGE} if req.url.endswith(("clip1.mp4", "clip4.mp4")) else {}
                 if req.resource_type == "fetch":
                     assert not set(req.all_headers()) & {"cookie", "referer", "authorization"}
                     reads.append(req.url)
+                    if req.url.endswith("clip4.mp4"):
+                        # This CDN returns the complete selected representation to an
+                        # anonymous fetch with a CORS-exposed range and generic binary MIME.
+                        headers.update({"Access-Control-Expose-Headers": "Content-Range",
+                                        "Content-Range": f"bytes 0-{len(luma)-1}/{len(luma)}"})
+                        return route.fulfill(status=206, content_type="application/octet-stream",
+                                             headers=headers, body=luma)
                 return route.fulfill(status=200, content_type="video/mp4", headers=headers,
                                      body=flower if req.url.endswith("clip2.mp4") else luma)
         forbidden.append((req.method, req.url))
@@ -140,7 +147,7 @@ def feed(context, worker):
     context.route(lambda url: urlsplit(url).scheme in {"http", "https"}, publisher)
     site = context.new_page()
     site.bring_to_front()
-    for n in (1, 2, 3):
+    for n in (1, 2, 3, 4):
         site.goto(PAGE + "/" + str(n))
         site.locator("label-ai-overlay").wait_for(state="attached")
         site.wait_for_function("document.querySelector('video').readyState >= 3")
@@ -160,6 +167,10 @@ def feed(context, worker):
             site.wait_for_function("document.documentElement.dataset.videoTestDecision === 'negative'", timeout=100_000)
             assert not site.locator("label-ai-overlay .slop-label").count()
             print("Completed camera-footage scan without a badge", flush=True)
+        elif n == 4:
+            wait_for_video_badge(site, "#film")
+            assert reads.count(CDN + "/clip4.mp4") == 1
+            print("Labeled the playing video after one complete binary CDN range response", flush=True)
         else:
             site.wait_for_function("document.querySelector('video').played.length > 0 && document.querySelector('video').played.end(0) > 4.9", timeout=20_000)
             assert CDN + "/clip3.mp4" in reads

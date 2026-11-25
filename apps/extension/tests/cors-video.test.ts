@@ -186,3 +186,109 @@ it('retains fully observed timestamps if the visible player buffers for its next
   const frames = await readCorsVideoFrames(player, source, [0, 100, 200], signal.signal);
   expect(frames?.map((frame) => frame.timestampMs)).toEqual([0, 100, 200]);
 });
+
+it.each([false, true])(
+  'reads one complete 206 with Content-Length present: %s',
+  async (includeLength) => {
+    const response206 = response(bytes, 'video/webm', 206);
+    response206.headers.set('content-range', 'bytes 0-11/12');
+    if (includeLength) response206.headers.set('content-length', '12');
+    fetchFile.mockResolvedValue(response206);
+    expect((await readCorsVideoFrames(player, source, samples, signal.signal))?.length).toBe(3);
+    expect(fetchFile).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each([
+  [206, 'bytes 1-11/12', '11'],
+  [206, 'bytes 0-10/12', '11'],
+  [206, 'bytes 0-11/*', '12'],
+  [206, 'bytes 0-12/13', undefined],
+  [206, 'bytes 0-10/11', undefined],
+  [206, 'bytes 0-11/12', '11'],
+  [206, 'bytes 0-11/12, 0-11/12', '12'],
+  [206, 'bytes 0-16777216/16777217', undefined],
+  [200, 'bytes 0-11/12', '12'],
+] as const)(
+  'declines inconsistent status %i range %s and length %s',
+  async (status, range, length) => {
+    const res = response(bytes, 'video/webm', status);
+    res.headers.set('content-range', range);
+    if (length) res.headers.set('content-length', length);
+    fetchFile.mockResolvedValue(res);
+    expect(await readCorsVideoFrames(player, source, samples, signal.signal)).toBeUndefined();
+    expect(fetchFile).toHaveBeenCalledTimes(1);
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+  },
+);
+
+const mp4 = Uint8Array.of(
+  0,
+  0,
+  0,
+  20,
+  102,
+  116,
+  121,
+  112,
+  105,
+  115,
+  111,
+  109,
+  0,
+  0,
+  0,
+  0,
+  109,
+  112,
+  52,
+  49,
+);
+it.each([
+  { data: bytes, expected: 'video/webm' },
+  { data: mp4, expected: 'video/mp4' },
+])('identifies a binary CDN object as $expected before decode', async ({ data, expected }) => {
+  fetchFile.mockResolvedValue(response(data, 'application/octet-stream'));
+  expect((await readCorsVideoFrames(player, source, samples, signal.signal))?.length).toBe(3);
+  expect(URL.createObjectURL).toHaveBeenCalledWith(expect.objectContaining({ type: expected }));
+  expect(fetchFile).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  Uint8Array.of(1, 2, 3),
+  Uint8Array.of(0x1a, 0x45, 0xdf, 0xa3, 0x87, 0x42, 0x82, 0x84, 110, 111, 112, 101),
+  Uint8Array.of(0, 0, 0, 16, 102, 116, 121, 112, 97, 118, 105, 102, 0, 0, 0, 0),
+])('declines a binary object without an MP4 or WebM container signature', async (data) => {
+  fetchFile.mockResolvedValue(response(data, 'application/octet-stream'));
+  expect(await readCorsVideoFrames(player, source, samples, signal.signal)).toBeUndefined();
+  expect(URL.createObjectURL).not.toHaveBeenCalled();
+  expect(fetchFile).toHaveBeenCalledTimes(1);
+});
+
+it('stops reading the body as soon as it exceeds the declared whole range', async () => {
+  const cancel = vi.fn();
+  const body = new ReadableStream<Uint8Array>(
+    {
+      start(controller) {
+        controller.enqueue(bytes);
+      },
+      pull(controller) {
+        controller.close();
+      },
+      cancel,
+    },
+    { highWaterMark: 0 },
+  );
+  const res = new Response(body, {
+    status: 206,
+    headers: {
+      'content-type': 'video/webm',
+      'content-range': 'bytes 0-10/11',
+    },
+  });
+  Object.defineProperties(res, { url: { value: source }, type: { value: 'cors' } });
+  fetchFile.mockResolvedValue(res);
+  expect(await readCorsVideoFrames(player, source, samples, signal.signal)).toBeUndefined();
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(fetchFile).toHaveBeenCalledOnce();
+});

@@ -32,7 +32,7 @@ import { captureImage, captureVideoFrame, sourceFor } from '../../src/media/capt
 import { needsPlaybackWindow, observePlaybackWindow } from '../../src/media/playback-window';
 import { videoSamplePlan, videoSampleSlot } from '../../src/media/video-sampling';
 import { canReadCorsVideo, readCorsVideoFrames } from '../../src/media/cors-video';
-import { playbackSurfaceFor } from '../../src/media/playback-surface';
+import { playbackSurfaceFor, rendered } from '../../src/media/playback-surface';
 import { playingVideoCovers } from '../../src/media/video-cover';
 import { visiblePlaybackArea } from '../../src/media/playback-order';
 import { acquireVideoOriginal } from '../../src/media/video-original';
@@ -61,6 +61,7 @@ interface MediaEntry {
   captureTimer?: ReturnType<typeof setTimeout>;
   captureLease?: string;
   stopWindow?: () => void;
+  sampledWindow?: boolean;
   needsFreshScene?: boolean;
   nextWindowAt?: number;
 }
@@ -151,7 +152,6 @@ export default defineContentScript({
     const active = () => eligible() && permission.allowed;
 
     function currentCanvas(video: HTMLVideoElement): HTMLCanvasElement | undefined {
-      if (getComputedStyle(video).opacity !== '0') return;
       const surface = playbackSurfaceFor(video);
       return surface instanceof HTMLCanvasElement ? surface : undefined;
     }
@@ -305,7 +305,9 @@ export default defineContentScript({
       if (gallery()) entry.element.removeAttribute(galleryAttribute);
       entry.lastState = undefined;
       entry.nextWindowAt = undefined;
-      entry.source = sourceFor(entry.element);
+      const source = sourceFor(entry.element);
+      if (source !== entry.source) entry.sampledWindow = false;
+      entry.source = source;
       if (entry.element instanceof HTMLVideoElement) {
         entry.videoDuration = entry.element.duration;
         entry.playbackCanvas = currentCanvas(entry.element);
@@ -323,24 +325,7 @@ export default defineContentScript({
     function shown(element: Element): boolean {
       // IntersectionObserver alone may report transparent or hidden media as intersecting.
       if (element instanceof HTMLVideoElement) element = currentCanvas(element) ?? element;
-      let insidePlayer = !fullscreen;
-      for (let current: Element | null = element; current; ) {
-        if (current === fullscreen) insidePlayer = true;
-        const style = getComputedStyle(current);
-        if (
-          style.visibility === 'hidden' ||
-          style.visibility === 'collapse' ||
-          style.display === 'none' ||
-          Number.parseFloat(style.opacity) === 0
-        )
-          return false;
-        const root = current.getRootNode();
-        current =
-          current.assignedSlot ??
-          current.parentElement ??
-          (root instanceof ShadowRoot ? root.host : null);
-      }
-      return insidePlayer;
+      return rendered(element, fullscreen);
     }
 
     function place(entry: MediaEntry): LabelPlacement | null {
@@ -471,6 +456,7 @@ export default defineContentScript({
         current,
         (sample) => {
           entry.attempted = true;
+          entry.sampledWindow = true;
           // Avoid resubmitting continuously on long feeds where the detector abstains.
           entry.nextWindowAt = performance.now() + 8000;
           const queued = enqueuePlayback(entry.id, async () => {
@@ -524,9 +510,22 @@ export default defineContentScript({
         return;
       const generation = entry.generation;
       const durationMs = video.duration * 1000;
+      // A short, looping file can rewind while a slow worker scores its first
+      // scene. On replay, full-file sampling yields a decision bound to the
+      // resource and remains valid if inference finishes in the next lap.
+      const fileReplay = entry.sampledWindow && video.currentTime < 1;
       if (
         entry.playbackCanvas ||
-        needsPlaybackWindow(durationMs, video.currentTime * 1000, entry.source)
+        (needsPlaybackWindow(
+          durationMs,
+          video.currentTime * 1000,
+          entry.source,
+          (video.autoplay || video.loop) && !fileReplay,
+        ) &&
+          // Without a crossorigin attribute the decoder taints a canvas even if
+          // the CDN permits an anonymous read. The file path can score all
+          // observed timestamps from that single representation.
+          !(video.crossOrigin === null && canReadCorsVideo(video, entry.source)))
       ) {
         startPlaybackWindow(entry, video);
         return;

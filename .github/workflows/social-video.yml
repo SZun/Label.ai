@@ -1,13 +1,8 @@
 name: Social video playback
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
-    inputs:
-      live_sites:
-        description: "Exercise the public YouTube, TikTok and Bluesky guest players"
-        type: boolean
-        default: false
 permissions:
   contents: read
 
@@ -38,25 +33,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: ${{ fromJSON((inputs.live_sites || contains(github.event.pull_request.labels.*.name, 'test-live-social') || contains(github.event.pull_request.body, '<!-- test-live-social -->')) && '["stream","canvas","video-check","public-clip","youtube","tiktok","bluesky"]' || '["stream","canvas","video-check"]') }}
+        target: [stream, canvas, autoplay, video-check, public-clip]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: actions/download-artifact@v4
-        with:
-          name: social-video-extension
-          path: artifacts
-      - name: Install regular extension and Chrome for Testing
-        run: |
-          unzip -q artifacts/chromium.zip -d artifacts/chromium
-          python -m pip install -r tests/e2e/requirements.txt
-          python -m playwright install-deps chromium
-          python tests/e2e/prepare_browser.py chrome-for-testing "$RUNNER_TEMP/chrome" > "$RUNNER_TEMP/browser-path"
+      - uses: ./.github/actions/prepare-social-browser
       - name: Check the installed extension on playing video
         env:
           TARGET: ${{ matrix.target }}
+        shell: bash
         run: |
           if [[ "$TARGET" == video-check ]]; then
             python -u tests/e2e/generated_video.py --video-check --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium
@@ -66,11 +50,40 @@ jobs:
             python -u tests/e2e/generated_video.py --direct --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium
             exit
           fi
+          if [[ "$TARGET" == autoplay ]]; then
+            command -v ffmpeg || sudo apt-get install -y ffmpeg
+            python -u tests/e2e/autoplay_video.py --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium
+            exit
+          fi
           args=()
           if [[ "$TARGET" == stream || "$TARGET" == canvas ]]; then
             if [[ "$TARGET" == canvas ]]; then args+=(--canvas-player); fi
             command -v ffmpeg || sudo apt-get install -y ffmpeg
-          else
-            args+=(--live "$TARGET")
           fi
           python -u tests/e2e/social_video.py --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium "${args[@]}"
+
+  social:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [youtube, tiktok, facebook, instagram, x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/prepare-social-browser
+      - name: Play the public post and verify the production badge on its player
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: python -u tests/e2e/social_video.py --live "$PLATFORM" --browser "$(cat "$RUNNER_TEMP/browser-path")" --build artifacts/chromium
+
+  five-platform-acceptance:
+    needs: social
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all five live players to pass
+        env:
+          RESULT: ${{ needs.social.result }}
+        run: test "$RESULT" = success

@@ -24,7 +24,7 @@ TEXT = "AI Slop Detected 🤮"
 @contextmanager
 def browser_session(pw, profile, launch, args):
     options = {"executable_path":args.browser} if args.browser else {"channel":"chromium"}
-    context = pw.chromium.launch_persistent_context(profile,headless=True,args=launch,
+    context = pw.chromium.launch_persistent_context(profile,headless=not getattr(args, "headed", False),args=launch,
         ignore_default_args=["--disable-extensions"],device_scale_factor=getattr(args, "device_scale_factor", 1),viewport={"width":1000,"height":720},**options)
     try:
         yield context

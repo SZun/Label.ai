@@ -8,6 +8,11 @@ function box(element: Element, value = rect) {
 }
 
 function player() {
+  // jsdom does not implement pseudo-element computed styles.
+  const computed = window.getComputedStyle.bind(window);
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) =>
+    pseudo ? ({ content: 'none' } as CSSStyleDeclaration) : computed(el),
+  );
   const card = document.body.appendChild(document.createElement('article'));
   const decoder = card.appendChild(document.createElement('div'));
   const video = decoder.appendChild(document.createElement('video'));
@@ -87,4 +92,58 @@ it('abstains while a click-through poster covers the published canvas', () => {
   expect(playbackSurfaceFor(video)).toBeUndefined();
   poster.style.opacity = '0';
   expect(playbackSurfaceFor(video)).toBeInstanceOf(HTMLCanvasElement);
+});
+
+it('resolves a player canvas under an unpainted input layer and decoder wrapper', () => {
+  const { card, video, canvas, hits } = player();
+  video.style.opacity = '1';
+  video.parentElement!.style.opacity = '0';
+  const controls = card.appendChild(document.createElement('div'));
+  controls.style.opacity = '0';
+  const button = controls.appendChild(document.createElement('button'));
+  hits.mockReturnValue([button, controls, video, video.parentElement!, canvas]);
+  expect(playbackSurfaceFor(video)).toBe(canvas);
+  controls.style.opacity = '1';
+  expect(playbackSurfaceFor(video)).toBeUndefined();
+});
+
+it('uses the explicitly visible video inside a visibility-hidden wrapper', () => {
+  const { video } = player();
+  video.style.opacity = '1';
+  video.parentElement!.style.visibility = 'hidden';
+  video.style.visibility = 'visible';
+  expect(playbackSurfaceFor(video)).toBe(video);
+});
+
+it('recognizes a click-through canvas painted over its own same-size player container', () => {
+  const { card, video, canvas, hits } = player();
+  const screen = card.appendChild(document.createElement('div'));
+  box(screen);
+  screen.append(canvas);
+  canvas.style.pointerEvents = 'none';
+  hits.mockReturnValue([screen, card]);
+  expect(playbackSurfaceFor(video)).toBe(canvas);
+  hits.mockReturnValue([card.appendChild(document.createElement('div')), screen, card]);
+  expect(playbackSurfaceFor(video)).toBeUndefined();
+  hits.mockReturnValue([document.body]);
+  expect(playbackSurfaceFor(video)).toBeUndefined();
+});
+
+it('pairs a nested decoder with the canvas inside the same bounded player', () => {
+  const { card, video, canvas } = player();
+  let layer: Element = card;
+  for (let i = 0; i < 6; i++) layer = layer.appendChild(document.createElement('div'));
+  layer.append(video);
+  expect(playbackSurfaceFor(video)).toBe(canvas);
+});
+
+it('rejects click-through painted covers even when the canvas parent receives the hit', () => {
+  const { card, video, canvas, hits } = player();
+  box(card);
+  canvas.style.pointerEvents = 'none';
+  const curtain = card.appendChild(document.createElement('div'));
+  curtain.style.cssText = 'pointer-events:none;background:black';
+  box(curtain);
+  hits.mockReturnValue([card]);
+  expect(playbackSurfaceFor(video)).toBeUndefined();
 });

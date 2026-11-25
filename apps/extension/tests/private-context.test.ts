@@ -73,3 +73,21 @@ it('allows a public player with a closed login dialog and stops when the form op
     document.body.replaceChildren();
   }
 });
+
+it('scans a feed with a CSS-unmounted sign-in form and stops as soon as it is displayed', async () => {
+  const { eligibleDocumentChain, DEFAULT_SETTINGS } = await import('../src/core/policy');
+  const frame = { location: new URL('https://public.example/feed'), document } as unknown as Window;
+  Object.defineProperty(frame, 'parent', { value: frame });
+  document.body.innerHTML =
+    '<style>.dormant { display: none }</style><div class="dormant"><form><input type="password"></form></div>';
+  try {
+    const layer = document.querySelector('div')!;
+    expect(eligibleDocumentChain(frame, DEFAULT_SETTINGS)).toBe(true);
+    layer.classList.remove('dormant');
+    expect(eligibleDocumentChain(frame, DEFAULT_SETTINGS)).toBe(false);
+    layer.style.opacity = '0';
+    expect(eligibleDocumentChain(frame, DEFAULT_SETTINGS)).toBe(false);
+  } finally {
+    document.body.replaceChildren();
+  }
+});

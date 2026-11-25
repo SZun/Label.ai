@@ -45,6 +45,28 @@ function matchesContainer(bytes: Uint8Array, mime: string) {
   return length >= 16 && length <= bytes.length;
 }
 
+function videoMime(bytes: Uint8Array, declared: string): string | undefined {
+  if (declared !== 'application/octet-stream')
+    return matchesContainer(bytes, declared) ? declared : undefined;
+  // A generic response must distinguish WebM from other EBML files, and MP4
+  // from other ISO base media containers (including still images).
+  if (matchesContainer(bytes, 'video/webm')) {
+    const docType = [0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d]; // DocType, length 4, "webm".
+    for (let pos = 4; pos < 38 && pos + docType.length <= bytes.length; pos++) {
+      if (docType.every((byte, i) => bytes[pos + i] === byte)) return 'video/webm';
+    }
+  }
+  if (matchesContainer(bytes, 'video/mp4')) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const fileTypeSize = view.getUint32(0);
+    if (fileTypeSize % 4 !== 0) return;
+    // Inspect the major and compatible brands. Offset 12 is the minor version.
+    for (let pos = 8; pos < Math.min(fileTypeSize, 256); pos += 4) {
+      if (pos !== 12 && view.getUint32(pos) >>> 8 === 0x6d7034) return 'video/mp4'; // mp4*
+    }
+  }
+}
+
 // Install listeners before assigning a blob source or seeking. Never play or attach this decoder.
 function mediaEvent(
   decoder: HTMLVideoElement,
@@ -117,17 +139,19 @@ export async function readCorsVideoFrames(
   let url: string | undefined;
   try {
     const file = await readPublicMedia(source, controller.signal, current, {
-      allowedTypes: ['video/mp4', 'video/webm'],
+      allowedTypes: ['video/mp4', 'video/webm', 'application/octet-stream'],
       maxBytes: MAX_CLIP_BYTES,
       requireWholeFile: true,
     });
-    if (!file || !current() || !matchesContainer(file.bytes, file.mime)) return;
+    if (!file || !current()) return;
+    const mime = videoMime(file.bytes, file.mime);
+    if (!mime) return;
     const local = document.createElement('video');
     decoder = local;
     local.preload = 'metadata';
     local.muted = true;
     local.playsInline = true;
-    const blobUrl = URL.createObjectURL(new Blob([file.bytes], { type: file.mime }));
+    const blobUrl = URL.createObjectURL(new Blob([file.bytes], { type: mime }));
     url = blobUrl;
     await mediaEvent(local, 'loadedmetadata', controller.signal, () => {
       local.src = blobUrl;

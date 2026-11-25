@@ -38,3 +38,26 @@ Installed Chrome exercised a generated stream joined 70 seconds into playback. I
 The publisher identified its Bluesky example as Sora 2 footage. Chrome played that exact post and sampled it. Three independently decoded four-second windows from its first twelve seconds produced lower-quartile model scores of 0.0074, 0.0071 and 0.0022. All three missed the display threshold. An exploratory higher-resolution center crop also missed all three, and one genuine camera control scored higher than the generated windows. Raw scores are uncalibrated. [Publisher post](https://bsky.app/profile/carnage4life.bsky.social/post/3m23sq2iios2g) · [Browser check](https://github.com/SZun/Label.ai/actions/runs/45527174384/job/138913458060)
 
 The YouTube guest session required sign-in before playback. On TikTok an early positional test mistook a badge above the player for a confirmed video decision. Acceptance now requires a badge explicitly bound to video. [YouTube check](https://github.com/SZun/Label.ai/actions/runs/45527174384/job/138913458074) · [TikTok check](https://github.com/SZun/Label.ai/actions/runs/45527174384/job/138913458053)
+
+### Five-platform playback acceptance
+
+The Social video playback workflow installs the production extension in Chrome for Testing and opens one independently identified public generated video each on YouTube, TikTok, Facebook, Instagram and X. The five-platform job requires five successful live checks. A site that blocks playback, a post that changes during the check, and a detector that leaves the player unlabelled each prevent a pass. The separate stream, canvas, local video and public MP4 checks exercise the same build.
+
+To run all five checks with a visible Chrome for Testing window, build the extension, install the Playwright dependency from `tests/e2e/requirements.txt`, and run the following from the repository root. Set `CHROME_FOR_TESTING` to the browser executable. Use `all` for a per-platform summary and a failing exit code if any check fails. For a single post, choose `youtube`, `tiktok`, `facebook`, `instagram` or `x`. The temporary profile starts fresh and is deleted when the check exits.
+
+```sh
+python3 tests/e2e/social_video.py --live all --headed --sign-in-first --manual-start \
+  --browser "$CHROME_FOR_TESTING" --build apps/extension/.output/chrome-mv3 --report social-results.json
+```
+
+With `--sign-in-first`, enter credentials only in the platform’s own browser window. Press Enter in the terminal after sign-in. The runner then opens the exact public post and checks its moving player and video badge. Your usual Chrome profile is separate. Omit the sign-in flag for a guest run. The extension itself starts automatically when browser access and page eligibility allow it. The optional local report records the build fingerprint, session mode, time, and five outcomes. It contains no screenshots, account details, or browsing history. A successful signed-in batch supplies separate five-platform acceptance evidence when the hosted guest run encounters access restrictions.
+
+#### Signed-in testing and public browsing
+
+Label.ai has no account system. Visitors can receive a badge on accessible public posts while signed out. When a platform requires sign-in before playing a post, the viewer signs in to that platform through the normal browser UI. The extension keeps using the same local scanner. It never asks for a password or copies session cookies. Private messages, active password forms and protected video are outside the scanner’s supported scope.
+
+The hosted guest run exercises five public permalinks. A local signed-in run exercises those same posts in a separate temporary Chrome profile. Both require visible moving footage and the extension's video badge on the same player. An account prompt, unrelated thumbnail badge or successful local fixture leaves that platform unverified.
+
+In installed Chrome, the production scanner submitted ten frames from the first four seconds of a 45-second player. It displayed a badge on the generated scene at 18.2 seconds. After the source changed to camera footage, the scanner completed at 17.2 seconds and left the player unlabelled. These are playback and timing controls from two source clips. [Browser check](https://github.com/SZun/Label.ai/actions/runs/45541711522/job/138961720502)
+
+An offline experiment cropped the center square from each decoded video frame before resizing it to at most 440 pixels. It kept the packaged model and existing motion, scene-cut and score checks. At the 12-frame benchmark cadence, the crop flagged 3 of 48 previously missed generated sources and none of 44 previously unflagged camera sources (45 camera windows). Only those three newly flagged generated clips were retested at the social player's ten-frame cadence, where two still gained a badge. At that cadence, the crop also flagged one of 72 distinct camera sources. On the identical four seconds of a recorded interview, the current detector abstained with a lower-quartile score of 0.074 and the crop labeled it at 0.791. This new false positive kept the crop out of the extension. [Camera control](https://commons.wikimedia.org/wiki/File:Giga_Connectivity_Forum_2024_%22Entretien_Tapis_Rouge%22-_H.E._Aurelie_Adam_Soule_Zoumarou,_Benin.webm)
