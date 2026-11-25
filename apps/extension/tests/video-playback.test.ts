@@ -51,7 +51,10 @@ async function playbackHarness(getDuration: () => number, start = 0) {
   });
   video.currentTime = start;
   let clock = 1000;
+  const wallClockOrigin = Date.now() - clock;
   vi.spyOn(performance, 'now').mockImplementation(() => clock);
+  // RetryBudget uses wall time; permission and playback cooldowns use monotonic time.
+  vi.spyOn(Date, 'now').mockImplementation(() => wallClockOrigin + clock);
   const paused = vi.spyOn(video, 'paused', 'get').mockReturnValue(false);
   vi.spyOn(video, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 480, 480));
   vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
@@ -368,7 +371,12 @@ it('retries a transient frame capture failure without changing the video source'
     await h.start();
     for (let n = 0; n < 12; n++) h.presentFrame(n / 24, n + 1);
     expect(mocks.captureFrame).toHaveBeenCalledTimes(1);
-    h.advanceClock(2000);
+    h.advanceClock(999);
+    h.renew();
+    await h.tick();
+    h.presentFrame(0.5, 13);
+    expect(mocks.captureFrame).toHaveBeenCalledTimes(1);
+    h.advanceClock(1);
     h.renew();
     await h.tick();
     for (let n = 0; n < 4 * 24; n++) h.presentFrame(n / 24, n + 1);
