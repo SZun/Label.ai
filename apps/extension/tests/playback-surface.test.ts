@@ -77,3 +77,14 @@ it('rechecks the visible surface when a feed reuses a player', () => {
   video.remove();
   expect(playbackSurfaceFor(video)).toBeUndefined();
 });
+
+it('abstains while a click-through poster covers the published canvas', () => {
+  const { card, video } = player();
+  const poster = card.appendChild(document.createElement('img'));
+  poster.src = '/preview.jpg';
+  poster.style.pointerEvents = 'none';
+  box(poster);
+  expect(playbackSurfaceFor(video)).toBeUndefined();
+  poster.style.opacity = '0';
+  expect(playbackSurfaceFor(video)).toBeInstanceOf(HTMLCanvasElement);
+});

@@ -257,8 +257,27 @@ def play_tiktok(page, target):
             matchingCanvases:canvases.filter(e=>visible(e)&&overlaps(e)).map(c=>[c.width,c.height]).slice(0,6),layers};
         }""")
         print("TikTok render surface after viewer click:", surface, flush=True)
-    if not surface["visibleVideo"] and not surface["matchingCanvases"]:
-        raise RuntimeError("TikTok did not expose a visible video or overlapping canvas after the viewer click")
+    if not surface["visibleVideo"]:
+        if len(surface["matchingCanvases"]) != 1:
+            raise RuntimeError("TikTok did not expose one visible playback surface after the viewer click")
+        # Independently confirm that the region the viewer sees is moving. Keep
+        # these small compositor samples in test memory and never inspect a
+        # hidden decoder or treat a still cover as a moving video.
+        rect = target.bounding_box()
+        if rect is None:
+            raise RuntimeError("TikTok's target player was replaced during the viewer click")
+        clip = {"x": rect["x"] + rect["width"] * 0.35, "y": rect["y"] + rect["height"] * 0.4,
+                "width": 48, "height": 48}
+        previous = page.screenshot(clip=clip)
+        moving = False
+        for _ in range(5):
+            page.wait_for_timeout(250)
+            if page.screenshot(clip=clip) != previous:
+                moving = True
+                break
+        if not moving:
+            raise RuntimeError("TikTok's visible canvas did not show motion after the viewer click")
+        print("TikTok visible canvas also confirmed moving at the target player", flush=True)
 
 
 

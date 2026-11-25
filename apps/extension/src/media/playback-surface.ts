@@ -29,6 +29,19 @@ function sameBounds(a: DOMRectReadOnly, b: DOMRectReadOnly) {
   );
 }
 
+function couldCoverCanvas(layer: Element, rect: DOMRectReadOnly) {
+  // elementsFromPoint omits click-through cover art even when it is painted.
+  const box = layer.getBoundingClientRect();
+  return (
+    box.left <= rect.left + 2 &&
+    box.top <= rect.top + 2 &&
+    box.right >= rect.right - 2 &&
+    box.bottom >= rect.bottom - 2 &&
+    getComputedStyle(layer).pointerEvents === 'none' &&
+    rendered(layer)
+  );
+}
+
 function exposedCanvas(
   canvas: HTMLCanvasElement,
   rect: DOMRectReadOnly,
@@ -80,9 +93,11 @@ export function playbackSurfaceFor(
     if (scope === document.body || scope === document.documentElement) return;
     const walker = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT);
     let canvas: HTMLCanvasElement | undefined;
+    const artwork: Element[] = [];
     let visited = 0;
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       if (++visited > 96) return;
+      if (node instanceof HTMLImageElement || node instanceof SVGSVGElement) artwork.push(node);
       if (
         node === video ||
         !(node instanceof HTMLCanvasElement || node instanceof HTMLVideoElement)
@@ -96,7 +111,11 @@ export function playbackSurfaceFor(
     if (canvas) {
       if (!rendered(canvas) || !canvas.width || !canvas.height) return;
       const aspectRatio = canvas.width / canvas.height / (video.videoWidth / video.videoHeight);
-      if (Math.abs(aspectRatio - 1) > 0.05) return;
+      if (
+        Math.abs(aspectRatio - 1) > 0.05 ||
+        artwork.some((layer) => couldCoverCanvas(layer, rect))
+      )
+        return;
       return exposedCanvas(canvas, rect, video) ? canvas : undefined;
     }
     if (scope.matches('article, [role="article"]')) return;
